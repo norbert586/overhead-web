@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overhead — Flight Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #070a10;
+    --bg-card: #0a0e16;
+    --bg-elevated: #0d1219;
+    --border: #141c28;
+    --border-subtle: #101620;
+    --accent: #7eb8e0;
+    --accent-dim: rgba(126,184,224,0.10);
+    --accent-micro: rgba(126,184,224,0.04);
+    --class-commercial: #5b9bd5;
+    --class-private: #9b7ec8;
+    --class-government: #d46b6b;
+    --class-cargo: #c4935a;
+    --text-primary: #c8d0da;
+    --text-secondary: #586474;
+    --text-dim: #2c3644;
+    --text-ghost: #1a2230;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── Top bar ── */
+  .top-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 100;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .app-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .app-logo svg {
+    width: 16px; height: 16px;
+    fill: var(--accent);
+    opacity: 0.7;
+  }
+
+  .app-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .scan-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 16px;
+  }
+
+  .scan-dot {
+    width: 5px; height: 5px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 3s ease-in-out infinite;
+    box-shadow: 0 0 6px rgba(126,184,224,0.25);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.9; }
+  }
+
+  .scan-text {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .status-info {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .hamburger {
+    width: 32px; height: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    border: none;
+    background: none;
+    transition: background 0.15s;
+  }
+
+  .hamburger:hover { background: var(--accent-dim); }
+
+  .hamburger span {
+    display: block;
+    width: 16px; height: 1.5px;
+    background: var(--text-secondary);
+    border-radius: 1px;
+    transition: background 0.15s;
+  }
+
+  .hamburger:hover span { background: var(--accent); }
+
+  .menu-overlay {
+    display: none;
+    position: fixed;
+    top: 44px; right: 0;
+    width: 190px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 0 4px;
+    z-index: 99;
+    padding: 4px 0;
+  }
+
+  .menu-overlay.open { display: block; }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .menu-item:hover {
+    color: var(--accent);
+    background: var(--accent-micro);
+  }
+
+  .menu-item.active { color: var(--accent); }
+
+  .menu-item svg {
+    width: 15px; height: 15px;
+    fill: currentColor;
+  }
+
+  /* ── Main layout ── */
+  .main {
+    position: fixed;
+    top: 44px; left: 0; right: 0; bottom: 28px;
+    display: grid;
+    grid-template-columns: 320px 1fr 300px;
+    grid-template-rows: 1fr;
+    gap: 20px;
+    padding: 20px 28px;
+  }
+
+  /* ── Left column ── */
+  .col-left {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .callsign-block { text-align: left; }
+
+  .callsign-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .callsign-dash {
+    width: 16px; height: 1px;
+    background: var(--text-dim);
+  }
+
+  .callsign {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 44px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 6px;
+  }
+
+  .aircraft-type {
+    font-size: 12px;
+    color: var(--text-secondary);
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .operator-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .operator-logo {
+    width: 22px; height: 22px;
+    border-radius: 3px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .operator-name {
+    font-size: 12px;
+    color: var(--text-secondary);
+    letter-spacing: 1px;
+  }
+
+  .classification {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 3px 12px 2px;
+    border: 1px solid;
+    border-radius: 1px;
+  }
+
+  .classification.commercial {
+    color: var(--class-commercial);
+    border-color: rgba(91,155,213,0.3);
+    background: rgba(91,155,213,0.06);
+  }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 20px 0;
+  }
+
+  .route-block {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .route-airport .iata {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 3px;
+  }
+
+  .route-airport .city {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .route-airport .flag {
+    font-size: 12px;
+    margin-top: 3px;
+    display: block;
+  }
+
+  .route-connector {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .route-seg {
+    width: 8px; height: 1px;
+    background: var(--text-dim);
+  }
+
+  .route-dot {
+    width: 3px; height: 3px;
+    background: var(--accent);
+    border-radius: 50%;
+    opacity: 0.5;
+  }
+
+  /* Intel in left col below route */
+  .intel-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 20px;
+  }
+
+  .intel-header {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 8px 12px 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .intel-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 12px;
+  }
+
+  .intel-row + .intel-row {
+    border-top: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .intel-row .i-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+  }
+
+  .intel-row .i-value {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .flag-inline { font-size: 14px; line-height: 1; }
+
+  /* ── Center column: Photo + Telemetry ── */
+  .col-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 14px;
+  }
+
+  .aircraft-photo-wrap {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border);
+  }
+
+  .aircraft-photo-wrap img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.8;
+    filter: saturate(0.15) contrast(1.1) brightness(0.85);
+  }
+
+  .aircraft-photo-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 50px;
+    background: linear-gradient(var(--bg-primary), transparent);
+    z-index: 2;
+  }
+
+  .aircraft-photo-wrap::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 70px;
+    background: linear-gradient(transparent, var(--bg-primary));
+    z-index: 2;
+  }
+
+  .photo-tag {
+    position: absolute;
+    bottom: 10px; right: 14px;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    z-index: 3;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .photo-callsign {
+    position: absolute;
+    top: 14px; left: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    z-index: 3;
+  }
+
+  .telemetry-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border-subtle);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .t-cell {
+    background: var(--bg-card);
+    padding: 14px 6px;
+    text-align: center;
+  }
+
+  .t-cell .t-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .t-cell .t-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+
+  .t-cell .t-unit {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+  }
+
+  /* ── Right column: Stats ── */
+  .col-right {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .times-seen {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 14px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .times-seen::before {
+    content: '';
+    position: absolute;
+    top: 8px; bottom: 8px; left: 0;
+    width: 2px;
+    background: var(--accent);
+    opacity: 0.2;
+    border-radius: 0 1px 1px 0;
+  }
+
+  .ts-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .ts-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+  }
+
+  .ts-sub {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .ts-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  /* Additional stat cards for right col */
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 14px 14px;
+  }
+
+  .stat-card-header {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+  }
+
+  .stat-row + .stat-row {
+    border-top: 1px solid rgba(255,255,255,0.03);
+  }
+
+  .stat-row .s-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+  }
+
+  .stat-row .s-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .class-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+
+  .class-dot.commercial { background: var(--class-commercial); }
+  .class-dot.private { background: var(--class-private); }
+  .class-dot.government { background: var(--class-government); }
+  .class-dot.cargo { background: var(--class-cargo); }
+
+  /* ── Bottom bar ── */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 28px;
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 28px;
+    z-index: 50;
+  }
+
+  .bottom-bar span {
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  /* ── Mobile ── */
+  @media (max-width: 900px) {
+    .main {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto;
+      gap: 12px;
+      padding: 12px 16px;
+      overflow-y: auto;
+    }
+
+    .col-left, .col-center, .col-right {
+      justify-content: flex-start;
+    }
+
+    .aircraft-photo-wrap {
+      flex: none;
+      height: 200px;
+    }
+
+    .callsign { font-size: 30px; }
+    .t-cell .t-value { font-size: 17px; }
+    .ts-value { font-size: 24px; }
+    .bottom-bar { display: none; }
+    .status-info { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <div class="app-logo">
+        <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+        <span class="app-name">Overhead</span>
+      </div>
+      <div class="scan-status">
+        <div class="scan-dot"></div>
+        <span class="scan-text">Tracking · 50 nm · 12s</span>
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <span class="status-info">42.7077° N, 83.0315° W</span>
+      <button class="hamburger" onclick="document.querySelector('.menu-overlay').classList.toggle('open')">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Menu -->
+  <div class="menu-overlay">
+    <div class="menu-item active">
+      <svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+      Flight
+    </div>
+    <div class="menu-item">
+      <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+      Log
+    </div>
+    <div class="menu-item">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+      Settings
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- Left: Identity + Route + Intel -->
+    <div class="col-left">
+      <div class="callsign-block">
+        <div class="callsign-row">
+          <div class="callsign-dash"></div>
+          <div class="callsign">MXY293</div>
+          <div class="callsign-dash"></div>
+        </div>
+        <div class="aircraft-type">Airbus A380-800</div>
+        <div class="operator-row">
+          <div class="operator-logo">✈</div>
+          <span class="operator-name">Mexico Airlines</span>
+        </div>
+        <div class="classification commercial">commercial</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="route-block">
+        <div class="route-airport">
+          <div class="iata">JFK</div>
+          <div class="city">New York</div>
+          <span class="flag">🇺🇸</span>
+        </div>
+        <div class="route-connector">
+          <div class="route-seg"></div>
+          <div class="route-seg"></div>
+          <div class="route-dot"></div>
+          <div class="route-seg"></div>
+          <div class="route-seg"></div>
+        </div>
+        <div class="route-airport">
+          <div class="iata">SLC</div>
+          <div class="city">Salt Lake City</div>
+          <span class="flag">🇺🇸</span>
+        </div>
+      </div>
+
+      <div class="intel-section">
+        <div class="intel-header">Intel</div>
+        <div class="intel-row">
+          <span class="i-label">Country</span>
+          <span class="i-value"><span class="flag-inline">🇲🇽</span> Mexico</span>
+        </div>
+        <div class="intel-row">
+          <span class="i-label">Reg</span>
+          <span class="i-value">N577N</span>
+        </div>
+        <div class="intel-row">
+          <span class="i-label">Hex</span>
+          <span class="i-value">A7C3B2</span>
+        </div>
+        <div class="intel-row">
+          <span class="i-label">Type Code</span>
+          <span class="i-value">A388</span>
+        </div>
+        <div class="intel-row">
+          <span class="i-label">Manufacturer</span>
+          <span class="i-value">Airbus</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Photo + Telemetry -->
+    <div class="col-center">
+      <div class="aircraft-photo-wrap">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/A380_Emirates_A6-EUV_%2827382338087%29.jpg/1280px-A380_Emirates_A6-EUV_%2827382338087%29.jpg" alt="Aircraft" />
+        <div class="photo-callsign">MXY293</div>
+        <div class="photo-tag">N577N</div>
+      </div>
+
+      <div class="telemetry-grid">
+        <div class="t-cell">
+          <div class="t-label">Alt</div>
+          <div class="t-value">32.4k</div>
+          <div class="t-unit">ft</div>
+        </div>
+        <div class="t-cell">
+          <div class="t-label">Spd</div>
+          <div class="t-value">487</div>
+          <div class="t-unit">kts</div>
+        </div>
+        <div class="t-cell">
+          <div class="t-label">Brg</div>
+          <div class="t-value">274°</div>
+          <div class="t-unit">W</div>
+        </div>
+        <div class="t-cell">
+          <div class="t-label">Dist</div>
+          <div class="t-value">4.2</div>
+          <div class="t-unit">nm</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Times Seen + Session Stats -->
+    <div class="col-right">
+      <div class="times-seen">
+        <div class="ts-left">
+          <span class="ts-label">Times seen</span>
+          <span class="ts-sub">This aircraft</span>
+        </div>
+        <span class="ts-value">17</span>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card-header">Session</div>
+        <div class="stat-row">
+          <span class="s-label">Total detected</span>
+          <span class="s-value">1,247</span>
+        </div>
+        <div class="stat-row">
+          <span class="s-label">Unique aircraft</span>
+          <span class="s-value">384</span>
+        </div>
+        <div class="stat-row">
+          <span class="s-label">Active in range</span>
+          <span class="s-value">12</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card-header">Classification</div>
+        <div class="stat-row">
+          <span class="s-label"><span class="class-dot commercial"></span>Commercial</span>
+          <span class="s-value">847</span>
+        </div>
+        <div class="stat-row">
+          <span class="s-label"><span class="class-dot private"></span>Private</span>
+          <span class="s-value">211</span>
+        </div>
+        <div class="stat-row">
+          <span class="s-label"><span class="class-dot cargo"></span>Cargo</span>
+          <span class="s-value">143</span>
+        </div>
+        <div class="stat-row">
+          <span class="s-label"><span class="class-dot government"></span>Government</span>
+          <span class="s-value">46</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card-header">Top Aircraft Today</div>
+        <div class="stat-row">
+          <span class="s-label">B737-800</span>
+          <span class="s-value">124</span>
+        </div>
+        <div class="stat-row">
+          <span class="s-label">A320neo</span>
+          <span class="s-value">98</span>
+        </div>
+        <div class="stat-row">
+          <span class="s-label">CRJ-900</span>
+          <span class="s-value">67</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="bottom-bar">
+    <span>OVERHEAD v1.0</span>
+    <span>Last poll: 3s ago</span>
+  </div>
+
+</body>
+</html>
