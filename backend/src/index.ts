@@ -4,6 +4,7 @@ import cors from 'cors';
 import { initDb } from './database/db';
 import { runMigrations } from './database/migrations';
 import flightsRouter from './routes/flights';
+import statsRouter from './routes/stats';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
@@ -16,6 +17,7 @@ async function start() {
   app.use(express.json());
 
   app.use('/api/flights', flightsRouter);
+  app.use('/api/stats', statsRouter);
 
   // /api/log proxies to the log route on the flights router
   app.get('/api/log', (req, res) => {

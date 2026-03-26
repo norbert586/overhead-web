@@ -4,8 +4,8 @@ import RouteBlock from '../components/RouteBlock';
 import TelemetryGrid from '../components/TelemetryGrid';
 import IntelCard from '../components/IntelCard';
 import TimesSeenCard from '../components/TimesSeenCard';
-import ClassificationLegend from '../components/ClassificationLegend';
-import LocationCard from '../components/LocationCard';
+import WeatherCard from '../components/WeatherCard';
+import MapCard from '../components/MapCard';
 import type { Flight } from '../types/flight';
 
 interface FlightScreenProps {
@@ -58,11 +58,11 @@ export default function FlightScreen({ flight }: FlightScreenProps) {
         />
       </div>
 
-      {/* ── Right column: Flight context ── */}
+      {/* ── Right column ── */}
       <div className="col-right">
         <TimesSeenCard timesSeen={flight.timesSeen} />
-        <ClassificationLegend />
-        <LocationCard />
+        <WeatherCard />
+        <MapCard />
       </div>
     </div>
   );

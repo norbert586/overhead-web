@@ -5,11 +5,12 @@ import BottomBar from './components/BottomBar';
 import EmptyState from './components/EmptyState';
 import FlightScreen from './screens/FlightScreen';
 import LogScreen from './screens/LogScreen';
+import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import { useSettings } from './hooks/useSettings';
 import { useFlightData } from './hooks/useFlightData';
 
-export type View = 'flight' | 'log' | 'settings';
+export type View = 'flight' | 'log' | 'stats' | 'settings';
 
 function App() {
   const [view, setView] = useState<View>('flight');
@@ -29,6 +30,10 @@ function App() {
 
     if (view === 'log') {
       return <LogScreen />;
+    }
+
+    if (view === 'stats') {
+      return <StatsScreen />;
     }
 
     // Flight view

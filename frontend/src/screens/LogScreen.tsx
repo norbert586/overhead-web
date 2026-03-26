@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { fetchLog } from '../services/api';
 import { fetchPhoto, thumbnailFallback } from '../utils/photos';
-import type { Flight } from '../types/flight';
+import type { Flight, Classification } from '../types/flight';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,9 +19,7 @@ function timeAgo(iso: string): string {
 
 function formatRoute(f: Flight): string {
   if (!f.originIata && !f.destinationIata) return '—';
-  const o = f.originIata      ?? '???';
-  const d = f.destinationIata ?? '???';
-  return `${o} → ${d}`;
+  return `${f.originIata ?? '???'} → ${f.destinationIata ?? '???'}`;
 }
 
 function formatAlt(ft: number | null): string {
@@ -29,21 +27,17 @@ function formatAlt(ft: number | null): string {
   return `${Math.round(ft / 100) * 100}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' ft';
 }
 
-// ── Chevron icon ─────────────────────────────────────────────────────────────
+// ── Icons ────────────────────────────────────────────────────────────────────
 
 function Chevron({ open }: { open: boolean }) {
   return (
-    <svg
-      viewBox="0 0 12 12"
-      className={`log-chevron${open ? ' open' : ''}`}
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 12 12" className={`log-chevron${open ? ' open' : ''}`} aria-hidden="true">
       <polyline points="2,4 6,8 10,4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// ── Photo loader (per expanded row) ─────────────────────────────────────────
+// ── Photo loader ─────────────────────────────────────────────────────────────
 
 function RowPhoto({ registration }: { registration: string | null }) {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
@@ -74,40 +68,25 @@ function RowPhoto({ registration }: { registration: string | null }) {
   }
 
   if (state === 'idle') {
-    return (
-      <button className="log-photo-btn" onClick={load}>
-        ↓ Load photo
-      </button>
-    );
+    return <button className="log-photo-btn" onClick={load}>↓ Load photo</button>;
   }
   if (state === 'loading') return <div className="log-photo-loading">Loading…</div>;
   if (state === 'error' || !src) return <div className="log-photo-unavailable">No photo available</div>;
 
   return (
-    <img
-      className="log-photo-img"
-      src={src}
-      alt={registration}
-      onError={handleError}
-    />
+    <img className="log-photo-img" src={src} alt={registration} onError={handleError} />
   );
 }
 
-// ── Single log row ───────────────────────────────────────────────────────────
+// ── Single log row ────────────────────────────────────────────────────────────
 
 function LogRow({ flight: f }: { flight: Flight }) {
   const [open, setOpen] = useState(false);
-
   const typeLabel = [f.manufacturer, f.aircraftType].filter(Boolean).join(' ') || '—';
 
   return (
     <div className={`log-row${open ? ' expanded' : ''}`}>
-      {/* Main clickable line */}
-      <button
-        className="log-row-main"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-      >
+      <button className="log-row-main" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="log-dot-col">
           <span className={`log-dot ${f.classification}`} />
         </span>
@@ -119,57 +98,50 @@ function LogRow({ flight: f }: { flight: Flight }) {
         <span className="log-chevron-col"><Chevron open={open} /></span>
       </button>
 
-      {/* Expanded detail panel */}
       {open && (
         <div className="log-detail">
           <div className="log-detail-grid">
-            {/* Left intel column */}
             <div className="log-detail-col">
               <div className="log-detail-section-label">Identity</div>
-              {[
-                ['Callsign',       f.callsign],
-                ['Registration',   f.registration],
-                ['Hex',            f.hex],
-                ['Aircraft',       typeLabel !== '—' ? typeLabel : null],
-                ['Operator',       f.operator],
-                ['Owner',          f.owner],
-                ['Country',        f.country],
-              ].map(([label, val]) => val ? (
-                <div className="log-detail-row" key={String(label)}>
+              {([
+                ['Callsign',     f.callsign],
+                ['Registration', f.registration],
+                ['Hex',          f.hex],
+                ['Aircraft',     typeLabel !== '—' ? typeLabel : null],
+                ['Operator',     f.operator],
+                ['Owner',        f.owner],
+                ['Country',      f.country],
+              ] as [string, string | null][]).map(([label, val]) => val ? (
+                <div className="log-detail-row" key={label}>
                   <span className="log-detail-label">{label}</span>
-                  <span className="log-detail-value">{String(val)}</span>
+                  <span className="log-detail-value">{val}</span>
                 </div>
               ) : null)}
             </div>
 
-            {/* Right telemetry + timeline column */}
             <div className="log-detail-col">
               <div className="log-detail-section-label">Flight data</div>
-              {[
-                ['Route',         f.originIata && f.destinationIata
-                                    ? `${f.originIata} → ${f.destinationIata}` : null],
-                ['Origin',        f.originCity && f.originCountry
-                                    ? `${f.originCity}, ${f.originCountry}` : f.originCity],
-                ['Destination',   f.destinationCity && f.destinationCountry
-                                    ? `${f.destinationCity}, ${f.destinationCountry}` : f.destinationCity],
-                ['Altitude',      formatAlt(f.altitudeFt)],
-                ['Speed',         f.speedKts  != null ? `${f.speedKts} kts`  : null],
-                ['Bearing',       f.bearingDeg != null ? `${f.bearingDeg}°`  : null],
-                ['Distance',      f.distanceNm != null ? `${f.distanceNm} nm`: null],
-                ['Classification',f.classification],
-                ['Times seen',    String(f.timesSeen)],
-                ['First seen',    f.firstSeen ? timeAgo(f.firstSeen) : null],
-                ['Last seen',     f.lastSeen  ? timeAgo(f.lastSeen)  : null],
-              ].map(([label, val]) => val ? (
-                <div className="log-detail-row" key={String(label)}>
+              {([
+                ['Route',          f.originIata && f.destinationIata ? `${f.originIata} → ${f.destinationIata}` : null],
+                ['Origin',         f.originCity  ? [f.originCity,      f.originCountry     ].filter(Boolean).join(', ') : null],
+                ['Destination',    f.destinationCity ? [f.destinationCity, f.destinationCountry].filter(Boolean).join(', ') : null],
+                ['Altitude',       formatAlt(f.altitudeFt)],
+                ['Speed',          f.speedKts   != null ? `${f.speedKts} kts`  : null],
+                ['Bearing',        f.bearingDeg != null ? `${f.bearingDeg}°`   : null],
+                ['Distance',       f.distanceNm != null ? `${f.distanceNm} nm` : null],
+                ['Classification', f.classification],
+                ['Times seen',     String(f.timesSeen)],
+                ['First seen',     f.firstSeen ? timeAgo(f.firstSeen) : null],
+                ['Last seen',      f.lastSeen  ? timeAgo(f.lastSeen)  : null],
+              ] as [string, string | null][]).map(([label, val]) => val ? (
+                <div className="log-detail-row" key={label}>
                   <span className="log-detail-label">{label}</span>
-                  <span className="log-detail-value">{String(val)}</span>
+                  <span className="log-detail-value">{val}</span>
                 </div>
               ) : null)}
             </div>
           </div>
 
-          {/* Photo section */}
           <div className="log-photo-section">
             <div className="log-detail-section-label" style={{ marginBottom: 10 }}>Photo</div>
             <RowPhoto registration={f.registration} />
@@ -196,40 +168,103 @@ function ListHeader() {
   );
 }
 
+// ── Filter bar ────────────────────────────────────────────────────────────────
+
+type ClassFilter = 'all' | Classification;
+
+const CLASS_PILLS: { key: ClassFilter; label: string }[] = [
+  { key: 'all',        label: 'All'        },
+  { key: 'commercial', label: 'Commercial' },
+  { key: 'private',    label: 'Private'    },
+  { key: 'cargo',      label: 'Cargo'      },
+  { key: 'government', label: 'Gov / Mil'  },
+  { key: 'unknown',    label: 'Unknown'    },
+];
+
+interface FilterBarProps {
+  search: string;
+  onSearch: (v: string) => void;
+  classFilter: ClassFilter;
+  onClass: (v: ClassFilter) => void;
+  count: number;
+  total: number;
+}
+
+function FilterBar({ search, onSearch, classFilter, onClass, count, total }: FilterBarProps) {
+  return (
+    <div className="log-filter-bar">
+      <input
+        className="log-search"
+        type="text"
+        placeholder="Search callsign, registration, type…"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        spellCheck={false}
+      />
+      <div className="log-filter-pills">
+        {CLASS_PILLS.map(({ key, label }) => (
+          <button
+            key={key}
+            className={`log-pill${classFilter === key ? ' active' : ''}${key !== 'all' ? ` pill-${key}` : ''}`}
+            onClick={() => onClass(key)}
+          >
+            {key !== 'all' && <span className={`log-dot ${key}`} style={{ marginRight: 5 }} />}
+            {label}
+          </button>
+        ))}
+      </div>
+      <span className="log-filter-count">
+        {count < total ? `${count} / ${total}` : total.toLocaleString()} events
+      </span>
+    </div>
+  );
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 const LIMIT_OPTIONS = [50, 100, 200] as const;
 
 export default function LogScreen() {
-  const [limit,    setLimit   ] = useState<50 | 100 | 200>(50);
-  const [flights,  setFlights ] = useState<Flight[]>([]);
-  const [total,    setTotal   ] = useState(0);
-  const [loading,  setLoading ] = useState(true);
-  const [error,    setError   ] = useState<string | null>(null);
+  const [limit,       setLimit      ] = useState<50 | 100 | 200>(50);
+  const [flights,     setFlights    ] = useState<Flight[]>([]);
+  const [total,       setTotal      ] = useState(0);
+  const [loading,     setLoading    ] = useState(true);
+  const [error,       setError      ] = useState<string | null>(null);
+  const [search,      setSearch     ] = useState('');
+  const [classFilter, setClassFilter] = useState<ClassFilter>('all');
 
   useEffect(() => {
     setLoading(true);
     setError(null);
     fetchLog(limit)
-      .then(({ flights, total }) => {
-        setFlights(flights);
-        setTotal(total);
-      })
+      .then(({ flights, total }) => { setFlights(flights); setTotal(total); })
       .catch(() => setError('Failed to load flight log.'))
       .finally(() => setLoading(false));
   }, [limit]);
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return flights.filter((f) => {
+      if (classFilter !== 'all' && f.classification !== classFilter) return false;
+      if (!q) return true;
+      return (
+        f.callsign?.toLowerCase().includes(q)       ||
+        f.registration?.toLowerCase().includes(q)   ||
+        f.aircraftType?.toLowerCase().includes(q)   ||
+        f.manufacturer?.toLowerCase().includes(q)   ||
+        f.operator?.toLowerCase().includes(q)       ||
+        f.originIata?.toLowerCase().includes(q)     ||
+        f.destinationIata?.toLowerCase().includes(q)
+      );
+    });
+  }, [flights, search, classFilter]);
+
   return (
     <div className="log-screen">
-      {/* Header bar */}
+      {/* Header */}
       <div className="log-header">
         <div className="log-header-left">
           <span className="log-title">Flight Log</span>
-          {!loading && (
-            <span className="log-total">
-              {total.toLocaleString()} events stored
-            </span>
-          )}
         </div>
         <div className="log-header-right">
           <span className="log-limit-label">Show</span>
@@ -245,21 +280,31 @@ export default function LogScreen() {
         </div>
       </div>
 
+      {/* Filter bar */}
+      {!loading && !error && (
+        <FilterBar
+          search={search}
+          onSearch={setSearch}
+          classFilter={classFilter}
+          onClass={setClassFilter}
+          count={filtered.length}
+          total={total}
+        />
+      )}
+
       {/* List */}
       <div className="log-list">
-        {loading && (
-          <div className="log-empty">Loading…</div>
+        {loading && <div className="log-empty">Loading…</div>}
+        {!loading && error && <div className="log-empty log-error">{error}</div>}
+        {!loading && !error && filtered.length === 0 && (
+          <div className="log-empty">
+            {flights.length === 0 ? 'No flights recorded yet.' : 'No flights match the current filter.'}
+          </div>
         )}
-        {!loading && error && (
-          <div className="log-empty log-error">{error}</div>
-        )}
-        {!loading && !error && flights.length === 0 && (
-          <div className="log-empty">No flights recorded yet.</div>
-        )}
-        {!loading && !error && flights.length > 0 && (
+        {!loading && !error && filtered.length > 0 && (
           <>
             <ListHeader />
-            {flights.map((f) => (
+            {filtered.map((f) => (
               <LogRow key={`${f.hex}-${f.firstSeen}`} flight={f} />
             ))}
           </>

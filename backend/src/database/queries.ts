@@ -299,6 +299,228 @@ export function setCallsignCache(
   );
 }
 
+// ── Full stats dashboard ─────────────────────────────────────────────────────
+
+export function getAllStats() {
+  const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const cutoff7d  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000).toISOString();
+
+  // All-time summary
+  const summaryRow = get<{
+    total_events: number; unique_aircraft: number;
+    operators: number; countries: number; avg_altitude_ft: number | null;
+  }>(`SELECT
+      COUNT(*) as total_events,
+      COUNT(DISTINCT hex) as unique_aircraft,
+      COUNT(DISTINCT operator) as operators,
+      COUNT(DISTINCT country) as countries,
+      ROUND(AVG(altitude_ft)) as avg_altitude_ft
+    FROM flights`);
+
+  // 24-hour window
+  const row24h = get<{
+    events: number; aircraft: number; operators: number; gov_count: number;
+  }>(`SELECT
+      COUNT(*) as events,
+      COUNT(DISTINCT hex) as aircraft,
+      COUNT(DISTINCT operator) as operators,
+      SUM(CASE WHEN classification IN ('government','military') THEN 1 ELSE 0 END) as gov_count
+    FROM flights WHERE last_seen >= ?`, [cutoff24h]);
+
+  // Classification breakdown
+  const classRows = all<{
+    classification: string; total_count: number; unique_aircraft: number;
+    avg_altitude: number | null; count_24h: number;
+  }>(`SELECT
+      classification,
+      COUNT(*) as total_count,
+      COUNT(DISTINCT hex) as unique_aircraft,
+      ROUND(AVG(altitude_ft)) as avg_altitude,
+      SUM(CASE WHEN last_seen >= '${cutoff24h}' THEN 1 ELSE 0 END) as count_24h
+    FROM flights GROUP BY classification ORDER BY total_count DESC`);
+
+  // Altitude distribution
+  const altRows = all<{ band: string; count: number; sort_order: number }>(`
+    SELECT
+      CASE
+        WHEN altitude_ft IS NULL OR altitude_ft < 1000  THEN 'Ground / VFR'
+        WHEN altitude_ft < 10000 THEN '1k – 10k ft'
+        WHEN altitude_ft < 25000 THEN '10k – 25k ft'
+        WHEN altitude_ft < 40000 THEN '25k – 40k ft'
+        ELSE '40k+ ft'
+      END as band,
+      COUNT(*) as count,
+      CASE
+        WHEN altitude_ft IS NULL OR altitude_ft < 1000  THEN 0
+        WHEN altitude_ft < 10000 THEN 1
+        WHEN altitude_ft < 25000 THEN 2
+        WHEN altitude_ft < 40000 THEN 3
+        ELSE 4
+      END as sort_order
+    FROM flights GROUP BY band ORDER BY sort_order`);
+
+  // Hourly activity — extract hour from ISO string (pos 12-13 in "YYYY-MM-DDTHH:...")
+  const hourRows = all<{ hour: number; events: number }>(`
+    SELECT
+      CAST(substr(last_seen, 12, 2) AS INTEGER) as hour,
+      COUNT(*) as events
+    FROM flights WHERE last_seen >= ?
+    GROUP BY substr(last_seen, 12, 2)
+    ORDER BY hour`, [cutoff24h]);
+
+  // Weekly activity
+  const weekRows = all<{ day_name: string; day_num: number; events: number }>(`
+    SELECT
+      CASE strftime('%w', substr(last_seen,1,10))
+        WHEN '0' THEN 'Sun' WHEN '1' THEN 'Mon' WHEN '2' THEN 'Tue'
+        WHEN '3' THEN 'Wed' WHEN '4' THEN 'Thu' WHEN '5' THEN 'Fri'
+        ELSE 'Sat'
+      END as day_name,
+      CAST(strftime('%w', substr(last_seen,1,10)) AS INTEGER) as day_num,
+      COUNT(*) as events
+    FROM flights WHERE last_seen >= ?
+    GROUP BY strftime('%w', substr(last_seen,1,10))
+    ORDER BY day_num`, [cutoff7d]);
+
+  // Top aircraft types
+  const typeRows = all<{
+    aircraft_type: string; manufacturer: string | null;
+    event_count: number; unique_aircraft: number;
+  }>(`SELECT aircraft_type, MAX(manufacturer) as manufacturer,
+      COUNT(*) as event_count, COUNT(DISTINCT hex) as unique_aircraft
+    FROM flights WHERE aircraft_type IS NOT NULL
+    GROUP BY aircraft_type ORDER BY event_count DESC LIMIT 15`);
+
+  // Top operators
+  const operatorRows = all<{
+    operator: string; event_count: number;
+    unique_aircraft: number; top_classification: string;
+  }>(`SELECT operator,
+      COUNT(*) as event_count,
+      COUNT(DISTINCT hex) as unique_aircraft,
+      MAX(classification) as top_classification
+    FROM flights WHERE operator IS NOT NULL
+    GROUP BY operator ORDER BY event_count DESC LIMIT 10`);
+
+  // Top countries
+  const countryRows = all<{
+    country: string; country_iso: string | null;
+    event_count: number; unique_aircraft: number;
+  }>(`SELECT country, MAX(country_iso) as country_iso,
+      COUNT(*) as event_count, COUNT(DISTINCT hex) as unique_aircraft
+    FROM flights WHERE country IS NOT NULL
+    GROUP BY country ORDER BY event_count DESC LIMIT 15`);
+
+  // Top routes
+  const routeRows = all<{
+    origin_iata: string; origin_city: string | null;
+    destination_iata: string; destination_city: string | null;
+    event_count: number;
+  }>(`SELECT origin_iata,
+      MAX(origin_city) as origin_city,
+      destination_iata,
+      MAX(destination_city) as destination_city,
+      COUNT(*) as event_count
+    FROM flights
+    WHERE origin_iata IS NOT NULL AND destination_iata IS NOT NULL
+    GROUP BY origin_iata, destination_iata
+    ORDER BY event_count DESC LIMIT 12`);
+
+  // Recent notable — gov/mil or frequently seen
+  const notableRows = all<FlightRow>(`
+    SELECT * FROM flights
+    WHERE classification IN ('government','military') OR times_seen >= 5
+    ORDER BY last_seen DESC LIMIT 20`);
+
+  // Most seen aircraft (grouped by hex across all events)
+  const mostSeenRows = all<{
+    hex: string; registration: string | null; callsign: string | null;
+    aircraft_type: string | null; manufacturer: string | null;
+    operator: string | null; country: string | null;
+    max_times_seen: number; event_count: number;
+    first_seen_ever: string; last_seen_ever: string; classification: string;
+  }>(`SELECT hex,
+      MAX(registration) as registration,
+      MAX(callsign) as callsign,
+      MAX(aircraft_type) as aircraft_type,
+      MAX(manufacturer) as manufacturer,
+      MAX(operator) as operator,
+      MAX(country) as country,
+      MAX(times_seen) as max_times_seen,
+      COUNT(*) as event_count,
+      MIN(first_seen) as first_seen_ever,
+      MAX(last_seen) as last_seen_ever,
+      MAX(classification) as classification
+    FROM flights GROUP BY hex
+    ORDER BY max_times_seen DESC LIMIT 20`);
+
+  return {
+    summary: {
+      totalEvents:   summaryRow?.total_events   ?? 0,
+      uniqueAircraft: summaryRow?.unique_aircraft ?? 0,
+      operators:     summaryRow?.operators       ?? 0,
+      countries:     summaryRow?.countries       ?? 0,
+      avgAltitudeFt: summaryRow?.avg_altitude_ft ?? null,
+    },
+    summary24h: {
+      events:   row24h?.events    ?? 0,
+      aircraft: row24h?.aircraft  ?? 0,
+      operators: row24h?.operators ?? 0,
+      govCount: row24h?.gov_count ?? 0,
+    },
+    classification: classRows.map((r) => ({
+      classification: r.classification,
+      totalCount:     r.total_count,
+      uniqueAircraft: r.unique_aircraft,
+      avgAltitude:    r.avg_altitude,
+      count24h:       r.count_24h,
+    })),
+    altitudeDistribution: altRows.map((r) => ({ band: r.band, count: r.count })),
+    hourlyActivity: hourRows.map((r) => ({ hour: r.hour, events: r.events })),
+    weeklyActivity: weekRows.map((r) => ({ dayName: r.day_name, dayNum: r.day_num, events: r.events })),
+    topAircraftTypes: typeRows.map((r) => ({
+      aircraftType:   r.aircraft_type,
+      manufacturer:   r.manufacturer,
+      eventCount:     r.event_count,
+      uniqueAircraft: r.unique_aircraft,
+    })),
+    topOperators: operatorRows.map((r) => ({
+      operator:          r.operator,
+      eventCount:        r.event_count,
+      uniqueAircraft:    r.unique_aircraft,
+      topClassification: r.top_classification,
+    })),
+    topCountries: countryRows.map((r) => ({
+      country:        r.country,
+      countryIso:     r.country_iso,
+      eventCount:     r.event_count,
+      uniqueAircraft: r.unique_aircraft,
+    })),
+    topRoutes: routeRows.map((r) => ({
+      originIata:       r.origin_iata,
+      originCity:       r.origin_city,
+      destinationIata:  r.destination_iata,
+      destinationCity:  r.destination_city,
+      eventCount:       r.event_count,
+    })),
+    recentNotable:    notableRows.map(rowToFlight),
+    mostSeenAircraft: mostSeenRows.map((r) => ({
+      hex:            r.hex,
+      registration:   r.registration,
+      callsign:       r.callsign,
+      aircraftType:   r.aircraft_type,
+      manufacturer:   r.manufacturer,
+      operator:       r.operator,
+      country:        r.country,
+      maxTimesSeen:   r.max_times_seen,
+      eventCount:     r.event_count,
+      firstSeenEver:  r.first_seen_ever,
+      lastSeenEver:   r.last_seen_ever,
+      classification: r.classification,
+    })),
+  };
+}
+
 // ── Session stats ────────────────────────────────────────────────────────────
 
 export function getSessionStats() {

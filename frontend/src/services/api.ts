@@ -2,6 +2,7 @@
 // Wraps all calls to the Overhead backend.
 
 import type { Flight, FlightsResponse } from '../types/flight';
+import type { StatsData } from '../types/stats';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
@@ -11,6 +12,12 @@ export async function fetchFlights(
   radius: number,
 ): Promise<FlightsResponse> {
   const res = await fetch(`${BASE_URL}/api/flights?lat=${lat}&lon=${lon}&radius=${radius}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchStats(): Promise<StatsData> {
+  const res = await fetch(`${BASE_URL}/api/stats`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

@@ -1,6 +1,6 @@
 import TimesSeenCard from './TimesSeenCard';
-import ClassificationLegend from './ClassificationLegend';
-import LocationCard from './LocationCard';
+import WeatherCard from './WeatherCard';
+import MapCard from './MapCard';
 import TelemetryGrid from './TelemetryGrid';
 import AircraftPhoto from './AircraftPhoto';
 
@@ -61,8 +61,8 @@ function NoAircraft() {
       {/* Right col */}
       <div className="col-right">
         <TimesSeenCard timesSeen={0} />
-        <ClassificationLegend />
-        <LocationCard />
+        <WeatherCard />
+        <MapCard />
       </div>
     </div>
   );
