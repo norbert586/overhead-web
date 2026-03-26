@@ -7,12 +7,18 @@ import FlightScreen from './screens/FlightScreen';
 import LogScreen from './screens/LogScreen';
 import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
 import { useSettings } from './hooks/useSettings';
 import { useFlightData } from './hooks/useFlightData';
+import { useAuth } from './hooks/useAuth';
 
 export type View = 'flight' | 'log' | 'stats' | 'settings';
+type AuthView = 'login' | 'register';
 
 function App() {
+  const { user, isAuthenticated, login, logout } = useAuth();
+  const [authView, setAuthView] = useState<AuthView>('login');
   const [view, setView] = useState<View>('flight');
   const { settings, saveSettings, hasSettings } = useSettings();
 
@@ -21,7 +27,25 @@ function App() {
     longitude:       settings.longitude,
     radiusNm:        settings.radiusNm,
     pollIntervalSec: settings.pollIntervalSec,
+    enabled:         isAuthenticated,
   });
+
+  if (!isAuthenticated) {
+    if (authView === 'register') {
+      return (
+        <RegisterScreen
+          onLogin={login}
+          onShowLogin={() => setAuthView('login')}
+        />
+      );
+    }
+    return (
+      <LoginScreen
+        onLogin={login}
+        onShowRegister={() => setAuthView('register')}
+      />
+    );
+  }
 
   function renderMain() {
     if (view === 'settings') {
@@ -55,7 +79,6 @@ function App() {
       return <EmptyState variant="no-aircraft" />;
     }
 
-    // Display the closest aircraft (already sorted by distance on the backend)
     return <FlightScreen flight={flights[0]} />;
   }
 
@@ -68,6 +91,8 @@ function App() {
         pollIntervalSec={settings.pollIntervalSec}
         latitude={settings.latitude}
         longitude={settings.longitude}
+        userEmail={user?.email}
+        onLogout={logout}
       />
       <main className="app-main">
         {renderMain()}

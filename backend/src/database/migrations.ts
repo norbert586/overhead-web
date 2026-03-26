@@ -3,8 +3,17 @@ import { exec, run } from './db';
 export function runMigrations(): void {
   // Core tables and safe indexes (no event_key yet)
   exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      email        TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      invite_code  TEXT,
+      created_at   TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS flights (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
       event_key TEXT,
       hex TEXT NOT NULL,
       registration TEXT,
@@ -63,6 +72,16 @@ export function runMigrations(): void {
   try {
     exec(`ALTER TABLE flights ADD COLUMN event_key TEXT`);
   } catch { /* column already exists — fine */ }
+
+  // Add user_id column to existing DBs
+  try {
+    exec(`ALTER TABLE flights ADD COLUMN user_id INTEGER REFERENCES users(id)`);
+  } catch { /* column already exists — fine */ }
+
+  // Now safe to create the user_id index (column guaranteed to exist)
+  try {
+    exec(`CREATE INDEX IF NOT EXISTS idx_flights_user_id ON flights(user_id)`);
+  } catch { /* already exists */ }
 
   // Backfill event_key for pre-existing rows
   run(

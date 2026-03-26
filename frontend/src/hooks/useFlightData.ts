@@ -7,6 +7,7 @@ interface UseFlightDataParams {
   longitude: number | null;
   radiusNm: number;
   pollIntervalSec: number;
+  enabled?: boolean;
 }
 
 export function useFlightData(params: UseFlightDataParams): {
@@ -22,8 +23,8 @@ export function useFlightData(params: UseFlightDataParams): {
   const abortRef = useRef<AbortController | null>(null);
 
   const poll = useCallback(async () => {
-    const { latitude, longitude, radiusNm } = params;
-    if (latitude === null || longitude === null) return;
+    const { latitude, longitude, radiusNm, enabled = true } = params;
+    if (!enabled || latitude === null || longitude === null) return;
 
     abortRef.current?.abort();
     abortRef.current = new AbortController();
