@@ -104,7 +104,14 @@ export function upsertFlight(
     const isNewSighting = gapMs > EVENT_WINDOW_MS;
 
     if (isNewSighting) {
-      // New event row — full insert, increment times_seen from previous best
+      // New flyover after gap — carry forward the highest times_seen ever recorded
+      // for this aircraft + 1, so the counter is truly cumulative across all visits
+      const maxRow = get<{ max_seen: number }>(
+        'SELECT MAX(times_seen) as max_seen FROM flights WHERE hex = ? AND user_id = ?',
+        [flight.hex, userId],
+      );
+      const nextSeen = (maxRow?.max_seen ?? 0) + 1;
+
       run(
         `INSERT INTO flights (
           user_id, event_key, hex, registration, callsign, aircraft_type, manufacturer,
@@ -113,7 +120,7 @@ export function upsertFlight(
           destination_iata, destination_city, destination_country,
           altitude_ft, speed_kts, bearing_deg, distance_nm,
           classification, times_seen, first_seen, last_seen
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           userId, eventKey, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
           flight.manufacturer ?? existing.manufacturer,
@@ -128,13 +135,15 @@ export function upsertFlight(
           flight.destinationCity ?? existing.destination_city,
           flight.destinationCountry ?? existing.destination_country,
           flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
-          flight.classification, now, now,
+          flight.classification, nextSeen, now, now,
         ],
       );
     } else {
-      // Same flyover — update telemetry, use COALESCE to never overwrite good enrichment with null
+      // Same flyover — increment times_seen and refresh telemetry
+      // COALESCE protects enrichment data: never overwrite good data with null
       run(
         `UPDATE flights SET
+          times_seen       = times_seen + 1,
           altitude_ft      = ?,
           speed_kts        = ?,
           bearing_deg      = ?,

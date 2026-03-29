@@ -83,11 +83,23 @@ export function runMigrations(): void {
     exec(`CREATE INDEX IF NOT EXISTS idx_flights_user_id ON flights(user_id)`);
   } catch { /* already exists */ }
 
-  // Backfill event_key for pre-existing rows
+  // Backfill event_key for pre-existing rows (old format, no user prefix)
   run(
     `UPDATE flights
      SET event_key = hex || '|' || COALESCE(registration,'') || '|' || COALESCE(callsign,'')
      WHERE event_key IS NULL`,
+    [],
+  );
+
+  // Migrate old event_keys (no user prefix) to new format and assign to user 1.
+  // Detects old format by checking the key doesn't start with a digit followed by '|digit' or '|[A-F0-9]'
+  // Simpler: old keys start with a hex ICAO code (letters/digits, no leading digit-pipe pattern).
+  // Safest check: user_id IS NULL means it's a pre-auth row.
+  run(
+    `UPDATE flights
+     SET event_key = '1|' || event_key,
+         user_id   = 1
+     WHERE user_id IS NULL`,
     [],
   );
 
