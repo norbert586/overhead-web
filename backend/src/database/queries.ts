@@ -83,121 +83,99 @@ function rowToFlight(row: FlightRow): Flight {
   };
 }
 
-// Gap before the same aircraft creates a new event row (matches working app)
+// If an aircraft reappears after this gap it counts as a new visit
 const EVENT_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
 
-/** Upsert a flight using event_key dedup + COALESCE to protect enrichment data */
+/**
+ * Upsert logic — one row per unique aircraft (hex + user_id).
+ *
+ * Within the 20-min window  → update telemetry only, times_seen stays the same
+ * Beyond the 20-min window  → update telemetry + increment times_seen
+ * Never seen before         → insert with times_seen = 1
+ */
 export function upsertFlight(
   flight: Omit<Flight, 'timesSeen' | 'firstSeen' | 'lastSeen'>,
   userId: number,
 ): Flight {
   const now = new Date().toISOString();
-  const eventKey = `${userId}|${flight.hex}|${flight.registration ?? ''}|${flight.callsign ?? ''}`;
 
+  // One canonical record per aircraft per user, keyed by hex
   const existing = get<FlightRow>(
-    'SELECT * FROM flights WHERE event_key = ? ORDER BY last_seen DESC LIMIT 1',
-    [eventKey],
+    'SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1',
+    [flight.hex, userId],
   );
 
   if (existing) {
     const gapMs = Date.now() - new Date(existing.last_seen as string).getTime();
-    const isNewSighting = gapMs > EVENT_WINDOW_MS;
+    const isNewVisit = gapMs > EVENT_WINDOW_MS;
+    console.log(`[upsert] ${flight.hex} → ${isNewVisit ? 'NEW VISIT' : 'UPDATE'} | gap=${Math.round(gapMs/1000)}s | times_seen=${existing.times_seen as number}${isNewVisit ? ' → ' + ((existing.times_seen as number) + 1) : ''}`);
 
-    if (isNewSighting) {
-      // New flyover after gap — carry forward the highest times_seen ever recorded
-      // for this aircraft + 1, so the counter is truly cumulative across all visits
-      const maxRow = get<{ max_seen: number }>(
-        'SELECT MAX(times_seen) as max_seen FROM flights WHERE hex = ? AND user_id = ?',
-        [flight.hex, userId],
-      );
-      const nextSeen = (maxRow?.max_seen ?? 0) + 1;
-
-      run(
-        `INSERT INTO flights (
-          user_id, event_key, hex, registration, callsign, aircraft_type, manufacturer,
-          owner, operator, country, country_iso,
-          origin_iata, origin_city, origin_country,
-          destination_iata, destination_city, destination_country,
-          altitude_ft, speed_kts, bearing_deg, distance_nm,
-          classification, times_seen, first_seen, last_seen
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          userId, eventKey, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
-          flight.manufacturer ?? existing.manufacturer,
-          flight.owner ?? existing.owner,
-          flight.operator ?? existing.operator,
-          flight.country ?? existing.country,
-          flight.countryIso ?? existing.country_iso,
-          flight.originIata ?? existing.origin_iata,
-          flight.originCity ?? existing.origin_city,
-          flight.originCountry ?? existing.origin_country,
-          flight.destinationIata ?? existing.destination_iata,
-          flight.destinationCity ?? existing.destination_city,
-          flight.destinationCountry ?? existing.destination_country,
-          flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
-          flight.classification, nextSeen, now, now,
-        ],
-      );
-    } else {
-      // Same flyover — increment times_seen and refresh telemetry
-      // COALESCE protects enrichment data: never overwrite good data with null
-      run(
-        `UPDATE flights SET
-          times_seen       = times_seen + 1,
-          altitude_ft      = ?,
-          speed_kts        = ?,
-          bearing_deg      = ?,
-          distance_nm      = ?,
-          classification   = ?,
-          last_seen        = ?,
-          manufacturer     = COALESCE(?, manufacturer),
-          owner            = COALESCE(?, owner),
-          operator         = COALESCE(?, operator),
-          country          = COALESCE(?, country),
-          country_iso      = COALESCE(?, country_iso),
-          origin_iata      = COALESCE(?, origin_iata),
-          origin_city      = COALESCE(?, origin_city),
-          origin_country   = COALESCE(?, origin_country),
-          destination_iata = COALESCE(?, destination_iata),
-          destination_city = COALESCE(?, destination_city),
-          destination_country = COALESCE(?, destination_country)
-        WHERE id = ?`,
-        [
-          flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
-          flight.classification, now,
-          flight.manufacturer, flight.owner, flight.operator,
-          flight.country, flight.countryIso,
-          flight.originIata, flight.originCity, flight.originCountry,
-          flight.destinationIata, flight.destinationCity, flight.destinationCountry,
-          existing.id as number,
-        ],
-      );
-    }
+    run(
+      `UPDATE flights SET
+        times_seen       = times_seen + ?,
+        altitude_ft      = ?,
+        speed_kts        = ?,
+        bearing_deg      = ?,
+        distance_nm      = ?,
+        classification   = ?,
+        last_seen        = ?,
+        manufacturer     = COALESCE(?, manufacturer),
+        owner            = COALESCE(?, owner),
+        operator         = COALESCE(?, operator),
+        country          = COALESCE(?, country),
+        country_iso      = COALESCE(?, country_iso),
+        origin_iata      = COALESCE(?, origin_iata),
+        origin_city      = COALESCE(?, origin_city),
+        origin_country   = COALESCE(?, origin_country),
+        destination_iata = COALESCE(?, destination_iata),
+        destination_city = COALESCE(?, destination_city),
+        destination_country = COALESCE(?, destination_country)
+      WHERE id = ?`,
+      [
+        isNewVisit ? 1 : 0,
+        flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
+        flight.classification, now,
+        flight.manufacturer, flight.owner, flight.operator,
+        flight.country, flight.countryIso,
+        flight.originIata, flight.originCity, flight.originCountry,
+        flight.destinationIata, flight.destinationCity, flight.destinationCountry,
+        existing.id as number,
+      ],
+    );
   } else {
-    // Brand new aircraft — first insert
+    // Brand new aircraft — never seen before
+    console.log(`[upsert] ${flight.hex} → INSERT (first time)`);
     run(
       `INSERT INTO flights (
-        user_id, event_key, hex, registration, callsign, aircraft_type, manufacturer,
+        user_id, hex, registration, callsign, aircraft_type, manufacturer,
         owner, operator, country, country_iso,
         origin_iata, origin_city, origin_country,
         destination_iata, destination_city, destination_country,
         altitude_ft, speed_kts, bearing_deg, distance_nm,
         classification, times_seen, first_seen, last_seen
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        userId, eventKey, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
+        userId, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
         flight.manufacturer, flight.owner, flight.operator, flight.country, flight.countryIso,
         flight.originIata, flight.originCity, flight.originCountry,
         flight.destinationIata, flight.destinationCity, flight.destinationCountry,
         flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
-        flight.classification, now, now,
+        flight.classification, 1, now, now,
       ],
     );
   }
 
   return rowToFlight(
-    get<FlightRow>('SELECT * FROM flights WHERE event_key = ? ORDER BY last_seen DESC LIMIT 1', [eventKey])!,
+    get<FlightRow>('SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1', [flight.hex, userId])!,
   );
+}
+
+export function getLastKnownFlight(userId: number): Flight | null {
+  const row = get<FlightRow>(
+    'SELECT * FROM flights WHERE user_id = ? ORDER BY last_seen DESC LIMIT 1',
+    [userId],
+  );
+  return row ? rowToFlight(row) : null;
 }
 
 export function getFlightHistory(hex: string, userId: number) {

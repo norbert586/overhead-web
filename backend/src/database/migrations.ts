@@ -68,7 +68,7 @@ export function runMigrations(): void {
     CREATE INDEX IF NOT EXISTS idx_flights_classification ON flights(classification);
   `);
 
-  // Add event_key column to existing DBs — must happen before the index
+  // Add event_key column if it exists on old DBs (no longer used, kept for compat)
   try {
     exec(`ALTER TABLE flights ADD COLUMN event_key TEXT`);
   } catch { /* column already exists — fine */ }
@@ -83,30 +83,8 @@ export function runMigrations(): void {
     exec(`CREATE INDEX IF NOT EXISTS idx_flights_user_id ON flights(user_id)`);
   } catch { /* already exists */ }
 
-  // Backfill event_key for pre-existing rows (old format, no user prefix)
-  run(
-    `UPDATE flights
-     SET event_key = hex || '|' || COALESCE(registration,'') || '|' || COALESCE(callsign,'')
-     WHERE event_key IS NULL`,
-    [],
-  );
-
-  // Migrate old event_keys (no user prefix) to new format and assign to user 1.
-  // Detects old format by checking the key doesn't start with a digit followed by '|digit' or '|[A-F0-9]'
-  // Simpler: old keys start with a hex ICAO code (letters/digits, no leading digit-pipe pattern).
-  // Safest check: user_id IS NULL means it's a pre-auth row.
-  run(
-    `UPDATE flights
-     SET event_key = '1|' || event_key,
-         user_id   = 1
-     WHERE user_id IS NULL`,
-    [],
-  );
-
-  // Now safe to create the index (column guaranteed to exist)
-  try {
-    exec(`CREATE INDEX IF NOT EXISTS idx_flights_event_key ON flights(event_key)`);
-  } catch { /* already exists */ }
+  // Assign all legacy rows (pre-auth) to user 1
+  run(`UPDATE flights SET user_id = 1 WHERE user_id IS NULL`, []);
 
   console.log('Migrations complete.');
 }

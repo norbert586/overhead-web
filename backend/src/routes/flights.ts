@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { fetchClosest } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
-import { upsertFlight, getFlightHistory, getLog, getSessionStats } from '../database/queries';
+import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight } from '../database/queries';
 import { requireAuth } from '../middleware/auth';
 import type { FlightsResponse } from '../types/flight';
 
@@ -25,9 +25,11 @@ router.get('/', async (req: Request, res: Response) => {
     const ac = await fetchClosest(lat, lon, radius);
 
     if (!ac) {
+      console.log('[poll] adsb.lol: no aircraft in range → returning lastKnown');
       const dbStats = getSessionStats(req.userId);
+      const lastKnown = getLastKnownFlight(req.userId);
       const response: FlightsResponse = {
-        flights: [],
+        flights: lastKnown ? [lastKnown] : [],
         stats: { ...dbStats, activeCount: 0 },
         timestamp: new Date().toISOString(),
       };
@@ -37,6 +39,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     const callsign     = ac.flight?.trim() || null;
     const registration = ac.r?.trim()      || null;
+    console.log(`[poll] adsb.lol: ${ac.hex} | ${callsign ?? '—'} | ${registration ?? '—'} | ${ac.dst?.toFixed(1) ?? '?'} nm`);
 
     const [aircraftInfo, routeInfo] = await Promise.all([
       registration ? enrichAircraft(registration) : Promise.resolve({
