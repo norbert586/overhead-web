@@ -2,10 +2,13 @@ import { Router, Request, Response } from 'express';
 import { fetchClosest } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
-import { upsertFlight, getFlightHistory, getLog, getSessionStats } from '../database/queries';
+import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight } from '../database/queries';
+import { requireAuth } from '../middleware/auth';
 import type { FlightsResponse } from '../types/flight';
 
 const router = Router();
+
+router.use(requireAuth);
 
 // GET /api/flights?lat=&lon=&radius=
 router.get('/', async (req: Request, res: Response) => {
@@ -22,10 +25,11 @@ router.get('/', async (req: Request, res: Response) => {
     const ac = await fetchClosest(lat, lon, radius);
 
     if (!ac) {
-      // No aircraft in range — return empty with current db stats
-      const dbStats = getSessionStats();
+      console.log('[poll] adsb.lol: no aircraft in range → returning lastKnown');
+      const dbStats = getSessionStats(req.userId);
+      const lastKnown = getLastKnownFlight(req.userId);
       const response: FlightsResponse = {
-        flights: [],
+        flights: lastKnown ? [lastKnown] : [],
         stats: { ...dbStats, activeCount: 0 },
         timestamp: new Date().toISOString(),
       };
@@ -35,8 +39,8 @@ router.get('/', async (req: Request, res: Response) => {
 
     const callsign     = ac.flight?.trim() || null;
     const registration = ac.r?.trim()      || null;
+    console.log(`[poll] adsb.lol: ${ac.hex} | ${callsign ?? '—'} | ${registration ?? '—'} | ${ac.dst?.toFixed(1) ?? '?'} nm`);
 
-    // Enrich in parallel
     const [aircraftInfo, routeInfo] = await Promise.all([
       registration ? enrichAircraft(registration) : Promise.resolve({
         manufacturer: null, owner: null, country: null, countryIso: null,
@@ -75,10 +79,10 @@ router.get('/', async (req: Request, res: Response) => {
       bearingDeg:       ac.track ?? null,
       distanceNm:       ac.dst   ?? null,
       classification,
-      photoUrl:         null, // photos fetched client-side from Planespotters
-    });
+      photoUrl:         null,
+    }, req.userId);
 
-    const dbStats = getSessionStats();
+    const dbStats = getSessionStats(req.userId);
     const response: FlightsResponse = {
       flights: [flight],
       stats: { ...dbStats, activeCount: 1 },
@@ -94,7 +98,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 // GET /api/flights/:hex/history
 router.get('/:hex/history', (req: Request, res: Response) => {
-  const history = getFlightHistory(req.params.hex);
+  const history = getFlightHistory(req.params.hex, req.userId);
   if (!history) {
     res.status(404).json({ error: 'Not found' });
     return;
@@ -106,7 +110,7 @@ router.get('/:hex/history', (req: Request, res: Response) => {
 router.get('/log', (req: Request, res: Response) => {
   const limit  = Math.min(parseInt(req.query.limit  as string) || 50, 200);
   const offset = parseInt(req.query.offset as string) || 0;
-  res.json(getLog(limit, offset));
+  res.json(getLog(limit, offset, req.userId));
 });
 
 export default router;

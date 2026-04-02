@@ -10,7 +10,16 @@ function sleep(ms: number) {
 
 function isTransient(err: unknown): boolean {
   const code = (err as NodeJS.ErrnoException)?.code;
-  return code === 'ECONNRESET' || code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'ENOTFOUND';
+  const msg  = (err as Error)?.message ?? '';
+  return (
+    code === 'ECONNRESET' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ENOTFOUND' ||
+    code === 'UND_ERR_CONNECT_TIMEOUT' ||
+    msg.includes('Connect Timeout') ||
+    msg.includes('fetch failed')
+  );
 }
 
 /**
@@ -33,6 +42,7 @@ export async function fetchClosest(
       if (!res.ok) throw new Error(`adsb.lol ${res.status}`);
 
       const json = await res.json() as { ac?: AdsbAircraft[] };
+      console.log('[adsb.lol] raw response keys:', Object.keys(json), '| ac count:', json?.ac?.length ?? 'no ac key');
       const aircraft = json?.ac;
       if (!aircraft || aircraft.length === 0) return null;
 

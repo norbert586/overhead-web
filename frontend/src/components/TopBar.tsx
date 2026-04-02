@@ -9,6 +9,8 @@ interface TopBarProps {
   pollIntervalSec?: number;
   latitude?: number | null;
   longitude?: number | null;
+  userEmail?: string;
+  onLogout?: () => void;
 }
 
 export default function TopBar({
@@ -18,6 +20,8 @@ export default function TopBar({
   pollIntervalSec = 12,
   latitude,
   longitude,
+  userEmail,
+  onLogout,
 }: TopBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -73,9 +77,14 @@ export default function TopBar({
       <HamburgerMenu
         isOpen={menuOpen}
         view={view}
+        userEmail={userEmail}
         onSelect={(v) => {
           setView(v);
           setMenuOpen(false);
+        }}
+        onLogout={() => {
+          setMenuOpen(false);
+          onLogout?.();
         }}
       />
     </div>

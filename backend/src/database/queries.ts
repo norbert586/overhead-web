@@ -1,6 +1,32 @@
 import { run, get, all } from './db';
 import type { Flight } from '../types/flight';
 
+// ── User management ──────────────────────────────────────────────────────────
+
+interface UserRow extends Record<string, unknown> {
+  id: number;
+  email: string;
+  password_hash: string;
+  invite_code: string | null;
+  created_at: string;
+}
+
+export function createUser(email: string, passwordHash: string, inviteCode: string): UserRow {
+  run(
+    `INSERT INTO users (email, password_hash, invite_code) VALUES (?, ?, ?)`,
+    [email, passwordHash, inviteCode],
+  );
+  return get<UserRow>('SELECT * FROM users WHERE email = ?', [email])!;
+}
+
+export function findUserByEmail(email: string): UserRow | null {
+  return get<UserRow>('SELECT * FROM users WHERE email = ?', [email]) ?? null;
+}
+
+export function findUserById(id: number): UserRow | null {
+  return get<UserRow>('SELECT * FROM users WHERE id = ?', [id]) ?? null;
+}
+
 interface FlightRow extends Record<string, unknown> {
   hex: string;
   registration: string | null;
@@ -57,124 +83,114 @@ function rowToFlight(row: FlightRow): Flight {
   };
 }
 
-// Gap before the same aircraft creates a new event row (matches working app)
+// If an aircraft reappears after this gap it counts as a new visit
 const EVENT_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
 
-/** Upsert a flight using event_key dedup + COALESCE to protect enrichment data */
-export function upsertFlight(flight: Omit<Flight, 'timesSeen' | 'firstSeen' | 'lastSeen'>): Flight {
+/**
+ * Upsert logic — one row per unique aircraft (hex + user_id).
+ *
+ * Within the 20-min window  → update telemetry only, times_seen stays the same
+ * Beyond the 20-min window  → update telemetry + increment times_seen
+ * Never seen before         → insert with times_seen = 1
+ */
+export function upsertFlight(
+  flight: Omit<Flight, 'timesSeen' | 'firstSeen' | 'lastSeen'>,
+  userId: number,
+): Flight {
   const now = new Date().toISOString();
-  const eventKey = `${flight.hex}|${flight.registration ?? ''}|${flight.callsign ?? ''}`;
 
+  // One canonical record per aircraft per user, keyed by hex
   const existing = get<FlightRow>(
-    'SELECT * FROM flights WHERE event_key = ? ORDER BY last_seen DESC LIMIT 1',
-    [eventKey],
+    'SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1',
+    [flight.hex, userId],
   );
 
   if (existing) {
     const gapMs = Date.now() - new Date(existing.last_seen as string).getTime();
-    const isNewSighting = gapMs > EVENT_WINDOW_MS;
+    const isNewVisit = gapMs > EVENT_WINDOW_MS;
+    console.log(`[upsert] ${flight.hex} → ${isNewVisit ? 'NEW VISIT' : 'UPDATE'} | gap=${Math.round(gapMs/1000)}s | times_seen=${existing.times_seen as number}${isNewVisit ? ' → ' + ((existing.times_seen as number) + 1) : ''}`);
 
-    if (isNewSighting) {
-      // New event row — full insert, increment times_seen from previous best
-      run(
-        `INSERT INTO flights (
-          event_key, hex, registration, callsign, aircraft_type, manufacturer,
-          owner, operator, country, country_iso,
-          origin_iata, origin_city, origin_country,
-          destination_iata, destination_city, destination_country,
-          altitude_ft, speed_kts, bearing_deg, distance_nm,
-          classification, times_seen, first_seen, last_seen
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
-        [
-          eventKey, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
-          flight.manufacturer ?? existing.manufacturer,
-          flight.owner ?? existing.owner,
-          flight.operator ?? existing.operator,
-          flight.country ?? existing.country,
-          flight.countryIso ?? existing.country_iso,
-          flight.originIata ?? existing.origin_iata,
-          flight.originCity ?? existing.origin_city,
-          flight.originCountry ?? existing.origin_country,
-          flight.destinationIata ?? existing.destination_iata,
-          flight.destinationCity ?? existing.destination_city,
-          flight.destinationCountry ?? existing.destination_country,
-          flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
-          flight.classification, now, now,
-        ],
-      );
-    } else {
-      // Same flyover — update telemetry, use COALESCE to never overwrite good enrichment with null
-      run(
-        `UPDATE flights SET
-          altitude_ft      = ?,
-          speed_kts        = ?,
-          bearing_deg      = ?,
-          distance_nm      = ?,
-          classification   = ?,
-          last_seen        = ?,
-          manufacturer     = COALESCE(?, manufacturer),
-          owner            = COALESCE(?, owner),
-          operator         = COALESCE(?, operator),
-          country          = COALESCE(?, country),
-          country_iso      = COALESCE(?, country_iso),
-          origin_iata      = COALESCE(?, origin_iata),
-          origin_city      = COALESCE(?, origin_city),
-          origin_country   = COALESCE(?, origin_country),
-          destination_iata = COALESCE(?, destination_iata),
-          destination_city = COALESCE(?, destination_city),
-          destination_country = COALESCE(?, destination_country)
-        WHERE id = ?`,
-        [
-          flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
-          flight.classification, now,
-          flight.manufacturer, flight.owner, flight.operator,
-          flight.country, flight.countryIso,
-          flight.originIata, flight.originCity, flight.originCountry,
-          flight.destinationIata, flight.destinationCity, flight.destinationCountry,
-          existing.id as number,
-        ],
-      );
-    }
+    run(
+      `UPDATE flights SET
+        times_seen       = times_seen + ?,
+        altitude_ft      = ?,
+        speed_kts        = ?,
+        bearing_deg      = ?,
+        distance_nm      = ?,
+        classification   = ?,
+        last_seen        = ?,
+        manufacturer     = COALESCE(?, manufacturer),
+        owner            = COALESCE(?, owner),
+        operator         = COALESCE(?, operator),
+        country          = COALESCE(?, country),
+        country_iso      = COALESCE(?, country_iso),
+        origin_iata      = COALESCE(?, origin_iata),
+        origin_city      = COALESCE(?, origin_city),
+        origin_country   = COALESCE(?, origin_country),
+        destination_iata = COALESCE(?, destination_iata),
+        destination_city = COALESCE(?, destination_city),
+        destination_country = COALESCE(?, destination_country)
+      WHERE id = ?`,
+      [
+        isNewVisit ? 1 : 0,
+        flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
+        flight.classification, now,
+        flight.manufacturer, flight.owner, flight.operator,
+        flight.country, flight.countryIso,
+        flight.originIata, flight.originCity, flight.originCountry,
+        flight.destinationIata, flight.destinationCity, flight.destinationCountry,
+        existing.id as number,
+      ],
+    );
   } else {
-    // Brand new aircraft — first insert
+    // Brand new aircraft — never seen before
+    console.log(`[upsert] ${flight.hex} → INSERT (first time)`);
     run(
       `INSERT INTO flights (
-        event_key, hex, registration, callsign, aircraft_type, manufacturer,
+        user_id, hex, registration, callsign, aircraft_type, manufacturer,
         owner, operator, country, country_iso,
         origin_iata, origin_city, origin_country,
         destination_iata, destination_city, destination_country,
         altitude_ft, speed_kts, bearing_deg, distance_nm,
         classification, times_seen, first_seen, last_seen
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        eventKey, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
+        userId, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
         flight.manufacturer, flight.owner, flight.operator, flight.country, flight.countryIso,
         flight.originIata, flight.originCity, flight.originCountry,
         flight.destinationIata, flight.destinationCity, flight.destinationCountry,
         flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
-        flight.classification, now, now,
+        flight.classification, 1, now, now,
       ],
     );
   }
 
   return rowToFlight(
-    get<FlightRow>('SELECT * FROM flights WHERE event_key = ? ORDER BY last_seen DESC LIMIT 1', [eventKey])!,
+    get<FlightRow>('SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1', [flight.hex, userId])!,
   );
 }
 
-export function getFlightHistory(hex: string) {
+export function getLastKnownFlight(userId: number): Flight | null {
+  const row = get<FlightRow>(
+    'SELECT * FROM flights WHERE user_id = ? ORDER BY last_seen DESC LIMIT 1',
+    [userId],
+  );
+  return row ? rowToFlight(row) : null;
+}
+
+export function getFlightHistory(hex: string, userId: number) {
   return get<{ hex: string; times_seen: number; first_seen: string; last_seen: string }>(
-    'SELECT hex, times_seen, first_seen, last_seen FROM flights WHERE hex = ?',
-    [hex],
+    'SELECT hex, times_seen, first_seen, last_seen FROM flights WHERE hex = ? AND user_id = ?',
+    [hex, userId],
   );
 }
 
-export function getLog(limit: number, offset: number): { flights: Flight[]; total: number } {
+export function getLog(limit: number, offset: number, userId: number): { flights: Flight[]; total: number } {
   const rows = all<FlightRow>(
-    'SELECT * FROM flights ORDER BY last_seen DESC LIMIT ? OFFSET ?',
-    [limit, offset],
+    'SELECT * FROM flights WHERE user_id = ? ORDER BY last_seen DESC LIMIT ? OFFSET ?',
+    [userId, limit, offset],
   );
-  const countRow = get<{ count: number }>('SELECT COUNT(*) as count FROM flights');
+  const countRow = get<{ count: number }>('SELECT COUNT(*) as count FROM flights WHERE user_id = ?', [userId]);
   return {
     flights: rows.map(rowToFlight),
     total: countRow?.count ?? 0,
@@ -301,7 +317,7 @@ export function setCallsignCache(
 
 // ── Full stats dashboard ─────────────────────────────────────────────────────
 
-export function getAllStats() {
+export function getAllStats(userId: number) {
   const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const cutoff7d  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000).toISOString();
 
@@ -315,7 +331,7 @@ export function getAllStats() {
       COUNT(DISTINCT operator) as operators,
       COUNT(DISTINCT country) as countries,
       ROUND(AVG(altitude_ft)) as avg_altitude_ft
-    FROM flights`);
+    FROM flights WHERE user_id = ?`, [userId]);
 
   // 24-hour window
   const row24h = get<{
@@ -325,7 +341,7 @@ export function getAllStats() {
       COUNT(DISTINCT hex) as aircraft,
       COUNT(DISTINCT operator) as operators,
       SUM(CASE WHEN classification IN ('government','military') THEN 1 ELSE 0 END) as gov_count
-    FROM flights WHERE last_seen >= ?`, [cutoff24h]);
+    FROM flights WHERE user_id = ? AND last_seen >= ?`, [userId, cutoff24h]);
 
   // Classification breakdown
   const classRows = all<{
@@ -336,8 +352,9 @@ export function getAllStats() {
       COUNT(*) as total_count,
       COUNT(DISTINCT hex) as unique_aircraft,
       ROUND(AVG(altitude_ft)) as avg_altitude,
-      SUM(CASE WHEN last_seen >= '${cutoff24h}' THEN 1 ELSE 0 END) as count_24h
-    FROM flights GROUP BY classification ORDER BY total_count DESC`);
+      SUM(CASE WHEN last_seen >= ? THEN 1 ELSE 0 END) as count_24h
+    FROM flights WHERE user_id = ? GROUP BY classification ORDER BY total_count DESC`,
+    [cutoff24h, userId]);
 
   // Altitude distribution
   const altRows = all<{ band: string; count: number; sort_order: number }>(`
@@ -357,16 +374,16 @@ export function getAllStats() {
         WHEN altitude_ft < 40000 THEN 3
         ELSE 4
       END as sort_order
-    FROM flights GROUP BY band ORDER BY sort_order`);
+    FROM flights WHERE user_id = ? GROUP BY band ORDER BY sort_order`, [userId]);
 
   // Hourly activity — extract hour from ISO string (pos 12-13 in "YYYY-MM-DDTHH:...")
   const hourRows = all<{ hour: number; events: number }>(`
     SELECT
       CAST(substr(last_seen, 12, 2) AS INTEGER) as hour,
       COUNT(*) as events
-    FROM flights WHERE last_seen >= ?
+    FROM flights WHERE user_id = ? AND last_seen >= ?
     GROUP BY substr(last_seen, 12, 2)
-    ORDER BY hour`, [cutoff24h]);
+    ORDER BY hour`, [userId, cutoff24h]);
 
   // Weekly activity
   const weekRows = all<{ day_name: string; day_num: number; events: number }>(`
@@ -378,9 +395,9 @@ export function getAllStats() {
       END as day_name,
       CAST(strftime('%w', substr(last_seen,1,10)) AS INTEGER) as day_num,
       COUNT(*) as events
-    FROM flights WHERE last_seen >= ?
+    FROM flights WHERE user_id = ? AND last_seen >= ?
     GROUP BY strftime('%w', substr(last_seen,1,10))
-    ORDER BY day_num`, [cutoff7d]);
+    ORDER BY day_num`, [userId, cutoff7d]);
 
   // Top aircraft types
   const typeRows = all<{
@@ -388,8 +405,8 @@ export function getAllStats() {
     event_count: number; unique_aircraft: number;
   }>(`SELECT aircraft_type, MAX(manufacturer) as manufacturer,
       COUNT(*) as event_count, COUNT(DISTINCT hex) as unique_aircraft
-    FROM flights WHERE aircraft_type IS NOT NULL
-    GROUP BY aircraft_type ORDER BY event_count DESC LIMIT 15`);
+    FROM flights WHERE user_id = ? AND aircraft_type IS NOT NULL
+    GROUP BY aircraft_type ORDER BY event_count DESC LIMIT 15`, [userId]);
 
   // Top operators
   const operatorRows = all<{
@@ -399,8 +416,8 @@ export function getAllStats() {
       COUNT(*) as event_count,
       COUNT(DISTINCT hex) as unique_aircraft,
       MAX(classification) as top_classification
-    FROM flights WHERE operator IS NOT NULL
-    GROUP BY operator ORDER BY event_count DESC LIMIT 10`);
+    FROM flights WHERE user_id = ? AND operator IS NOT NULL
+    GROUP BY operator ORDER BY event_count DESC LIMIT 10`, [userId]);
 
   // Top countries
   const countryRows = all<{
@@ -408,8 +425,8 @@ export function getAllStats() {
     event_count: number; unique_aircraft: number;
   }>(`SELECT country, MAX(country_iso) as country_iso,
       COUNT(*) as event_count, COUNT(DISTINCT hex) as unique_aircraft
-    FROM flights WHERE country IS NOT NULL
-    GROUP BY country ORDER BY event_count DESC LIMIT 15`);
+    FROM flights WHERE user_id = ? AND country IS NOT NULL
+    GROUP BY country ORDER BY event_count DESC LIMIT 15`, [userId]);
 
   // Top routes
   const routeRows = all<{
@@ -422,15 +439,15 @@ export function getAllStats() {
       MAX(destination_city) as destination_city,
       COUNT(*) as event_count
     FROM flights
-    WHERE origin_iata IS NOT NULL AND destination_iata IS NOT NULL
+    WHERE user_id = ? AND origin_iata IS NOT NULL AND destination_iata IS NOT NULL
     GROUP BY origin_iata, destination_iata
-    ORDER BY event_count DESC LIMIT 12`);
+    ORDER BY event_count DESC LIMIT 12`, [userId]);
 
   // Recent notable — gov/mil or frequently seen
   const notableRows = all<FlightRow>(`
     SELECT * FROM flights
-    WHERE classification IN ('government','military') OR times_seen >= 5
-    ORDER BY last_seen DESC LIMIT 20`);
+    WHERE user_id = ? AND (classification IN ('government','military') OR times_seen >= 5)
+    ORDER BY last_seen DESC LIMIT 20`, [userId]);
 
   // Most seen aircraft (grouped by hex across all events)
   const mostSeenRows = all<{
@@ -451,8 +468,8 @@ export function getAllStats() {
       MIN(first_seen) as first_seen_ever,
       MAX(last_seen) as last_seen_ever,
       MAX(classification) as classification
-    FROM flights GROUP BY hex
-    ORDER BY max_times_seen DESC LIMIT 20`);
+    FROM flights WHERE user_id = ? GROUP BY hex
+    ORDER BY max_times_seen DESC LIMIT 20`, [userId]);
 
   return {
     summary: {
@@ -523,12 +540,13 @@ export function getAllStats() {
 
 // ── Session stats ────────────────────────────────────────────────────────────
 
-export function getSessionStats() {
-  const totalRow = get<{ count: number }>('SELECT COUNT(*) as count FROM flights');
-  const uniqueRow = get<{ count: number }>('SELECT COUNT(DISTINCT hex) as count FROM flights');
+export function getSessionStats(userId: number) {
+  const totalRow = get<{ count: number }>('SELECT COUNT(*) as count FROM flights WHERE user_id = ?', [userId]);
+  const uniqueRow = get<{ count: number }>('SELECT COUNT(DISTINCT hex) as count FROM flights WHERE user_id = ?', [userId]);
 
   const classRows = all<{ classification: string; count: number }>(
-    'SELECT classification, COUNT(*) as count FROM flights GROUP BY classification',
+    'SELECT classification, COUNT(*) as count FROM flights WHERE user_id = ? GROUP BY classification',
+    [userId],
   );
   const classCounts = { commercial: 0, private: 0, cargo: 0, government: 0 };
   for (const row of classRows) {
@@ -538,8 +556,9 @@ export function getSessionStats() {
 
   const topRows = all<{ aircraft_type: string; count: number }>(
     `SELECT aircraft_type, COUNT(*) as count FROM flights
-     WHERE aircraft_type IS NOT NULL
+     WHERE user_id = ? AND aircraft_type IS NOT NULL
      GROUP BY aircraft_type ORDER BY count DESC LIMIT 5`,
+    [userId],
   );
 
   return {

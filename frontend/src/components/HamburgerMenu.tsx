@@ -3,7 +3,9 @@ import type { View } from '../App';
 interface HamburgerMenuProps {
   isOpen: boolean;
   view: View;
+  userEmail?: string;
   onSelect: (view: View) => void;
+  onLogout?: () => void;
 }
 
 const FlightIcon = () => (
@@ -37,11 +39,20 @@ const ITEMS: { view: View; label: string; Icon: () => JSX.Element }[] = [
   { view: 'settings', label: 'Settings', Icon: SettingsIcon },
 ];
 
-export default function HamburgerMenu({ isOpen, view, onSelect }: HamburgerMenuProps) {
+const LogoutIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
+  </svg>
+);
+
+export default function HamburgerMenu({ isOpen, view, userEmail, onSelect, onLogout }: HamburgerMenuProps) {
   if (!isOpen) return null;
 
   return (
     <div className="menu-overlay">
+      {userEmail && (
+        <div className="menu-user">{userEmail}</div>
+      )}
       {ITEMS.map(({ view: v, label, Icon }) => (
         <div
           key={v}
@@ -52,6 +63,11 @@ export default function HamburgerMenu({ isOpen, view, onSelect }: HamburgerMenuP
           {label}
         </div>
       ))}
+      <div className="menu-divider" />
+      <div className="menu-item menu-item-logout" onClick={onLogout}>
+        <LogoutIcon />
+        Sign out
+      </div>
     </div>
   );
 }
