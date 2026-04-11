@@ -1,6 +1,6 @@
 import type { Flight } from './flight';
 
-export interface StatsData {
+export interface StatsSummaryData {
   summary: {
     totalEvents:    number;
     uniqueAircraft: number;
@@ -21,27 +21,45 @@ export interface StatsData {
     avgAltitude:    number | null;
     count24h:       number;
   }>;
+}
+
+export interface StatsAltitudeData {
   altitudeDistribution: Array<{ band: string; count: number }>;
-  hourlyActivity:       Array<{ hour: number; events: number }>;
-  weeklyActivity:       Array<{ dayName: string; dayNum: number; events: number }>;
+}
+
+export interface StatsActivityData {
+  hourlyActivity: Array<{ hour: number; events: number }>;
+  weeklyActivity: Array<{ dayName: string; dayNum: number; events: number }>;
+}
+
+export interface StatsAircraftTypesData {
   topAircraftTypes: Array<{
     aircraftType:   string;
     manufacturer:   string | null;
     eventCount:     number;
     uniqueAircraft: number;
   }>;
+}
+
+export interface StatsOperatorsData {
   topOperators: Array<{
     operator:          string;
     eventCount:        number;
     uniqueAircraft:    number;
     topClassification: string;
   }>;
+}
+
+export interface StatsCountriesData {
   topCountries: Array<{
     country:        string;
     countryIso:     string | null;
     eventCount:     number;
     uniqueAircraft: number;
   }>;
+}
+
+export interface StatsRoutesData {
   topRoutes: Array<{
     originIata:      string;
     originCity:      string | null;
@@ -49,7 +67,13 @@ export interface StatsData {
     destinationCity: string | null;
     eventCount:      number;
   }>;
+}
+
+export interface StatsNotableData {
   recentNotable: Flight[];
+}
+
+export interface StatsMostSeenData {
   mostSeenAircraft: Array<{
     hex:            string;
     registration:   string | null;

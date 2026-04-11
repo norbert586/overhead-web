@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import type { View } from '../App';
 
 interface HamburgerMenuProps {
@@ -32,7 +33,7 @@ const SettingsIcon = () => (
   </svg>
 );
 
-const ITEMS: { view: View; label: string; Icon: () => JSX.Element }[] = [
+const ITEMS: { view: View; label: string; Icon: () => ReactElement }[] = [
   { view: 'flight',   label: 'Flight',   Icon: FlightIcon },
   { view: 'log',      label: 'Log',      Icon: LogIcon },
   { view: 'stats',    label: 'Stats',    Icon: StatsIcon },
@@ -46,10 +47,8 @@ const LogoutIcon = () => (
 );
 
 export default function HamburgerMenu({ isOpen, view, userEmail, onSelect, onLogout }: HamburgerMenuProps) {
-  if (!isOpen) return null;
-
   return (
-    <div className="menu-overlay">
+    <div className={`menu-overlay${isOpen ? ' menu-open' : ''}`}>
       {userEmail && (
         <div className="menu-user">{userEmail}</div>
       )}

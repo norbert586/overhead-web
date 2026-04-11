@@ -2,7 +2,17 @@
 // Wraps all calls to the Overhead backend.
 
 import type { Flight, FlightsResponse } from '../types/flight';
-import type { StatsData } from '../types/stats';
+import type {
+  StatsSummaryData,
+  StatsAltitudeData,
+  StatsActivityData,
+  StatsAircraftTypesData,
+  StatsOperatorsData,
+  StatsCountriesData,
+  StatsRoutesData,
+  StatsNotableData,
+  StatsMostSeenData,
+} from '../types/stats';
 import type { AuthUser } from '../hooks/useAuth';
 import { getToken } from '../hooks/useAuth';
 
@@ -31,11 +41,21 @@ export async function fetchFlights(
   return res.json();
 }
 
-export async function fetchStats(): Promise<StatsData> {
-  const res = await apiFetch(`${BASE_URL}/api/stats`);
+async function statsGet<T>(path: string): Promise<T> {
+  const res = await apiFetch(`${BASE_URL}/api/stats/${path}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
+
+export const fetchStatsSummary      = () => statsGet<StatsSummaryData>('summary');
+export const fetchStatsAltitude     = () => statsGet<StatsAltitudeData>('altitude');
+export const fetchStatsActivity     = () => statsGet<StatsActivityData>('activity');
+export const fetchStatsAircraftTypes= () => statsGet<StatsAircraftTypesData>('aircraft-types');
+export const fetchStatsOperators    = () => statsGet<StatsOperatorsData>('operators');
+export const fetchStatsCountries    = () => statsGet<StatsCountriesData>('countries');
+export const fetchStatsRoutes       = () => statsGet<StatsRoutesData>('routes');
+export const fetchStatsNotable      = () => statsGet<StatsNotableData>('notable');
+export const fetchStatsMostSeen     = () => statsGet<StatsMostSeenData>('most-seen');
 
 export async function fetchLog(
   limit: number,

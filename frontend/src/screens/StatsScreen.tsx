@@ -1,12 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   type TooltipProps,
 } from 'recharts';
-import { fetchStats } from '../services/api';
+import {
+  fetchStatsSummary,
+  fetchStatsAltitude,
+  fetchStatsActivity,
+  fetchStatsAircraftTypes,
+  fetchStatsOperators,
+  fetchStatsCountries,
+  fetchStatsRoutes,
+  fetchStatsNotable,
+  fetchStatsMostSeen,
+} from '../services/api';
 import { getAirlineIata, getAirlineLogoUrl } from '../utils/airlines';
 import { countryToFlag } from '../utils/formatting';
-import type { StatsData } from '../types/stats';
+import type {
+  StatsSummaryData,
+  StatsAltitudeData,
+  StatsActivityData,
+  StatsAircraftTypesData,
+  StatsOperatorsData,
+  StatsCountriesData,
+  StatsRoutesData,
+  StatsNotableData,
+  StatsMostSeenData,
+} from '../types/stats';
 import type { Flight } from '../types/flight';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -21,14 +41,29 @@ const CLASS_COLORS: Record<string, string> = {
 };
 
 const THREAT_LEVELS = [
-  { max: 2,   label: 'CLEAR',    color: '#4a9b6f' },
-  { max: 6,   label: 'LOW',      color: '#c4935a' },
-  { max: 12,  label: 'ELEVATED', color: '#d4864a' },
-  { max: Infinity, label: 'HIGH', color: '#d46b6b' },
+  { max: 2,        label: 'CLEAR',    color: '#4a9b6f' },
+  { max: 6,        label: 'LOW',      color: '#c4935a' },
+  { max: 12,       label: 'ELEVATED', color: '#d4864a' },
+  { max: Infinity, label: 'HIGH',     color: '#d46b6b' },
 ];
 
 function getThreatLevel(govCount: number) {
   return THREAT_LEVELS.find((l) => govCount <= l.max) ?? THREAT_LEVELS[3];
+}
+
+// ── Per-section state ─────────────────────────────────────────────────────────
+
+type S<T> = { data: T | null; loading: boolean; error: boolean };
+const init = <T,>(): S<T> => ({ data: null, loading: true, error: false });
+
+function loadSection<T>(
+  fetcher: () => Promise<T>,
+  setter: Dispatch<SetStateAction<S<T>>>,
+) {
+  setter({ data: null, loading: true, error: false });
+  fetcher()
+    .then((data) => setter({ data, loading: false, error: false }))
+    .catch(() => setter({ data: null, loading: false, error: true }));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,18 +88,16 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// Fill hourly data so all 24 hours are present
-function fillHours(data: StatsData['hourlyActivity']) {
+function fillHours(data: StatsActivityData['hourlyActivity']) {
   return Array.from({ length: 24 }, (_, i) => ({
     label: `${String(i).padStart(2, '0')}`,
     events: data.find((h) => h.hour === i)?.events ?? 0,
   }));
 }
 
-// Fill weekly data so all 7 days are present (in Mon-Sun order)
 const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_NUM   = [1, 2, 3, 4, 5, 6, 0];
-function fillWeek(data: StatsData['weeklyActivity']) {
+function fillWeek(data: StatsActivityData['weeklyActivity']) {
   return DAY_ORDER.map((name, i) => ({
     label:  name,
     events: data.find((d) => d.dayNum === DAY_NUM[i])?.events ?? 0,
@@ -94,6 +127,14 @@ function SCard({ title, className = '', children }: {
       {children}
     </div>
   );
+}
+
+function SCardError({ message = 'Failed to load' }: { message?: string }) {
+  return <div className="s-section-error">{message}</div>;
+}
+
+function SCardLoading() {
+  return <div className="s-section-loading">Loading…</div>;
 }
 
 function BarRow({ label, value, max, color = 'var(--accent)' }: {
@@ -135,7 +176,7 @@ function OperatorLogo({ name }: { name: string }) {
   );
 }
 
-// ── Notable / Most-seen expandable row ────────────────────────────────────────
+// ── Notable / Most-seen expandable rows ───────────────────────────────────────
 
 function NotableRow({ f }: { f: Flight }) {
   const [open, setOpen] = useState(false);
@@ -176,7 +217,7 @@ function NotableRow({ f }: { f: Flight }) {
 }
 
 function MostSeenRow({ a, rank }: {
-  a: StatsData['mostSeenAircraft'][0]; rank: number;
+  a: StatsMostSeenData['mostSeenAircraft'][0]; rank: number;
 }) {
   const [open, setOpen] = useState(false);
   const type = [a.manufacturer, a.aircraftType].filter(Boolean).join(' ') || '—';
@@ -219,31 +260,44 @@ function MostSeenRow({ a, rank }: {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function StatsScreen() {
-  const [data,    setData   ] = useState<StatsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError  ] = useState(false);
-  const [updated, setUpdated] = useState<Date | null>(null);
+  const [summary,       setSummary      ] = useState<S<StatsSummaryData>>(init);
+  const [altitude,      setAltitude     ] = useState<S<StatsAltitudeData>>(init);
+  const [activity,      setActivity     ] = useState<S<StatsActivityData>>(init);
+  const [aircraftTypes, setAircraftTypes] = useState<S<StatsAircraftTypesData>>(init);
+  const [operators,     setOperators    ] = useState<S<StatsOperatorsData>>(init);
+  const [countries,     setCountries    ] = useState<S<StatsCountriesData>>(init);
+  const [routes,        setRoutes       ] = useState<S<StatsRoutesData>>(init);
+  const [notable,       setNotable      ] = useState<S<StatsNotableData>>(init);
+  const [mostSeen,      setMostSeen     ] = useState<S<StatsMostSeenData>>(init);
+  const [updated,       setUpdated      ] = useState<Date | null>(null);
 
   function load() {
-    setLoading(true);
-    setError(false);
-    fetchStats()
-      .then((d) => { setData(d); setUpdated(new Date()); })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+    loadSection(fetchStatsSummary,       setSummary);
+    loadSection(fetchStatsAltitude,      setAltitude);
+    loadSection(fetchStatsActivity,      setActivity);
+    loadSection(fetchStatsAircraftTypes, setAircraftTypes);
+    loadSection(fetchStatsOperators,     setOperators);
+    loadSection(fetchStatsCountries,     setCountries);
+    loadSection(fetchStatsRoutes,        setRoutes);
+    loadSection(fetchStatsNotable,       setNotable);
+    loadSection(fetchStatsMostSeen,      setMostSeen);
+    setUpdated(new Date());
   }
 
   useEffect(() => { load(); }, []);
 
-  const threat = data ? getThreatLevel(data.summary24h.govCount) : null;
-  const hourlyFull = data ? fillHours(data.hourlyActivity) : [];
-  const weeklyFull = data ? fillWeek(data.weeklyActivity)  : [];
-  const maxClass   = data ? Math.max(...data.classification.map((c) => c.totalCount), 1) : 1;
-  const maxType    = data ? Math.max(...data.topAircraftTypes.map((t) => t.eventCount), 1) : 1;
-  const maxOp      = data ? Math.max(...data.topOperators.map((o) => o.eventCount), 1) : 1;
-  const maxCountry = data ? Math.max(...data.topCountries.map((c) => c.eventCount), 1) : 1;
-  const maxRoute   = data ? Math.max(...data.topRoutes.map((r) => r.eventCount), 1) : 1;
-  const maxAlt     = data ? Math.max(...data.altitudeDistribution.map((a) => a.count), 1) : 1;
+  const anyLoading = [summary, altitude, activity, aircraftTypes, operators, countries, routes, notable, mostSeen]
+    .some((s) => s.loading);
+
+  const threat     = summary.data ? getThreatLevel(summary.data.summary24h.govCount) : null;
+  const hourlyFull = activity.data ? fillHours(activity.data.hourlyActivity) : [];
+  const weeklyFull = activity.data ? fillWeek(activity.data.weeklyActivity)  : [];
+  const maxClass   = summary.data      ? Math.max(...summary.data.classification.map((c) => c.totalCount), 1) : 1;
+  const maxType    = aircraftTypes.data ? Math.max(...aircraftTypes.data.topAircraftTypes.map((t) => t.eventCount), 1) : 1;
+  const maxOp      = operators.data    ? Math.max(...operators.data.topOperators.map((o) => o.eventCount), 1) : 1;
+  const maxCountry = countries.data    ? Math.max(...countries.data.topCountries.map((c) => c.eventCount), 1) : 1;
+  const maxRoute   = routes.data       ? Math.max(...routes.data.topRoutes.map((r) => r.eventCount), 1) : 1;
+  const maxAlt     = altitude.data     ? Math.max(...altitude.data.altitudeDistribution.map((a) => a.count), 1) : 1;
 
   const AXIS_STYLE = {
     tick:     { fill: '#55667a', fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" },
@@ -259,99 +313,109 @@ export default function StatsScreen() {
         {updated && (
           <span className="stats-updated">Updated {updated.toLocaleTimeString()}</span>
         )}
-        <button className="stats-refresh-btn" onClick={load} disabled={loading}>
-          {loading ? 'Loading…' : '↻ Refresh'}
+        <button className="stats-refresh-btn" onClick={load} disabled={anyLoading}>
+          {anyLoading ? 'Loading…' : '↻ Refresh'}
         </button>
       </div>
 
-      {error && <div className="stats-error">Failed to load statistics.</div>}
+      <div className="stats-grid">
 
-      {data && (
-        <div className="stats-grid">
-
-          {/* ── Threat level ── */}
-          <SCard title="Threat Level" className="s-threat">
+        {/* ── Threat level ── */}
+        <SCard title="Threat Level" className="s-threat">
+          {summary.loading ? <SCardLoading /> : summary.error ? <SCardError /> : (
             <div className="s-threat-body">
               <div className="s-threat-level" style={{ color: threat!.color }}>
                 {threat!.label}
               </div>
               <div className="s-threat-count" style={{ color: threat!.color }}>
-                {fmt(data.summary24h.govCount)}
+                {fmt(summary.data!.summary24h.govCount)}
               </div>
               <div className="s-threat-sub">gov / mil aircraft in last 24h</div>
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── 24h snapshot ── */}
-          <SCard title="Last 24 Hours">
-            {[
-              ['Events',    fmt(data.summary24h.events)],
-              ['Aircraft',  fmt(data.summary24h.aircraft)],
-              ['Operators', fmt(data.summary24h.operators)],
+        {/* ── 24h snapshot ── */}
+        <SCard title="Last 24 Hours">
+          {summary.loading ? <SCardLoading /> : summary.error ? <SCardError /> : (
+            [
+              ['Events',    fmt(summary.data!.summary24h.events)],
+              ['Aircraft',  fmt(summary.data!.summary24h.aircraft)],
+              ['Operators', fmt(summary.data!.summary24h.operators)],
             ].map(([l, v]) => (
               <div className="s-stat-row" key={l}>
                 <span className="s-stat-label">{l}</span>
                 <span className="s-stat-value">{v}</span>
               </div>
-            ))}
-          </SCard>
+            ))
+          )}
+        </SCard>
 
-          {/* ── All-time snapshot ── */}
-          <SCard title="All Time">
-            {[
-              ['Total events',    fmt(data.summary.totalEvents)],
-              ['Unique aircraft', fmt(data.summary.uniqueAircraft)],
-              ['Operators',       fmt(data.summary.operators)],
-              ['Countries',       fmt(data.summary.countries)],
-              ['Avg altitude',    fmtAlt(data.summary.avgAltitudeFt)],
+        {/* ── All-time snapshot ── */}
+        <SCard title="All Time">
+          {summary.loading ? <SCardLoading /> : summary.error ? <SCardError /> : (
+            [
+              ['Total events',    fmt(summary.data!.summary.totalEvents)],
+              ['Unique aircraft', fmt(summary.data!.summary.uniqueAircraft)],
+              ['Operators',       fmt(summary.data!.summary.operators)],
+              ['Countries',       fmt(summary.data!.summary.countries)],
+              ['Avg altitude',    fmtAlt(summary.data!.summary.avgAltitudeFt)],
             ].map(([l, v]) => (
               <div className="s-stat-row" key={l}>
                 <span className="s-stat-label">{l}</span>
                 <span className="s-stat-value">{v}</span>
               </div>
-            ))}
-          </SCard>
+            ))
+          )}
+        </SCard>
 
-          {/* ── Classification breakdown ── */}
-          <SCard title="Classification Breakdown" className="s-full">
-            <div className="s-chart-sm">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.classification.map((c) => ({
-                  name: c.classification, total: c.totalCount, h24: c.count24h,
-                }))} barGap={4} barSize={28}>
-                  <XAxis dataKey="name" {...AXIS_STYLE} />
-                  <YAxis {...AXIS_STYLE} width={36} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                  <Bar dataKey="total" name="All time" radius={[2, 2, 0, 0]}>
-                    {data.classification.map((c) => (
-                      <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#5a6370'} fillOpacity={0.75} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="h24" name="Last 24h" radius={[2, 2, 0, 0]}>
-                    {data.classification.map((c) => (
-                      <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#5a6370'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="s-chart-legend">
-              <span className="s-legend-item"><span className="s-legend-swatch" style={{ opacity: 0.75 }} />All time</span>
-              <span className="s-legend-item"><span className="s-legend-swatch" />Last 24h</span>
-            </div>
-          </SCard>
+        {/* ── Classification breakdown ── */}
+        <SCard title="Classification Breakdown" className="s-full">
+          {summary.loading ? <SCardLoading /> : summary.error ? <SCardError /> : (
+            <>
+              <div className="s-chart-sm">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={summary.data!.classification.map((c) => ({
+                    name: c.classification, total: c.totalCount, h24: c.count24h,
+                  }))} barGap={4} barSize={28}>
+                    <XAxis dataKey="name" {...AXIS_STYLE} />
+                    <YAxis {...AXIS_STYLE} width={36} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                    <Bar dataKey="total" name="All time" radius={[2, 2, 0, 0]}>
+                      {summary.data!.classification.map((c) => (
+                        <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#5a6370'} fillOpacity={0.75} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="h24" name="Last 24h" radius={[2, 2, 0, 0]}>
+                      {summary.data!.classification.map((c) => (
+                        <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#5a6370'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="s-chart-legend">
+                <span className="s-legend-item"><span className="s-legend-swatch" style={{ opacity: 0.75 }} />All time</span>
+                <span className="s-legend-item"><span className="s-legend-swatch" />Last 24h</span>
+              </div>
+            </>
+          )}
+        </SCard>
 
-          {/* ── Altitude distribution ── */}
-          <SCard title="Altitude Distribution">
+        {/* ── Altitude distribution ── */}
+        <SCard title="Altitude Distribution">
+          {altitude.loading ? <SCardLoading /> : altitude.error ? <SCardError /> : (
             <div className="s-bar-list">
-              {data.altitudeDistribution.map((a) => (
+              {altitude.data!.altitudeDistribution.map((a) => (
                 <BarRow key={a.band} label={a.band} value={a.count} max={maxAlt} />
               ))}
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Hourly activity ── */}
-          <SCard title="Hourly Activity (Last 24h)">
+        {/* ── Hourly activity ── */}
+        <SCard title="Hourly Activity (Last 24h)">
+          {activity.loading ? <SCardLoading /> : activity.error ? <SCardError /> : (
             <div className="s-chart-sm">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyFull} barSize={8}>
@@ -362,10 +426,12 @@ export default function StatsScreen() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Weekly breakdown ── */}
-          <SCard title="Weekly Activity (Last 7 Days)" className="s-full">
+        {/* ── Weekly breakdown ── */}
+        <SCard title="Weekly Activity (Last 7 Days)" className="s-full">
+          {activity.loading ? <SCardLoading /> : activity.error ? <SCardError /> : (
             <div className="s-chart-md">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weeklyFull} barSize={36}>
@@ -376,12 +442,14 @@ export default function StatsScreen() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Most common aircraft types ── */}
-          <SCard title="Most Common Aircraft Types">
+        {/* ── Most common aircraft types ── */}
+        <SCard title="Most Common Aircraft Types">
+          {aircraftTypes.loading ? <SCardLoading /> : aircraftTypes.error ? <SCardError /> : (
             <div className="s-bar-list">
-              {data.topAircraftTypes.map((t) => (
+              {aircraftTypes.data!.topAircraftTypes.map((t) => (
                 <BarRow
                   key={t.aircraftType}
                   label={`${t.aircraftType}${t.manufacturer ? ` · ${t.manufacturer}` : ''}`}
@@ -390,10 +458,12 @@ export default function StatsScreen() {
                 />
               ))}
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Recent notable ── */}
-          <SCard title="Recent Notable Activity">
+        {/* ── Recent notable ── */}
+        <SCard title="Recent Notable Activity">
+          {notable.loading ? <SCardLoading /> : notable.error ? <SCardError /> : (
             <div className="s-exp-list">
               <div className="s-exp-header">
                 <span />
@@ -404,16 +474,18 @@ export default function StatsScreen() {
                 <span className="s-col-label">Seen</span>
                 <span />
               </div>
-              {data.recentNotable.length === 0
+              {notable.data!.recentNotable.length === 0
                 ? <div className="s-empty">No notable activity yet</div>
-                : data.recentNotable.map((f) => (
+                : notable.data!.recentNotable.map((f) => (
                   <NotableRow key={`${f.hex}-${f.firstSeen}`} f={f} />
                 ))}
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Most seen aircraft ── */}
-          <SCard title="Most Seen Aircraft" className="s-full">
+        {/* ── Most seen aircraft ── */}
+        <SCard title="Most Seen Aircraft" className="s-full">
+          {mostSeen.loading ? <SCardLoading /> : mostSeen.error ? <SCardError /> : (
             <div className="s-exp-list">
               <div className="s-exp-header s-exp-header-seen">
                 <span className="s-col-label">#</span>
@@ -424,16 +496,18 @@ export default function StatsScreen() {
                 <span className="s-col-label s-col-right">Times seen</span>
                 <span />
               </div>
-              {data.mostSeenAircraft.map((a, i) => (
+              {mostSeen.data!.mostSeenAircraft.map((a, i) => (
                 <MostSeenRow key={a.hex} a={a} rank={i + 1} />
               ))}
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Top operators ── */}
-          <SCard title="Most Active Operators">
+        {/* ── Top operators ── */}
+        <SCard title="Most Active Operators">
+          {operators.loading ? <SCardLoading /> : operators.error ? <SCardError /> : (
             <div className="s-op-list">
-              {data.topOperators.map((o) => (
+              {operators.data!.topOperators.map((o) => (
                 <div className="s-op-row" key={o.operator}>
                   <OperatorLogo name={o.operator} />
                   <div className="s-op-info">
@@ -450,12 +524,14 @@ export default function StatsScreen() {
                 </div>
               ))}
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Top countries ── */}
-          <SCard title="Most Common Countries">
+        {/* ── Top countries ── */}
+        <SCard title="Most Common Countries">
+          {countries.loading ? <SCardLoading /> : countries.error ? <SCardError /> : (
             <div className="s-bar-list">
-              {data.topCountries.map((c) => (
+              {countries.data!.topCountries.map((c) => (
                 <BarRow
                   key={c.country}
                   label={`${c.countryIso ? countryToFlag(c.country) + ' ' : ''}${c.country}`}
@@ -464,14 +540,16 @@ export default function StatsScreen() {
                 />
               ))}
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-          {/* ── Top routes ── */}
-          <SCard title="Most Common Routes">
+        {/* ── Top routes ── */}
+        <SCard title="Most Common Routes">
+          {routes.loading ? <SCardLoading /> : routes.error ? <SCardError /> : (
             <div className="s-bar-list">
-              {data.topRoutes.length === 0
+              {routes.data!.topRoutes.length === 0
                 ? <div className="s-empty">No route data yet</div>
-                : data.topRoutes.map((r) => (
+                : routes.data!.topRoutes.map((r) => (
                   <BarRow
                     key={`${r.originIata}-${r.destinationIata}`}
                     label={`${r.originIata} → ${r.destinationIata}`}
@@ -481,10 +559,10 @@ export default function StatsScreen() {
                   />
                 ))}
             </div>
-          </SCard>
+          )}
+        </SCard>
 
-        </div>
-      )}
+      </div>
     </div>
   );
 }
