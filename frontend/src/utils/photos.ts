@@ -92,34 +92,49 @@ export async function fetchPhotoWaterfall(
 ): Promise<PhotoResult | null> {
   if (!registration) return null;
 
-  if (regCache.has(registration)) return regCache.get(registration)!;
+  if (regCache.has(registration)) {
+    const cached = regCache.get(registration)!;
+    console.log(`[photo] ${registration} → cache hit:`, cached ?? 'null');
+    return cached;
+  }
+
+  console.log(`[photo] ${registration} — starting waterfall (type: ${typeCode ?? 'unknown'})`);
 
   // Tier 1 — Planespotters, specific aircraft
   const t1 = await fromPlanespotters(registration);
   if (t1) {
+    console.log(`[photo] ${registration} → tier 1 HIT (Planespotters):`, t1);
     const result: PhotoResult = { url: t1, tier: 'specific' };
     regCache.set(registration, result);
     return result;
   }
+  console.log(`[photo] ${registration} → tier 1 miss (Planespotters)`);
 
   // Tier 2 — airport-data.com, specific aircraft
   const t2 = await fromAirportData(registration);
   if (t2) {
+    console.log(`[photo] ${registration} → tier 2 HIT (airport-data.com):`, t2);
     const result: PhotoResult = { url: t2, tier: 'specific' };
     regCache.set(registration, result);
     return result;
   }
+  console.log(`[photo] ${registration} → tier 2 miss (airport-data.com)`);
 
   // Tier 3 — Planespotters by type code, comparable aircraft
   if (typeCode) {
     const t3 = await fromPlanespottersByType(typeCode);
     if (t3) {
+      console.log(`[photo] ${registration} → tier 3 HIT (comparable, type ${typeCode}):`, t3);
       const result: PhotoResult = { url: t3, tier: 'comparable' };
       regCache.set(registration, result);
       return result;
     }
+    console.log(`[photo] ${registration} → tier 3 miss (no type photo for ${typeCode})`);
+  } else {
+    console.log(`[photo] ${registration} → tier 3 skipped (no type code)`);
   }
 
+  console.log(`[photo] ${registration} → all tiers exhausted — no intel`);
   regCache.set(registration, null);
   return null;
 }

@@ -28,9 +28,11 @@ export default function AircraftPhoto({ callsign, registration, aircraftType }: 
       if (res) {
         setResult(res);
         setViewState('photo');
+        console.log(`[AircraftPhoto] rendering "${res.tier}" photo for ${registration}`);
       } else {
         setResult(null);
         setViewState('nointel');
+        console.log(`[AircraftPhoto] rendering no-intel box for ${registration} (type: ${aircraftType ?? 'unknown'})`);
       }
     });
 
