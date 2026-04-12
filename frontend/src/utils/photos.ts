@@ -1,45 +1,142 @@
-// Shared Planespotters photo fetch — module-level cache so results survive re-renders
-// and are shared between AircraftPhoto (main view) and LogScreen (detail rows).
+// Aircraft photo waterfall: Planespotters → airport-data.com → type-based fallback
+// Module-level caches survive re-renders and are shared across all consumers.
 
-type PhotoEntry = {
-  thumbnail_large?: { src?: string };
-  large?: { src?: string };
-};
+export type PhotoTier = 'specific' | 'comparable';
 
-const cache = new Map<string, string | null>();
+export interface PhotoResult {
+  url: string;
+  tier: PhotoTier;
+}
 
-function upsizeUrl(url: string): string {
+// Per-registration cache (tiers 1–2 results, keyed by reg)
+const regCache  = new Map<string, PhotoResult | null>();
+// Per-type cache (tier 3 results, keyed by ICAO type code)
+const typeCache = new Map<string, string | null>();
+
+// ── helpers ─────────────────────────────────────────────────────
+
+function upsizePlanespotters(url: string): string {
   return url
     .replace('/thumbnail_large/', '/full_nosym/')
     .replace('-thumbnail_large.', '.');
 }
 
-/**
- * Fetch the best available photo URL for a registration.
- * Prefers `large` field if present, otherwise tries to upsize the thumbnail_large CDN URL.
- * Falls back to raw thumbnail_large if upsizing produced a bad URL (caller handles onError).
- */
-export async function fetchPhoto(registration: string): Promise<string | null> {
-  if (cache.has(registration)) return cache.get(registration)!;
+/** Derive the safe thumbnail_large URL from an upsized Planespotters URL — used by LogScreen. */
+export function thumbnailFallback(upsized: string): string {
+  return upsized.replace('/full_nosym/', '/thumbnail_large/');
+}
+
+type PSPhoto = { thumbnail_large?: { src?: string }; large?: { src?: string } };
+
+function bestPlanespottersUrl(photo: PSPhoto): string | null {
+  const thumb = photo?.thumbnail_large?.src ?? null;
+  return photo?.large?.src ?? (thumb ? upsizePlanespotters(thumb) : null);
+}
+
+// ── Tier 1: Planespotters by registration ────────────────────────
+
+async function fromPlanespotters(reg: string): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://api.planespotters.net/pub/photos/reg/${encodeURIComponent(registration)}`,
+      `https://api.planespotters.net/pub/photos/reg/${encodeURIComponent(reg)}`,
     );
-    if (!res.ok) { cache.set(registration, null); return null; }
-    const json = await res.json() as { photos?: PhotoEntry[] };
+    if (!res.ok) return null;
+    const json = await res.json() as { photos?: PSPhoto[] };
     const photo = json?.photos?.[0];
-    const thumb = photo?.thumbnail_large?.src ?? null;
-    const src   = photo?.large?.src ?? (thumb ? upsizeUrl(thumb) : null);
-    cache.set(registration, src);
-    return src;
+    return photo ? bestPlanespottersUrl(photo) : null;
   } catch {
-    cache.set(registration, null);
     return null;
   }
 }
 
-/** Derive the safe thumbnail_large URL from an upsized URL, for onError fallback. */
-export function thumbnailFallback(upsized: string): string {
-  return upsized
-    .replace('/full_nosym/', '/thumbnail_large/');
+// ── Tier 2: airport-data.com by registration ─────────────────────
+
+async function fromAirportData(reg: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.airport-data.com/api/ac_thumb.json?m=${encodeURIComponent(reg)}&n=1`,
+    );
+    if (!res.ok) return null;
+    const json = await res.json() as { data?: { image?: string }[] };
+    return json?.data?.[0]?.image ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Tier 3: Planespotters by ICAO type code (comparable aircraft) ─
+
+async function fromPlanespottersByType(typeCode: string): Promise<string | null> {
+  if (typeCache.has(typeCode)) return typeCache.get(typeCode)!;
+  try {
+    const res = await fetch(
+      `https://api.planespotters.net/pub/photos/icao/${encodeURIComponent(typeCode)}`,
+    );
+    if (!res.ok) { typeCache.set(typeCode, null); return null; }
+    const json = await res.json() as { photos?: PSPhoto[] };
+    const photo = json?.photos?.[0];
+    const url = photo ? bestPlanespottersUrl(photo) : null;
+    typeCache.set(typeCode, url);
+    return url;
+  } catch {
+    typeCache.set(typeCode, null);
+    return null;
+  }
+}
+
+// ── Main waterfall ───────────────────────────────────────────────
+
+export async function fetchPhotoWaterfall(
+  registration: string | null,
+  typeCode: string | null,
+): Promise<PhotoResult | null> {
+  if (!registration) return null;
+
+  if (regCache.has(registration)) return regCache.get(registration)!;
+
+  // Tier 1 — Planespotters, specific aircraft
+  const t1 = await fromPlanespotters(registration);
+  if (t1) {
+    const result: PhotoResult = { url: t1, tier: 'specific' };
+    regCache.set(registration, result);
+    return result;
+  }
+
+  // Tier 2 — airport-data.com, specific aircraft
+  const t2 = await fromAirportData(registration);
+  if (t2) {
+    const result: PhotoResult = { url: t2, tier: 'specific' };
+    regCache.set(registration, result);
+    return result;
+  }
+
+  // Tier 3 — Planespotters by type code, comparable aircraft
+  if (typeCode) {
+    const t3 = await fromPlanespottersByType(typeCode);
+    if (t3) {
+      const result: PhotoResult = { url: t3, tier: 'comparable' };
+      regCache.set(registration, result);
+      return result;
+    }
+  }
+
+  regCache.set(registration, null);
+  return null;
+}
+
+// ── Backward-compat shim for LogScreen ──────────────────────────
+// Runs tiers 1–2 only (no type fallback needed for log row thumbnails).
+
+export async function fetchPhoto(registration: string): Promise<string | null> {
+  const cached = regCache.get(registration);
+  if (cached !== undefined) return cached?.url ?? null;
+
+  const t1 = await fromPlanespotters(registration);
+  if (t1) { regCache.set(registration, { url: t1, tier: 'specific' }); return t1; }
+
+  const t2 = await fromAirportData(registration);
+  if (t2) { regCache.set(registration, { url: t2, tier: 'specific' }); return t2; }
+
+  regCache.set(registration, null);
+  return null;
 }
