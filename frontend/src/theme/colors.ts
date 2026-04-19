@@ -4,9 +4,9 @@
 
 export const colors = {
   // Backgrounds
-  bgPrimary:    '#070a10',
-  bgCard:       '#0a0e16',
-  bgElevated:   '#0d1219',
+  bgPrimary:    '#050810',
+  bgCard:       '#080c14',
+  bgElevated:   '#0b1020',
   border:       '#141c28',
   borderSubtle: '#101620',
 
