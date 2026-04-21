@@ -16,7 +16,7 @@ import type {
 import type { AuthUser } from '../hooks/useAuth';
 import { getToken } from '../hooks/useAuth';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? `http://${window.location.hostname}:3001`;
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
 function authHeaders(): Record<string, string> {
   const token = getToken();
