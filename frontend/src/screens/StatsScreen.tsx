@@ -106,7 +106,7 @@ function fillWeek(data: StatsActivityData['weeklyActivity']) {
 
 // ── Custom chart tooltip ──────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
+function ChartTooltip({ active, payload, label }: TooltipProps<number, string> & { payload?: { value: number }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="chart-tooltip">
@@ -292,7 +292,7 @@ export default function StatsScreen() {
   const threat     = summary.data ? getThreatLevel(summary.data.summary24h.govCount) : null;
   const hourlyFull = activity.data ? fillHours(activity.data.hourlyActivity) : [];
   const weeklyFull = activity.data ? fillWeek(activity.data.weeklyActivity)  : [];
-  const maxClass   = summary.data      ? Math.max(...summary.data.classification.map((c) => c.totalCount), 1) : 1;
+
   const maxType    = aircraftTypes.data ? Math.max(...aircraftTypes.data.topAircraftTypes.map((t) => t.eventCount), 1) : 1;
   const maxOp      = operators.data    ? Math.max(...operators.data.topOperators.map((o) => o.eventCount), 1) : 1;
   const maxCountry = countries.data    ? Math.max(...countries.data.topCountries.map((c) => c.eventCount), 1) : 1;

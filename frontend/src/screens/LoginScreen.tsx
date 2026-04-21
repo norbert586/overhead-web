@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { apiLogin } from '../services/api';
 import type { AuthUser } from '../hooks/useAuth';
 
