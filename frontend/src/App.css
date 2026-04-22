@@ -658,6 +658,24 @@ body {
 
 /* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 900px) {
+  /* Unlock scroll at root level — desktop uses overflow:hidden for fixed layout */
+  html, body, #root {
+    height: auto;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .app-shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .app-main {
+    overflow: visible;
+    flex: none;
+  }
+
   .bottom-bar  { display: none; }
   .status-info { display: none; }
 
@@ -666,8 +684,7 @@ body {
     grid-template-rows: auto;
     gap: 12px;
     padding: 12px 16px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: visible;
     height: auto;
   }
 
@@ -676,16 +693,29 @@ body {
   .col-right {
     justify-content: flex-start;
     overflow-y: visible;
+    min-height: unset;
   }
 
+  /* Photo */
   .aircraft-photo-wrap {
     flex: none !important;
-    height: 200px;
+    height: 220px;
   }
 
-  .callsign     { font-size: 30px; }
-  .t-cell .t-value { font-size: 17px; }
-  .ts-value     { font-size: 24px; }
+  /* Map — needs explicit height since flex:1 doesn't work in scrollable flow */
+  .map-card {
+    flex: none;
+    height: 220px;
+  }
+
+  /* Telemetry: 2×2 instead of 4-wide (too cramped at 430px) */
+  .telemetry-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .callsign        { font-size: 30px; }
+  .t-cell .t-value { font-size: 18px; }
+  .ts-value        { font-size: 24px; }
 }
 
 /* ── AircraftPhoto ──────────────────────────────────────────── */
