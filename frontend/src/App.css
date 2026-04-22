@@ -706,10 +706,15 @@ body {
     height: 220px;
   }
 
-  /* Map — needs explicit height since flex:1 doesn't work in scrollable flow */
+  /* Map — explicit pixel heights at every level since height:100% chain
+     doesn't resolve reliably in scrollable flow on mobile */
   .map-card {
     flex: none;
     height: 220px;
+  }
+
+  .map-card .leaflet-container {
+    height: 220px !important;
   }
 
   /* Telemetry: 2×2 instead of 4-wide (too cramped at 430px) */
