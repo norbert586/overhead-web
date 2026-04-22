@@ -60,6 +60,9 @@ export default function MapCard() {
 
     mapRef.current = map;
 
+    // Leaflet initialises before CSS finishes layout — force a size recalc
+    requestAnimationFrame(() => map.invalidateSize());
+
     return () => {
       map.remove();
       mapRef.current  = null;
