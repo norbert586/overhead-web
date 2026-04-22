@@ -86,5 +86,10 @@ export function runMigrations(): void {
   // Assign all legacy rows (pre-auth) to user 1
   run(`UPDATE flights SET user_id = 1 WHERE user_id IS NULL`, []);
 
+  // Add photo_url to aircraft_cache if missing
+  try {
+    exec(`ALTER TABLE aircraft_cache ADD COLUMN photo_url TEXT`);
+  } catch { /* column already exists — fine */ }
+
   console.log('Migrations complete.');
 }
