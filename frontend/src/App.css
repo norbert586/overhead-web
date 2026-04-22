@@ -1036,6 +1036,11 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
 }
 
 .flag-inline {
