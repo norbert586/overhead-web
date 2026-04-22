@@ -1,0 +1,23 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: root
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            set -e
+            cd /var/www/overhead-web
+            git pull origin main
+            cd backend && npm install && npm run build && pm2 restart overhead-backend
+            cd ../frontend && npm install && npm run build
+            echo "Deploy complete"
