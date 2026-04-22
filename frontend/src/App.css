@@ -677,7 +677,11 @@ body {
   }
 
   .bottom-bar  { display: none; }
-  .status-info { display: none; }
+
+  .status-info {
+    font-size: 9px;
+    letter-spacing: 0.5px;
+  }
 
   .flight-screen {
     grid-template-columns: 1fr;
