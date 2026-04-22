@@ -86,7 +86,8 @@ export async function enrichAircraft(registration: string): Promise<AircraftEnri
     setAircraftCache(registration, { aircraftType: ac.type ?? null, ...result });
     return result;
 
-  } catch {
+  } catch (err) {
+    console.error('[enrichment] aircraft fetch failed:', registration, err);
     return EMPTY_AIRCRAFT;
   }
 }
@@ -144,7 +145,8 @@ export async function enrichCallsign(callsign: string): Promise<RouteEnrichment>
     setCallsignCache(callsign, result);
     return result;
 
-  } catch {
+  } catch (err) {
+    console.error('[enrichment] callsign fetch failed:', callsign, err);
     return EMPTY_ROUTE;
   }
 }
