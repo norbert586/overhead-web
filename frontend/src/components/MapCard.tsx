@@ -60,10 +60,12 @@ export default function MapCard() {
 
     mapRef.current = map;
 
-    // Leaflet initialises before CSS finishes layout — force a size recalc
-    requestAnimationFrame(() => map.invalidateSize());
+    // ResizeObserver fires when the container gets real dimensions (reliable on mobile)
+    const ro = new ResizeObserver(() => map.invalidateSize());
+    ro.observe(containerRef.current);
 
     return () => {
+      ro.disconnect();
       map.remove();
       mapRef.current  = null;
       circleRef.current  = null;
