@@ -2327,3 +2327,198 @@ body {
   color: var(--text-ghost);
   padding: 12px 0;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   MOBILE — Log & Stats screen improvements
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+
+  /* ── Overflow guard ─────────────────────────────────────────── */
+  .log-screen,
+  .stats-screen {
+    overflow-x: hidden;
+  }
+
+  /* ══ LOG SCREEN ════════════════════════════════════════════════ */
+
+  .log-screen {
+    height: auto;
+    min-height: calc(100dvh - 46px);
+    overflow-y: visible;
+  }
+
+  .log-header {
+    padding: 14px 16px 12px;
+  }
+
+  /* Bigger touch target for the limit dropdown */
+  .log-limit-select {
+    font-size: 13px;
+    padding: 8px 32px 8px 12px;
+    min-height: 44px;
+  }
+
+  /* Filter bar — stack vertically so pills don't cause side-scroll */
+  .log-filter-bar {
+    padding: 10px 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .log-search {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+
+  .log-filter-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* Bigger tap targets for filter pills */
+  .log-pill {
+    padding: 8px 14px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+
+  .log-filter-count {
+    margin-left: 0;
+  }
+
+  /* List area */
+  .log-list {
+    padding: 0 16px 20px;
+    overflow-x: hidden;
+  }
+
+  /* Simplified column layout — hide Aircraft and Last Seen to fit mobile width.
+     Remaining columns: dot | callsign | route | seen | chevron */
+  .log-list-header {
+    grid-template-columns: 22px minmax(0, 1fr) minmax(0, 90px) 40px 28px;
+  }
+
+  .log-list-header > *:nth-child(3),
+  .log-list-header > *:nth-child(5) {
+    display: none;
+  }
+
+  .log-row-main {
+    grid-template-columns: 22px minmax(0, 1fr) minmax(0, 90px) 40px 28px;
+    min-height: 48px;
+    padding: 10px 0;
+  }
+
+  .log-type,
+  .log-time {
+    display: none;
+  }
+
+  /* Expanded detail — stack columns vertically and fill full width */
+  .log-detail {
+    flex-direction: column;
+    padding: 12px 0 16px 16px;
+    gap: 16px;
+  }
+
+  .log-detail-grid {
+    width: 100%;
+  }
+
+  .log-photo-section {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .log-photo-btn {
+    padding: 10px 18px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+
+  /* ══ STATS SCREEN ══════════════════════════════════════════════ */
+
+  .stats-screen {
+    padding: 12px 16px;
+    height: auto;
+    min-height: calc(100dvh - 46px);
+    overflow-y: visible;
+  }
+
+  .stats-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  /* Bigger refresh button — easier to tap */
+  .stats-refresh-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    min-height: 40px;
+    margin-left: auto;
+  }
+
+  /* Single-column card grid */
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Flexible label column so bar rows don't overflow */
+  .s-bar-row {
+    grid-template-columns: minmax(0, 1fr) 2fr 44px;
+  }
+
+  /* Notable rows — simplified 4-column grid:
+     [dot] [callsign] [time] [chevron]
+     Header has 7 children; hide rank placeholder (#1), Type (#4), Route (#5). */
+  .s-exp-header:not(.s-exp-header-seen) {
+    grid-template-columns: 20px minmax(0, 1fr) 70px 20px;
+  }
+  .s-exp-header:not(.s-exp-header-seen) > *:nth-child(1),
+  .s-exp-header:not(.s-exp-header-seen) > *:nth-child(4),
+  .s-exp-header:not(.s-exp-header-seen) > *:nth-child(5) {
+    display: none;
+  }
+
+  .s-exp-main:not(.s-exp-main-seen) {
+    grid-template-columns: 20px minmax(0, 1fr) 70px 20px;
+  }
+
+  /* Most-seen rows — simplified 5-column grid:
+     [rank] [dot] [registration] [times-seen] [chevron]
+     Header: hide Type (#4) and Operator (#5). */
+  .s-exp-header-seen {
+    grid-template-columns: 28px 16px minmax(0, 1fr) 54px 20px;
+  }
+  .s-exp-header-seen > *:nth-child(4),
+  .s-exp-header-seen > *:nth-child(5) {
+    display: none;
+  }
+
+  .s-exp-main-seen {
+    grid-template-columns: 28px 16px minmax(0, 1fr) 54px 20px;
+  }
+
+  /* Hide detail columns not shown in either expandable row type */
+  .s-exp-type,
+  .s-exp-route,
+  .s-exp-operator {
+    display: none;
+  }
+
+  /* Expanded detail — single column on mobile */
+  .s-exp-detail {
+    grid-template-columns: 1fr;
+    padding-left: 20px;
+  }
+
+  /* Slightly shorter charts to preserve vertical space */
+  .s-chart-sm { height: 140px; }
+  .s-chart-md { height: 160px; }
+}
