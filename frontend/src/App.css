@@ -2334,31 +2334,51 @@ body {
 @media (max-width: 900px) {
 
   /* ── Contain document width to the viewport ──────────────────
-     overflow-x:clip stops horizontal overflow from propagating up
-     to the document scroll-width without touching overflow-y (unlike
-     hidden, clip does NOT force the other axis to auto, so page-level
-     vertical scrolling at the html element is preserved).             */
-  .app-shell {
-    overflow-x: clip;
-    width: 100%;
-    max-width: 100%;
-  }
-
+     Use overflow:hidden (not clip — Safari <16 ignores clip).
+     These elements have height:auto on mobile so the forced
+     overflow-y:auto from the browser is harmless: content height
+     equals container height, no inner scroll is created, and
+     page-level vertical scrolling via html still works.           */
+  .app-shell,
   .app-main {
-    overflow-x: clip;
+    overflow: hidden;
     width: 100%;
     max-width: 100%;
   }
 
-  /* Belt-and-suspenders: clip each screen independently so a single
-     overflowing element can never inflate the whole stats/log grid. */
+  /* Clip each screen so an overflowing child can never inflate
+     the document scroll-width and corrupt 1fr grid calculations. */
   .flight-screen,
   .log-screen,
   .stats-screen {
-    overflow-x: clip;
+    overflow: hidden;
     max-width: 100%;
     width: 100%;
     box-sizing: border-box;
+  }
+
+  /* ── Stats grid: fix Recharts 1fr inflation ──────────────────
+     CSS Grid 1fr tracks respect min-width:auto on their items.
+     Recharts SVG has a large intrinsic minimum content width, so
+     without min-width:0 the track (and its card) resolves to that
+     large minimum width — not the viewport width — causing the
+     page to be 2× wider than the screen.
+     • .stats-grid needs min-width:0 as a flex child of .stats-screen
+     • .s-card needs min-width:0 as a grid child of .stats-grid     */
+  .stats-grid {
+    min-width: 0;
+  }
+
+  .s-card {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* Chart containers must also be able to shrink */
+  .s-chart-sm,
+  .s-chart-md {
+    min-width: 0;
+    width: 100%;
   }
 
   /* ── Top bar ─────────────────────────────────────────────────
