@@ -2333,6 +2333,43 @@ body {
    ════════════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
 
+  /* ── Viewport width lock ────────────────────────────────────── */
+  /* Prevent any element from inflating the layout past the screen width.
+     Without max-width the top-bar coordinate text can push body wider than
+     100vw, causing all 100%-wide children (stat cards, etc.) to overflow. */
+  html, body, #root {
+    max-width: 100vw;
+  }
+
+  .app-shell {
+    max-width: 100vw;
+    width: 100%;
+  }
+
+  /* Clamp the top-bar so it never expands the layout */
+  .top-bar {
+    overflow: hidden;
+    max-width: 100vw;
+  }
+
+  /* Hide coordinates on mobile — too wide for 390px top-bar */
+  .status-info {
+    display: none;
+  }
+
+  /* Allow left side to shrink instead of pushing right */
+  .top-bar-left {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .scan-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* ── Overflow guard ─────────────────────────────────────────── */
   .log-screen,
   .stats-screen {
