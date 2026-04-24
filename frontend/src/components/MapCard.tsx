@@ -64,7 +64,12 @@ export default function MapCard() {
     const ro = new ResizeObserver(() => map.invalidateSize());
     ro.observe(containerRef.current);
 
+    // Belt-and-suspenders: a one-shot delayed call handles cases where the
+    // container starts at zero size and the ResizeObserver fires before the
+    // CSS height/width resolves (e.g. on first mobile paint).
+    const t = setTimeout(() => map.invalidateSize(), 300);
     return () => {
+      clearTimeout(t);
       ro.disconnect();
       map.remove();
       mapRef.current  = null;
