@@ -9,6 +9,10 @@ interface UserRow extends Record<string, unknown> {
   password_hash: string;
   invite_code: string | null;
   created_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  radius_nm: number | null;
+  poll_interval_sec: number | null;
 }
 
 export function createUser(email: string, passwordHash: string, inviteCode: string): UserRow {
@@ -25,6 +29,31 @@ export function findUserByEmail(email: string): UserRow | null {
 
 export function findUserById(id: number): UserRow | null {
   return get<UserRow>('SELECT * FROM users WHERE id = ?', [id]) ?? null;
+}
+
+export interface UserSettings {
+  latitude: number | null;
+  longitude: number | null;
+  radiusNm: number;
+  pollIntervalSec: number;
+}
+
+export function getUserSettings(userId: number): UserSettings | null {
+  const row = get<UserRow>('SELECT * FROM users WHERE id = ?', [userId]);
+  if (!row) return null;
+  return {
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    radiusNm: row.radius_nm ?? 25,
+    pollIntervalSec: row.poll_interval_sec ?? 12,
+  };
+}
+
+export function updateUserSettings(userId: number, s: UserSettings): void {
+  run(
+    `UPDATE users SET latitude = ?, longitude = ?, radius_nm = ?, poll_interval_sec = ? WHERE id = ?`,
+    [s.latitude, s.longitude, s.radiusNm, s.pollIntervalSec, userId],
+  );
 }
 
 interface FlightRow extends Record<string, unknown> {

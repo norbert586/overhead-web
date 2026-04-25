@@ -26,23 +26,35 @@ function load(): Settings {
   }
 }
 
+function persist(s: Settings) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
 export function useSettings(): {
   settings: Settings;
   saveSettings: (s: Settings) => void;
+  syncFromServer: (s: Settings) => void;
   hasSettings: boolean;
 } {
   const [settings, setSettings] = useState<Settings>(load);
 
   function saveSettings(s: Settings) {
     setSettings(s);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-    } catch {
-      // localStorage unavailable
-    }
+    persist(s);
+  }
+
+  // Called after a successful server profile fetch — overwrites local state
+  // without writing back to the server (avoids a useless round-trip).
+  function syncFromServer(s: Settings) {
+    setSettings(s);
+    persist(s);
   }
 
   const hasSettings = settings.latitude !== null && settings.longitude !== null;
 
-  return { settings, saveSettings, hasSettings };
+  return { settings, saveSettings, syncFromServer, hasSettings };
 }

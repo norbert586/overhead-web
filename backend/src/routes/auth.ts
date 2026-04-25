@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createUser, findUserByEmail, findUserById } from '../database/queries';
 import { requireAuth } from '../middleware/auth';
+import { sendWelcomeEmail } from '../services/email';
 
 const router = Router();
 
@@ -34,6 +35,10 @@ router.post('/register', async (req: Request, res: Response) => {
   const user = createUser(email, passwordHash, inviteCode);
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+
+  // Fire-and-forget — never blocks the response
+  sendWelcomeEmail(email).catch(() => {});
+
   res.status(201).json({ token, user: { id: user.id, email: user.email } });
 });
 

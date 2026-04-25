@@ -102,3 +102,36 @@ export async function apiRegister(
   }
   return res.json();
 }
+
+// ── User profile ──────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  id: number;
+  email: string;
+  createdAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  radiusNm: number;
+  pollIntervalSec: number;
+}
+
+export async function fetchProfile(): Promise<UserProfile> {
+  const res = await apiFetch(`${BASE_URL}/api/user/profile`);
+  if (!res.ok) throw new Error(`Profile fetch failed (${res.status})`);
+  return res.json();
+}
+
+export async function updateProfile(settings: {
+  latitude: number | null;
+  longitude: number | null;
+  radiusNm: number;
+  pollIntervalSec: number;
+}): Promise<UserProfile> {
+  const res = await apiFetch(`${BASE_URL}/api/user/profile`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error(`Profile update failed (${res.status})`);
+  return res.json();
+}

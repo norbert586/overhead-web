@@ -4,9 +4,10 @@ import type { Settings } from '../hooks/useSettings';
 interface SettingsScreenProps {
   settings: Settings;
   onSave: (s: Settings) => void;
+  isFirstSetup?: boolean;
 }
 
-export default function SettingsScreen({ settings, onSave }: SettingsScreenProps) {
+export default function SettingsScreen({ settings, onSave, isFirstSetup = false }: SettingsScreenProps) {
   const [lat, setLat] = useState(settings.latitude?.toString() ?? '');
   const [lon, setLon] = useState(settings.longitude?.toString() ?? '');
   const [radius, setRadius] = useState(settings.radiusNm.toString());
@@ -53,8 +54,12 @@ export default function SettingsScreen({ settings, onSave }: SettingsScreenProps
     <div className="settings-screen">
       <div className="settings-form">
         <div>
-          <div className="settings-heading">Settings</div>
-          <div className="settings-subheading">Configure your monitoring location and scan parameters.</div>
+          <div className="settings-heading">{isFirstSetup ? 'Set Your Location' : 'Settings'}</div>
+          <div className="settings-subheading">
+            {isFirstSetup
+              ? 'Enter your home coordinates to start tracking aircraft overhead. Your location is saved to your account — use any device, same data.'
+              : 'Configure your monitoring location and scan parameters.'}
+          </div>
         </div>
 
         {/* Location */}
@@ -127,8 +132,12 @@ export default function SettingsScreen({ settings, onSave }: SettingsScreenProps
 
         {/* Actions */}
         <div className="settings-actions">
-          <button className="settings-btn-save" onClick={handleSave}>Save</button>
-          <span className={`settings-saved${saved ? ' visible' : ''}`}>Saved</span>
+          <button className="settings-btn-save" onClick={handleSave}>
+            {isFirstSetup ? 'Start Tracking' : 'Save'}
+          </button>
+          <span className={`settings-saved${saved ? ' visible' : ''}`}>
+            {isFirstSetup ? 'Launching…' : 'Saved'}
+          </span>
         </div>
       </div>
     </div>
