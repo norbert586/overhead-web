@@ -91,5 +91,11 @@ export function runMigrations(): void {
     exec(`ALTER TABLE aircraft_cache ADD COLUMN photo_url TEXT`);
   } catch { /* column already exists — fine */ }
 
+  // Add per-user location/scan settings
+  try { exec(`ALTER TABLE users ADD COLUMN latitude REAL`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE users ADD COLUMN longitude REAL`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE users ADD COLUMN radius_nm INTEGER DEFAULT 25`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE users ADD COLUMN poll_interval_sec INTEGER DEFAULT 12`); } catch { /* exists */ }
+
   console.log('Migrations complete.');
 }

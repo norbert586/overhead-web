@@ -6,6 +6,7 @@ import { runMigrations } from './database/migrations';
 import flightsRouter from './routes/flights';
 import statsRouter from './routes/stats';
 import authRouter from './routes/auth';
+import userRouter from './routes/user';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
@@ -18,6 +19,7 @@ async function start() {
   app.use(express.json());
 
   app.use('/api/auth', authRouter);
+  app.use('/api/user', userRouter);
   app.use('/api/flights', flightsRouter);
   app.use('/api/stats', statsRouter);
 
