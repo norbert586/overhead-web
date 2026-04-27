@@ -49,6 +49,7 @@ export default function FlightScreen({ flight }: FlightScreenProps) {
           photoUrl={flight.photoUrl}
           callsign={flight.callsign}
           registration={flight.registration}
+          aircraftType={flight.aircraftType}
         />
         <TelemetryGrid
           altitudeFt={flight.altitudeFt}

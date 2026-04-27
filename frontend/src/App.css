@@ -812,6 +812,22 @@ body {
   text-transform: uppercase;
 }
 
+.photo-similar-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: rgba(5, 8, 16, 0.72);
+  border: 1px solid rgba(126, 184, 224, 0.12);
+  border-radius: 2px;
+  padding: 2px 6px;
+  z-index: 3;
+}
+
 /* ── Right column shared ────────────────────────────────────── */
 .stat-card {
   background: var(--glass-bg);
@@ -2319,6 +2335,118 @@ body {
   align-items: baseline;
 }
 
+/* ── Route rows (expandable) ── */
+
+.s-route-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.s-route-row {
+  border-radius: 3px;
+  transition: background 0.1s;
+}
+
+.s-route-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.s-route-row.open {
+  background: rgba(91, 155, 213, 0.04);
+  border: 1px solid rgba(91, 155, 213, 0.12);
+}
+
+.s-route-main {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 120px 1fr 44px 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.s-route-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.s-route-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 10px 12px 14px 12px;
+  border-top: 1px solid rgba(91, 155, 213, 0.1);
+  animation: row-expand 0.18s ease forwards;
+}
+
+.s-route-airport {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 64px;
+}
+
+.s-route-airport-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  margin-bottom: 2px;
+}
+
+.s-route-iata {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.s-route-city {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  margin-top: 1px;
+}
+
+.s-route-connector {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+  color: var(--text-ghost);
+  padding-top: 20px;
+  flex-shrink: 0;
+}
+
+.s-route-count-block {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.s-route-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--class-commercial);
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
 /* ── Empty state ── */
 
 .s-empty {
@@ -2499,26 +2627,71 @@ body {
     display: none;
   }
 
-  /* Expanded detail — stack columns vertically and fill full width */
+  /* Expanded detail — single-column layout with breathing room */
   .log-detail {
     flex-direction: column;
-    padding: 12px 0 16px 16px;
-    gap: 16px;
+    padding: 0 0 20px 0;
+    gap: 0;
   }
 
   .log-detail-grid {
     width: 100%;
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .log-detail-col {
+    padding: 14px 16px 4px;
+    border-bottom: 1px solid rgba(126, 184, 224, 0.06);
+  }
+
+  .log-detail-col:last-child {
+    border-bottom: none;
+  }
+
+  .log-detail-section-label {
+    font-size: 9px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+  }
+
+  .log-detail-row {
+    padding: 5px 0;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .log-detail-row:last-child {
+    border-bottom: none;
+  }
+
+  .log-detail-label {
+    font-size: 11px;
+    min-width: 90px;
+    flex-shrink: 0;
+  }
+
+  .log-detail-value {
+    font-size: 12px;
   }
 
   .log-photo-section {
     min-width: unset;
     width: 100%;
+    padding: 14px 16px 0;
+    border-top: 1px solid rgba(126, 184, 224, 0.06);
   }
 
   .log-photo-btn {
-    padding: 10px 18px;
+    padding: 12px 18px;
     font-size: 12px;
-    min-height: 40px;
+    min-height: 44px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .log-photo-img {
+    max-height: 220px;
   }
 
   /* ══ STATS SCREEN ══════════════════════════════════════════════ */
@@ -2552,6 +2725,13 @@ body {
   /* Flexible label column so bar rows don't overflow */
   .s-bar-row {
     grid-template-columns: minmax(0, 1fr) 2fr 44px;
+  }
+
+  /* Expandable rows — taller tap targets */
+  .s-exp-main,
+  .s-exp-main.s-exp-main-seen {
+    min-height: 48px;
+    padding: 10px 12px;
   }
 
   /* Notable rows — simplified 4-column grid:
@@ -2592,10 +2772,65 @@ body {
     display: none;
   }
 
-  /* Expanded detail — single column on mobile */
+  /* Expanded detail — single column, generous spacing */
   .s-exp-detail {
     grid-template-columns: 1fr;
-    padding-left: 20px;
+    padding: 12px 16px 16px;
+    gap: 6px;
+    border-top: 1px solid rgba(126, 184, 224, 0.08);
+    background: rgba(5, 8, 16, 0.3);
+  }
+
+  .s-exp-detail-row {
+    display: flex;
+    gap: 0;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .s-exp-detail-row:last-child {
+    border-bottom: none;
+  }
+
+  .s-exp-detail-row .log-detail-label {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .s-exp-detail-row .log-detail-value {
+    font-size: 12px;
+    color: var(--text-primary);
+    text-align: right;
+  }
+
+  /* Route detail on mobile */
+  .s-route-main {
+    grid-template-columns: minmax(0, 1fr) 2fr 36px 20px;
+    padding: 9px 6px;
+  }
+
+  .s-route-label {
+    font-size: 13px;
+  }
+
+  .s-route-detail {
+    flex-wrap: wrap;
+    gap: 14px 20px;
+    padding: 12px 12px 16px;
+  }
+
+  .s-route-iata {
+    font-size: 22px;
+  }
+
+  .s-route-city {
+    font-size: 12px;
+  }
+
+  .s-route-count-block {
+    margin-left: 0;
   }
 
   /* Slightly shorter charts to preserve vertical space */

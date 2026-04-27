@@ -43,7 +43,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     const [aircraftInfo, routeInfo] = await Promise.all([
       registration ? enrichAircraft(registration) : Promise.resolve({
-        manufacturer: null, owner: null, country: null, countryIso: null,
+        manufacturer: null, owner: null, country: null, countryIso: null, photoUrl: null,
       }),
       callsign ? enrichCallsign(callsign) : Promise.resolve({
         operator: null, originIata: null, originCity: null, originCountry: null,
@@ -79,7 +79,7 @@ router.get('/', async (req: Request, res: Response) => {
       bearingDeg:       ac.track ?? null,
       distanceNm:       ac.dst   ?? null,
       classification,
-      photoUrl:         null,
+      photoUrl:         aircraftInfo.photoUrl ?? null,
     }, req.userId);
 
     const dbStats = getSessionStats(req.userId);

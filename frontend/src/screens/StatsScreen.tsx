@@ -152,6 +152,49 @@ function BarRow({ label, value, max, color = 'var(--accent)' }: {
   );
 }
 
+// ── Route row (expandable) ────────────────────────────────────────────────────
+
+function RouteRow({ r, max }: {
+  r: StatsRoutesData['topRoutes'][0]; max: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const pct = max > 0 ? Math.round((r.eventCount / max) * 100) : 0;
+
+  return (
+    <div className={`s-route-row${open ? ' open' : ''}`}>
+      <button className="s-route-main" onClick={() => setOpen(o => !o)}>
+        <span className="s-route-label">{r.originIata} → {r.destinationIata}</span>
+        <div className="s-bar-track">
+          <div className="s-bar-fill" style={{ width: `${pct}%`, background: 'var(--class-commercial)' }} />
+        </div>
+        <span className="s-bar-value">{fmt(r.eventCount)}</span>
+        <svg viewBox="0 0 12 12" className={`log-chevron${open ? ' open' : ''}`} aria-hidden>
+          <polyline points="2,4 6,8 10,4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="s-route-detail">
+          <div className="s-route-airport">
+            <div className="s-route-airport-tag">Origin</div>
+            <div className="s-route-iata">{r.originIata}</div>
+            {r.originCity && <div className="s-route-city">{r.originCity}</div>}
+          </div>
+          <div className="s-route-connector" aria-hidden>→</div>
+          <div className="s-route-airport">
+            <div className="s-route-airport-tag">Destination</div>
+            <div className="s-route-iata">{r.destinationIata}</div>
+            {r.destinationCity && <div className="s-route-city">{r.destinationCity}</div>}
+          </div>
+          <div className="s-route-count-block">
+            <div className="s-route-airport-tag">Flights</div>
+            <div className="s-route-count">{fmt(r.eventCount)}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Operator logo ─────────────────────────────────────────────────────────────
 
 function OperatorLogo({ name }: { name: string }) {
@@ -546,16 +589,14 @@ export default function StatsScreen() {
         {/* ── Top routes ── */}
         <SCard title="Most Common Routes">
           {routes.loading ? <SCardLoading /> : routes.error ? <SCardError /> : (
-            <div className="s-bar-list">
+            <div className="s-route-list">
               {routes.data!.topRoutes.length === 0
                 ? <div className="s-empty">No route data yet</div>
                 : routes.data!.topRoutes.map((r) => (
-                  <BarRow
+                  <RouteRow
                     key={`${r.originIata}-${r.destinationIata}`}
-                    label={`${r.originIata} → ${r.destinationIata}`}
-                    value={r.eventCount}
+                    r={r}
                     max={maxRoute}
-                    color="var(--class-commercial)"
                   />
                 ))}
             </div>
