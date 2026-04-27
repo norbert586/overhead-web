@@ -1,4 +1,4 @@
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useRef, useCallback, type Dispatch, type SetStateAction } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   type TooltipProps,
@@ -219,39 +219,122 @@ function OperatorLogo({ name }: { name: string }) {
   );
 }
 
-// ── Notable / Most-seen expandable rows ───────────────────────────────────────
+// ── Notable aircraft — swipable card carousel ─────────────────────────────────
 
-function NotableRow({ f }: { f: Flight }) {
-  const [open, setOpen] = useState(false);
-  const type = [f.manufacturer, f.aircraftType].filter(Boolean).join(' ') || '—';
+const CLASS_LABEL: Record<string, string> = {
+  commercial: 'Commercial',
+  private:    'Private',
+  cargo:      'Cargo',
+  government: 'Government',
+  military:   'Military',
+  unknown:    'Unknown',
+};
+
+function NotableCard({ f }: { f: Flight }) {
+  const ident = f.callsign ?? f.registration ?? f.hex;
+  const type  = [f.manufacturer, f.aircraftType].filter(Boolean).join(' ') || null;
+  const route = f.originIata && f.destinationIata
+    ? `${f.originIata} → ${f.destinationIata}` : null;
+  const flag  = f.country ? countryToFlag(f.country) : null;
 
   return (
-    <div className={`s-exp-row${open ? ' open' : ''}`}>
-      <button className="s-exp-main" onClick={() => setOpen(o => !o)}>
-        <span className={`log-dot ${f.classification}`} style={{ flexShrink: 0 }} />
-        <span className="s-exp-callsign">{f.callsign ?? f.registration ?? f.hex}</span>
-        <span className="s-exp-type">{type}</span>
-        <span className="s-exp-route">
-          {f.originIata && f.destinationIata ? `${f.originIata} → ${f.destinationIata}` : '—'}
-        </span>
-        <span className="s-exp-time">{timeAgo(f.lastSeen)}</span>
-        <svg viewBox="0 0 12 12" className={`log-chevron${open ? ' open' : ''}`} aria-hidden>
-          <polyline points="2,4 6,8 10,4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      {open && (
-        <div className="s-exp-detail">
-          {[
-            ['Registration', f.registration], ['Hex', f.hex],
-            ['Operator', f.operator], ['Owner', f.owner],
-            ['Country', f.country], ['Alt', fmtAlt(f.altitudeFt)],
-            ['Speed', f.speedKts != null ? `${f.speedKts} kts` : null],
-            ['Times seen', String(f.timesSeen)],
-          ].filter(([, v]) => v).map(([l, v]) => (
-            <div className="s-exp-detail-row" key={String(l)}>
-              <span className="log-detail-label">{l}</span>
-              <span className="log-detail-value">{String(v)}</span>
+    <div className={`nc-card nc-card--${f.classification}`}>
+      {/* Classification badge */}
+      <div className={`nc-badge nc-badge--${f.classification}`}>
+        <span className={`log-dot ${f.classification}`} />
+        {CLASS_LABEL[f.classification] ?? f.classification}
+      </div>
+
+      {/* Primary identifier */}
+      <div className="nc-ident">{ident}</div>
+
+      {/* Aircraft type */}
+      {type && <div className="nc-type">{type}</div>}
+
+      {/* Country + operator */}
+      <div className="nc-intel">
+        {(flag || f.country) && (
+          <div className="nc-country">
+            {flag && <span className="nc-flag">{flag}</span>}
+            {f.country && <span className="nc-country-name">{f.country}</span>}
+          </div>
+        )}
+        {f.operator && <div className="nc-operator">{f.operator}</div>}
+        {!f.operator && f.owner && <div className="nc-operator">{f.owner}</div>}
+      </div>
+
+      {/* Route */}
+      {route && (
+        <div className="nc-route">
+          <span className="nc-route-origin">{f.originIata}</span>
+          <span className="nc-route-arrow">→</span>
+          <span className="nc-route-dest">{f.destinationIata}</span>
+          {f.originCity && f.destinationCity && (
+            <div className="nc-route-cities">
+              {f.originCity} → {f.destinationCity}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Footer: telemetry + seen counter */}
+      <div className="nc-footer">
+        <div className="nc-telem">
+          {f.altitudeFt != null && <span>{fmtAlt(f.altitudeFt)}</span>}
+          {f.speedKts   != null && <span>{f.speedKts} kts</span>}
+        </div>
+        <div className="nc-seen-wrap">
+          <span className="nc-seen">×{f.timesSeen}</span>
+          <span className="nc-time">{timeAgo(f.lastSeen)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotableCarousel({ flights }: { flights: Flight[] }) {
+  const scrollRef  = useRef<HTMLDivElement>(null);
+  const [idx, setIdx] = useState(0);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || el.children.length === 0) return;
+    const cardW = (el.children[0] as HTMLElement).offsetWidth + 10; // 10px gap
+    setIdx(Math.min(Math.round(el.scrollLeft / cardW), flights.length - 1));
+  }, [flights.length]);
+
+  function scrollTo(i: number) {
+    const el = scrollRef.current;
+    if (!el || el.children.length === 0) return;
+    const cardW = (el.children[0] as HTMLElement).offsetWidth + 10;
+    el.scrollTo({ left: cardW * i, behavior: 'smooth' });
+  }
+
+  if (flights.length === 0) {
+    return <div className="s-empty">No notable activity yet</div>;
+  }
+
+  return (
+    <div className="nc-wrap">
+      <div
+        className="nc-carousel"
+        ref={scrollRef}
+        onScroll={handleScroll}
+      >
+        {flights.map((f) => (
+          <NotableCard key={`${f.hex}-${f.firstSeen}`} f={f} />
+        ))}
+      </div>
+
+      {flights.length > 1 && (
+        <div className="nc-dots">
+          {flights.map((_, i) => (
+            <button
+              key={i}
+              className={`nc-dot${i === idx ? ' active' : ''}`}
+              onClick={() => scrollTo(i)}
+              aria-label={`Go to card ${i + 1}`}
+            />
           ))}
         </div>
       )}
@@ -505,24 +588,9 @@ export default function StatsScreen() {
         </SCard>
 
         {/* ── Recent notable ── */}
-        <SCard title="Recent Notable Activity">
+        <SCard title="Recent Notable Activity" className="s-notable">
           {notable.loading ? <SCardLoading /> : notable.error ? <SCardError /> : (
-            <div className="s-exp-list">
-              <div className="s-exp-header">
-                <span />
-                <span />
-                <span className="s-col-label">Callsign</span>
-                <span className="s-col-label">Type</span>
-                <span className="s-col-label">Route</span>
-                <span className="s-col-label">Seen</span>
-                <span />
-              </div>
-              {notable.data!.recentNotable.length === 0
-                ? <div className="s-empty">No notable activity yet</div>
-                : notable.data!.recentNotable.map((f) => (
-                  <NotableRow key={`${f.hex}-${f.firstSeen}`} f={f} />
-                ))}
-            </div>
+            <NotableCarousel flights={notable.data!.recentNotable} />
           )}
         </SCard>
 
