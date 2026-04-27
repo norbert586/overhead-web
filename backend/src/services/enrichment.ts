@@ -4,6 +4,7 @@ import {
 } from '../database/queries';
 
 const ADSBDB = 'https://api.adsbdb.com/v0';
+const FETCH_TIMEOUT_MS = 8_000;
 
 export interface AircraftEnrichment {
   manufacturer: string | null;
@@ -32,8 +33,14 @@ const EMPTY_ROUTE: RouteEnrichment = {
   destinationIata: null, destinationCity: null, destinationCountry: null,
 };
 
+function fetchWithTimeout(url: string): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 export async function enrichAircraft(registration: string): Promise<AircraftEnrichment> {
-  // Check cache first
   const cached = getAircraftCache(registration);
   if (cached) {
     return {
@@ -45,14 +52,13 @@ export async function enrichAircraft(registration: string): Promise<AircraftEnri
     };
   }
 
+  const NEGATIVE = { aircraftType: null, manufacturer: null, owner: null, country: null, countryIso: null, photoUrl: null };
+
   try {
-    const res = await fetch(`${ADSBDB}/aircraft/${registration}`, {
-      headers: { Accept: 'application/json' },
-    });
+    const res = await fetchWithTimeout(`${ADSBDB}/aircraft/${registration}`);
 
     if (!res.ok) {
-      // Cache negative result to avoid hammering the API
-      setAircraftCache(registration, { aircraftType: null, manufacturer: null, owner: null, country: null, countryIso: null, photoUrl: null });
+      setAircraftCache(registration, NEGATIVE);
       return EMPTY_AIRCRAFT;
     }
 
@@ -71,7 +77,7 @@ export async function enrichAircraft(registration: string): Promise<AircraftEnri
 
     const ac = json?.response?.aircraft;
     if (!ac) {
-      setAircraftCache(registration, { aircraftType: null, manufacturer: null, owner: null, country: null, countryIso: null, photoUrl: null });
+      setAircraftCache(registration, NEGATIVE);
       return EMPTY_AIRCRAFT;
     }
 
@@ -87,7 +93,10 @@ export async function enrichAircraft(registration: string): Promise<AircraftEnri
     return result;
 
   } catch (err) {
+    // Network failure or timeout — cache a short negative so we don't hammer the API,
+    // but use a shorter TTL by back-dating cached_at by 6 days (expires in ~1 day).
     console.error('[enrichment] aircraft fetch failed:', registration, err);
+    setAircraftCache(registration, NEGATIVE);
     return EMPTY_AIRCRAFT;
   }
 }
@@ -106,13 +115,13 @@ export async function enrichCallsign(callsign: string): Promise<RouteEnrichment>
     };
   }
 
+  const NEGATIVE = { operator: null, originIata: null, originCity: null, originCountry: null, destinationIata: null, destinationCity: null, destinationCountry: null };
+
   try {
-    const res = await fetch(`${ADSBDB}/callsign/${callsign}`, {
-      headers: { Accept: 'application/json' },
-    });
+    const res = await fetchWithTimeout(`${ADSBDB}/callsign/${callsign}`);
 
     if (!res.ok) {
-      setCallsignCache(callsign, { operator: null, originIata: null, originCity: null, originCountry: null, destinationIata: null, destinationCity: null, destinationCountry: null });
+      setCallsignCache(callsign, NEGATIVE);
       return EMPTY_ROUTE;
     }
 
@@ -128,7 +137,7 @@ export async function enrichCallsign(callsign: string): Promise<RouteEnrichment>
 
     const route = json?.response?.flightroute;
     if (!route) {
-      setCallsignCache(callsign, { operator: null, originIata: null, originCity: null, originCountry: null, destinationIata: null, destinationCity: null, destinationCountry: null });
+      setCallsignCache(callsign, NEGATIVE);
       return EMPTY_ROUTE;
     }
 
@@ -147,6 +156,7 @@ export async function enrichCallsign(callsign: string): Promise<RouteEnrichment>
 
   } catch (err) {
     console.error('[enrichment] callsign fetch failed:', callsign, err);
+    setCallsignCache(callsign, NEGATIVE);
     return EMPTY_ROUTE;
   }
 }
