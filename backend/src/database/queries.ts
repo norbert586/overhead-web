@@ -153,6 +153,7 @@ export function upsertFlight(
         operator         = COALESCE(?, operator),
         country          = COALESCE(?, country),
         country_iso      = COALESCE(?, country_iso),
+        photo_url        = COALESCE(?, photo_url),
         origin_iata      = COALESCE(?, origin_iata),
         origin_city      = COALESCE(?, origin_city),
         origin_country   = COALESCE(?, origin_country),
@@ -166,6 +167,7 @@ export function upsertFlight(
         flight.classification, now,
         flight.manufacturer, flight.owner, flight.operator,
         flight.country, flight.countryIso,
+        flight.photoUrl,
         flight.originIata, flight.originCity, flight.originCountry,
         flight.destinationIata, flight.destinationCity, flight.destinationCountry,
         existing.id as number,
@@ -177,15 +179,16 @@ export function upsertFlight(
     run(
       `INSERT INTO flights (
         user_id, hex, registration, callsign, aircraft_type, manufacturer,
-        owner, operator, country, country_iso,
+        owner, operator, country, country_iso, photo_url,
         origin_iata, origin_city, origin_country,
         destination_iata, destination_city, destination_country,
         altitude_ft, speed_kts, bearing_deg, distance_nm,
         classification, times_seen, first_seen, last_seen
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         userId, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
         flight.manufacturer, flight.owner, flight.operator, flight.country, flight.countryIso,
+        flight.photoUrl,
         flight.originIata, flight.originCity, flight.originCountry,
         flight.destinationIata, flight.destinationCity, flight.destinationCountry,
         flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
@@ -194,9 +197,21 @@ export function upsertFlight(
     );
   }
 
-  return rowToFlight(
-    get<FlightRow>('SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1', [flight.hex, userId])!,
+  const saved = get<FlightRow>(
+    'SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1',
+    [flight.hex, userId],
   );
+  if (!saved) {
+    console.error(`[upsert] SELECT after write returned nothing for hex=${flight.hex}`);
+    // Return a synthesised flight from the input so the caller still gets a valid object
+    return {
+      ...flight,
+      timesSeen: 1,
+      firstSeen: now,
+      lastSeen:  now,
+    } as Flight;
+  }
+  return rowToFlight(saved);
 }
 
 export function getLastKnownFlight(userId: number): Flight | null {
