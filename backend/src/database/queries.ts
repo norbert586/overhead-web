@@ -56,6 +56,25 @@ export function updateUserSettings(userId: number, s: UserSettings): void {
   );
 }
 
+export interface UserLocation {
+  id: number;
+  latitude: number;
+  longitude: number;
+  radiusNm: number;
+}
+
+export function getAllUsersWithLocation(): UserLocation[] {
+  return all<{ id: number; latitude: number; longitude: number; radius_nm: number }>(
+    'SELECT id, latitude, longitude, radius_nm FROM users WHERE latitude IS NOT NULL AND longitude IS NOT NULL',
+    [],
+  ).map((row) => ({
+    id:        row.id,
+    latitude:  row.latitude,
+    longitude: row.longitude,
+    radiusNm:  row.radius_nm ?? 25,
+  }));
+}
+
 interface FlightRow extends Record<string, unknown> {
   hex: string;
   registration: string | null;
