@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchLog } from '../services/api';
-import { fetchPhoto, thumbnailFallback } from '../utils/photos';
+import { fetchPhoto, fetchPhotoByType, thumbnailFallback } from '../utils/photos';
 import type { Flight, Classification } from '../types/flight';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -39,23 +39,41 @@ function Chevron({ open }: { open: boolean }) {
 
 // ── Photo loader ─────────────────────────────────────────────────────────────
 
-function RowPhoto({ registration }: { registration: string | null }) {
-  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [src,   setSrc  ] = useState<string | null>(null);
-  const [fb,    setFb   ] = useState<string | null>(null);
+function RowPhoto({ registration, aircraftType }: { registration: string | null; aircraftType?: string | null }) {
+  const [state,  setState ] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [src,    setSrc   ] = useState<string | null>(null);
+  const [fb,     setFb    ] = useState<string | null>(null);
+  const [source, setSource] = useState<'planespotters' | 'similar' | null>(null);
 
-  if (!registration) {
+  if (!registration && !aircraftType) {
     return <div className="log-photo-unavailable">No registration — photo unavailable</div>;
   }
 
   async function load() {
     setState('loading');
-    const url = await fetchPhoto(registration!);
-    if (!url) { setState('error'); return; }
-    const fallback = thumbnailFallback(url);
-    setSrc(url);
-    if (fallback !== url) setFb(fallback);
-    setState('done');
+    if (registration) {
+      const url = await fetchPhoto(registration);
+      if (url) {
+        const fallback = thumbnailFallback(url);
+        setSrc(url);
+        if (fallback !== url) setFb(fallback);
+        setSource('planespotters');
+        setState('done');
+        return;
+      }
+    }
+    if (aircraftType) {
+      const url = await fetchPhotoByType(aircraftType);
+      if (url) {
+        const fallback = thumbnailFallback(url);
+        setSrc(url);
+        if (fallback !== url) setFb(fallback);
+        setSource('similar');
+        setState('done');
+        return;
+      }
+    }
+    setState('error');
   }
 
   function handleError(e: React.SyntheticEvent<HTMLImageElement>) {
@@ -73,8 +91,15 @@ function RowPhoto({ registration }: { registration: string | null }) {
   if (state === 'loading') return <div className="log-photo-loading">Loading…</div>;
   if (state === 'error' || !src) return <div className="log-photo-unavailable">No photo available</div>;
 
+  const sourceLabel = source === 'similar'
+    ? `SIMILAR · ${aircraftType ?? ''}`
+    : 'PLANESPOTTERS';
+
   return (
-    <img className="log-photo-img" src={src} alt={registration} onError={handleError} />
+    <div className="log-photo-wrap">
+      <img className="log-photo-img" src={src} alt={registration ?? aircraftType ?? 'Aircraft'} onError={handleError} />
+      <div className="log-photo-source">{sourceLabel}</div>
+    </div>
   );
 }
 
@@ -144,7 +169,7 @@ function LogRow({ flight: f }: { flight: Flight }) {
 
           <div className="log-photo-section">
             <div className="log-detail-section-label" style={{ marginBottom: 10 }}>Photo</div>
-            <RowPhoto registration={f.registration} />
+            <RowPhoto registration={f.registration} aircraftType={f.aircraftType} />
           </div>
         </div>
       )}
