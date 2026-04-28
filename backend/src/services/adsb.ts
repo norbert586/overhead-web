@@ -23,15 +23,15 @@ function isTransient(err: unknown): boolean {
 }
 
 /**
- * Fetch the single closest aircraft within radiusNm of the given coordinates.
- * Retries up to MAX_RETRIES times on transient network errors (ECONNRESET etc).
- * Returns null if no aircraft is in range or all attempts fail.
+ * Fetch ALL aircraft within radiusNm of the given coordinates.
+ * Returns an empty array if none are in range or all attempts fail.
+ * Aircraft are sorted by distance (closest first) by adsb.lol.
  */
-export async function fetchClosest(
+export async function fetchAll(
   lat: number,
   lon: number,
   radiusNm: number,
-): Promise<AdsbAircraft | null> {
+): Promise<AdsbAircraft[]> {
   let lastErr: unknown;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -42,11 +42,8 @@ export async function fetchClosest(
       if (!res.ok) throw new Error(`adsb.lol ${res.status}`);
 
       const json = await res.json() as { ac?: AdsbAircraft[] };
-      console.log('[adsb.lol] raw response keys:', Object.keys(json), '| ac count:', json?.ac?.length ?? 'no ac key');
-      const aircraft = json?.ac;
-      if (!aircraft || aircraft.length === 0) return null;
-
-      return aircraft[0];
+      console.log('[adsb.lol] ac count:', json?.ac?.length ?? 0);
+      return json?.ac ?? [];
     } catch (err) {
       lastErr = err;
       const transient = isTransient((err as NodeJS.ErrnoException)?.cause ?? err);
@@ -59,5 +56,18 @@ export async function fetchClosest(
   }
 
   console.error('adsb.lol fetch error:', lastErr);
-  return null;
+  return [];
+}
+
+/**
+ * Returns only the single closest aircraft, or null if none in range.
+ * Kept for callers that only need one aircraft.
+ */
+export async function fetchClosest(
+  lat: number,
+  lon: number,
+  radiusNm: number,
+): Promise<AdsbAircraft | null> {
+  const aircraft = await fetchAll(lat, lon, radiusNm);
+  return aircraft[0] ?? null;
 }

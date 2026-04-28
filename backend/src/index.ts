@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { initDb } from './database/db';
 import { runMigrations } from './database/migrations';
+import { startScanner } from './services/scanner';
 import flightsRouter from './routes/flights';
 import statsRouter from './routes/stats';
 import authRouter from './routes/auth';
@@ -13,6 +14,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 async function start() {
   await initDb();
   runMigrations();
+  startScanner();
 
   const app = express();
   app.use(cors());

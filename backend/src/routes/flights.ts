@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { fetchClosest } from '../services/adsb';
+import { fetchAll } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
 import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight } from '../database/queries';
@@ -22,9 +22,9 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const ac = await fetchClosest(lat, lon, radius);
+    const allAc = await fetchAll(lat, lon, radius);
 
-    if (!ac) {
+    if (!allAc.length) {
       console.log('[poll] adsb.lol: no aircraft in range → returning lastKnown');
       const dbStats = getSessionStats(req.userId);
       const lastKnown = getLastKnownFlight(req.userId);
@@ -37,55 +37,59 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const callsign     = ac.flight?.trim() || null;
-    const registration = ac.r?.trim()      || null;
-    console.log(`[poll] adsb.lol: ${ac.hex} | ${callsign ?? '—'} | ${registration ?? '—'} | ${ac.dst?.toFixed(1) ?? '?'} nm`);
+    console.log(`[poll] adsb.lol: ${allAc.length} aircraft in range`);
 
-    const [aircraftInfo, routeInfo] = await Promise.all([
-      registration ? enrichAircraft(registration) : Promise.resolve({
-        manufacturer: null, owner: null, country: null, countryIso: null, photoUrl: null,
-      }),
-      callsign ? enrichCallsign(callsign) : Promise.resolve({
-        operator: null, originIata: null, originCity: null, originCountry: null,
-        destinationIata: null, destinationCity: null, destinationCountry: null,
-      }),
-    ]);
+    // Enrich + upsert all aircraft in parallel; display shows the closest (index 0)
+    const upserted = await Promise.all(allAc.map(async (ac) => {
+      const callsign     = ac.flight?.trim() || null;
+      const registration = ac.r?.trim()      || null;
 
-    const classification = classify({
-      callsign,
-      operator: routeInfo.operator,
-      owner: aircraftInfo.owner,
-      typeCode: ac.t ?? null,
-    });
+      const [aircraftInfo, routeInfo] = await Promise.all([
+        registration ? enrichAircraft(registration) : Promise.resolve({
+          manufacturer: null, owner: null, country: null, countryIso: null, photoUrl: null,
+        }),
+        callsign ? enrichCallsign(callsign) : Promise.resolve({
+          operator: null, originIata: null, originCity: null, originCountry: null,
+          destinationIata: null, destinationCity: null, destinationCountry: null,
+        }),
+      ]);
 
-    const flight = upsertFlight({
-      hex:              ac.hex,
-      registration,
-      callsign,
-      aircraftType:     ac.t ?? null,
-      manufacturer:     aircraftInfo.manufacturer,
-      owner:            aircraftInfo.owner,
-      operator:         routeInfo.operator,
-      country:          aircraftInfo.country,
-      countryIso:       aircraftInfo.countryIso,
-      originIata:       routeInfo.originIata,
-      originCity:       routeInfo.originCity,
-      originCountry:    routeInfo.originCountry,
-      destinationIata:  routeInfo.destinationIata,
-      destinationCity:  routeInfo.destinationCity,
-      destinationCountry: routeInfo.destinationCountry,
-      altitudeFt:       typeof ac.alt_baro === 'number' ? ac.alt_baro : null,
-      speedKts:         ac.gs    ?? null,
-      bearingDeg:       ac.track ?? null,
-      distanceNm:       ac.dst   ?? null,
-      classification,
-      photoUrl:         aircraftInfo.photoUrl ?? null,
-    }, req.userId);
+      const classification = classify({
+        callsign,
+        operator: routeInfo.operator,
+        owner:    aircraftInfo.owner,
+        typeCode: ac.t ?? null,
+      });
+
+      return upsertFlight({
+        hex:                ac.hex,
+        registration,
+        callsign,
+        aircraftType:       ac.t ?? null,
+        manufacturer:       aircraftInfo.manufacturer,
+        owner:              aircraftInfo.owner,
+        operator:           routeInfo.operator,
+        country:            aircraftInfo.country,
+        countryIso:         aircraftInfo.countryIso,
+        originIata:         routeInfo.originIata,
+        originCity:         routeInfo.originCity,
+        originCountry:      routeInfo.originCountry,
+        destinationIata:    routeInfo.destinationIata,
+        destinationCity:    routeInfo.destinationCity,
+        destinationCountry: routeInfo.destinationCountry,
+        altitudeFt:         typeof ac.alt_baro === 'number' ? ac.alt_baro : null,
+        speedKts:           ac.gs    ?? null,
+        bearingDeg:         ac.track ?? null,
+        distanceNm:         ac.dst   ?? null,
+        classification,
+        photoUrl:           aircraftInfo.photoUrl ?? null,
+      }, req.userId);
+    }));
 
     const dbStats = getSessionStats(req.userId);
     const response: FlightsResponse = {
-      flights: [flight],
-      stats: { ...dbStats, activeCount: 1 },
+      flights: [upserted[0]],            // closest aircraft for the live display
+      stats: { ...dbStats, activeCount: allAc.length },
       timestamp: new Date().toISOString(),
     };
 
