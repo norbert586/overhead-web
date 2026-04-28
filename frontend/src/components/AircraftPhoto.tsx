@@ -8,57 +8,78 @@ interface AircraftPhotoProps {
   aircraftType?: string | null;  // For similar-planes fallback
 }
 
+type Tier = 1 | 2 | 3;  // 1=adsbdb, 2=planespotters/reg, 3=planespotters/type
+
 export default function AircraftPhoto({ photoUrl, callsign, registration, aircraftType }: AircraftPhotoProps) {
-  const [src,       setSrc      ] = useState<string | null>(null);
-  const [fallback,  setFallback ] = useState<string | null>(null);
-  const [isSimilar, setIsSimilar] = useState(false);
+  const [src,  setSrc ] = useState<string | null>(null);
+  const [tier, setTier] = useState<Tier | null>(null);
+  const [fbSrc, setFbSrc] = useState<string | null>(null);
+
+  function applyUrl(url: string, t: Tier) {
+    setSrc(url);
+    setTier(t);
+    const fb = thumbnailFallback(url);
+    setFbSrc(fb !== url ? fb : null);
+  }
 
   useEffect(() => {
     setSrc(null);
-    setFallback(null);
-    setIsSimilar(false);
+    setTier(null);
+    setFbSrc(null);
     let cancelled = false;
 
-    function apply(url: string, similar = false) {
-      if (cancelled) return;
-      setSrc(url);
-      setIsSimilar(similar);
-      const fb = thumbnailFallback(url);
-      if (fb !== url) setFallback(fb);
-    }
-
     async function run() {
-      // Provider 1: adsbdb photo URL stored by backend enrichment
-      if (photoUrl) { apply(photoUrl); return; }
-
-      // Provider 2: Planespotters by registration
+      // Tier 1: adsbdb photo URL stored by backend
+      if (photoUrl) {
+        if (!cancelled) applyUrl(photoUrl, 1);
+        return;
+      }
+      // Tier 2: Planespotters by registration
       if (registration) {
         const url = await fetchPhoto(registration);
         if (cancelled) return;
-        if (url) { apply(url); return; }
+        if (url) { applyUrl(url, 2); return; }
       }
-
-      // Similar planes: Planespotters by ICAO type code
+      // Tier 3: Planespotters by ICAO type (similar planes)
       if (aircraftType) {
         const url = await fetchPhotoByType(aircraftType);
         if (cancelled) return;
-        if (url) { apply(url, true); return; }
+        if (url) { applyUrl(url, 3); return; }
       }
-
-      // No image — leave src as null
     }
 
     run();
     return () => { cancelled = true; };
   }, [photoUrl, registration, aircraftType]);
 
-  function handleError(e: React.SyntheticEvent<HTMLImageElement>) {
-    if (fallback && (e.target as HTMLImageElement).src !== fallback) {
-      setSrc(fallback);
-    } else {
-      setSrc(null);
+  async function handleError(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.target as HTMLImageElement;
+
+    // First: try the safe thumbnail fallback (Planespotters full_nosym → thumbnail_large)
+    if (fbSrc && img.src !== fbSrc) {
+      setSrc(fbSrc);
+      setFbSrc(null);
+      return;
     }
+
+    // Then cascade to the next tier
+    if (tier === 1 && registration) {
+      const url = await fetchPhoto(registration);
+      if (url) { applyUrl(url, 2); return; }
+    }
+    if ((tier === 1 || tier === 2) && aircraftType) {
+      const url = await fetchPhotoByType(aircraftType);
+      if (url) { applyUrl(url, 3); return; }
+    }
+    setSrc(null);
+    setTier(null);
   }
+
+  const sourceLabel =
+    tier === 1 ? 'ADSBDB' :
+    tier === 2 ? 'PLANESPOTTERS' :
+    tier === 3 ? (aircraftType ? `SIMILAR · ${aircraftType}` : 'SIMILAR') :
+    null;
 
   return (
     <div className="aircraft-photo-wrap">
@@ -69,7 +90,7 @@ export default function AircraftPhoto({ photoUrl, callsign, registration, aircra
       )}
       {callsign     && <div className="photo-callsign">{callsign}</div>}
       {registration && <div className="photo-registration">{registration}</div>}
-      {isSimilar && src && <div className="photo-similar-badge">Similar aircraft</div>}
+      {sourceLabel  && <div className="photo-source-tag">{sourceLabel}</div>}
     </div>
   );
 }
