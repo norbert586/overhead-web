@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactElement } from 'react';
 import { fetchAchievements, fetchRank } from '../services/api';
 import type {
   AchievementsResponse,
@@ -98,7 +98,7 @@ function IconSignal() {
   );
 }
 
-const CATEGORY_ICONS: Record<AchievementCategory, () => JSX.Element> = {
+const CATEGORY_ICONS: Record<AchievementCategory, () => ReactElement> = {
   detection:   IconDetection,
   collection:  IconCollection,
   rare:        IconRare,
@@ -114,7 +114,7 @@ function AchievementIcon({ id, category, unlocked }: {
   category: AchievementCategory;
   unlocked: boolean;
 }) {
-  const overrides: Record<string, () => JSX.Element> = {
+  const overrides: Record<string, () => ReactElement> = {
     low_pass: () => (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
