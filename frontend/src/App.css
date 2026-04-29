@@ -1878,20 +1878,87 @@ body {
   box-shadow: 0 0 0 3px rgba(126, 184, 224, 0.06);
 }
 
-/* Date range */
-.log-date-range {
+/* ── Date range filter ──────────────────────────────────────── */
+.log-date-filter {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 5px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: rgba(10, 16, 28, 0.50);
+  transition: border-color 0.2s;
 }
 
-.log-date-label {
+.log-date-filter.applied {
+  border-color: rgba(126, 184, 224, 0.28);
+  box-shadow: 0 0 0 1px rgba(126, 184, 224, 0.06) inset;
+}
+
+/* Quick preset buttons */
+.log-preset-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.log-preset-btn {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 10px;
-  color: var(--text-dim);
   letter-spacing: 1px;
   text-transform: uppercase;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+
+.log-preset-btn:hover {
+  color: var(--text-secondary);
+  background: rgba(126, 184, 224, 0.05);
+  border-color: var(--glass-border);
+}
+
+.log-preset-btn.active {
+  color: var(--accent);
+  background: rgba(126, 184, 224, 0.10);
+  border-color: rgba(126, 184, 224, 0.28);
+}
+
+/* Vertical divider between presets and inputs */
+.log-date-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--glass-border);
+  flex-shrink: 0;
+}
+
+/* From / To inputs group */
+.log-date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.log-date-field-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  opacity: 0.7;
   user-select: none;
+  padding-left: 2px;
 }
 
 .log-date-input {
@@ -1901,26 +1968,70 @@ body {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 4px;
-  padding: 5px 10px;
+  padding: 5px 8px;
   outline: none;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   color-scheme: dark;
+  width: 176px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .log-date-input:focus {
   border-color: var(--border-active);
-  box-shadow: 0 0 0 3px rgba(126, 184, 224, 0.06);
+  box-shadow: 0 0 0 3px rgba(126, 184, 224, 0.07);
 }
 
 .log-date-input::-webkit-calendar-picker-indicator {
-  filter: invert(0.5) sepia(1) saturate(0.5);
+  filter: invert(0.45) sepia(1) saturate(0.5) brightness(1.1);
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0.5;
+  margin-left: 2px;
 }
 
 .log-date-input::-webkit-calendar-picker-indicator:hover {
-  opacity: 0.9;
+  opacity: 0.85;
+}
+
+.log-date-arrow {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-ghost);
+  user-select: none;
+  margin-top: 12px; /* align with input, not label */
+}
+
+.log-date-apply {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 3px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s, box-shadow 0.12s;
+  margin-top: 12px;
+  white-space: nowrap;
+}
+
+.log-date-apply:hover {
+  color: var(--text-secondary);
+  background: rgba(126, 184, 224, 0.05);
+  border-color: rgba(126, 184, 224, 0.18);
+}
+
+.log-date-apply.ready {
+  color: var(--accent);
+  background: rgba(126, 184, 224, 0.10);
+  border-color: rgba(126, 184, 224, 0.32);
+  box-shadow: 0 0 8px rgba(126, 184, 224, 0.10);
+}
+
+.log-date-apply.ready:hover {
+  background: rgba(126, 184, 224, 0.16);
+  border-color: rgba(126, 184, 224, 0.45);
 }
 
 .log-date-clear {
@@ -1928,16 +2039,17 @@ body {
   font-size: 11px;
   color: var(--text-dim);
   background: none;
-  border: 1px solid var(--glass-border);
+  border: 1px solid transparent;
   border-radius: 3px;
-  padding: 4px 9px;
+  padding: 4px 8px;
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s;
+  margin-top: 12px;
 }
 
 .log-date-clear:hover {
-  color: var(--text-primary);
-  border-color: rgba(126, 184, 224, 0.22);
+  color: #d46b6b;
+  border-color: rgba(212, 107, 107, 0.25);
 }
 
 /* Classification pills */
@@ -1997,6 +2109,7 @@ body {
 
   .log-filter-bar {
     padding: 10px 14px;
+    gap: 10px;
   }
 
   /* Search stretches full width */
@@ -2006,22 +2119,64 @@ body {
     min-width: 0;
   }
 
-  /* Stack search + date on separate rows */
+  /* Stack search + date filter block on separate rows */
   .log-filter-top {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
 
-  /* Date range wraps cleanly */
-  .log-date-range {
+  /* Date filter block: stack presets above inputs */
+  .log-date-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  /* Preset buttons scroll horizontally */
+  .log-preset-group {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .log-preset-group::-webkit-scrollbar { display: none; }
+
+  /* Vertical divider becomes horizontal */
+  .log-date-divider {
+    width: 100%;
+    height: 1px;
+    align-self: stretch;
+  }
+
+  /* Inputs + buttons in a wrap row */
+  .log-date-inputs {
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
+  }
+
+  /* Each field takes 50% – 1 gap */
+  .log-date-field {
+    flex: 1 1 140px;
+    min-width: 0;
   }
 
   .log-date-input {
-    flex: 1 1 140px;
-    min-width: 0;
+    width: 100%;
+  }
+
+  /* Arrow hidden on mobile (label "To" is enough) */
+  .log-date-arrow { display: none; }
+
+  /* Apply + Clear on same row, full width */
+  .log-date-apply,
+  .log-date-clear {
+    margin-top: 0;
+    flex: 1 1 auto;
+    text-align: center;
   }
 
   /* Pills scroll horizontally */
@@ -2042,11 +2197,11 @@ body {
   }
 
   /* Explicit column placement for visible cells */
-  .log-dot-col                        { grid-column: 1; }
-  .log-callsign                       { grid-column: 2; }
-  .log-time                           { grid-column: 3; }
-  .log-chevron-col                    { grid-column: 4; }
-  .log-list-header > span:nth-child(5){ grid-column: 3; }
+  .log-dot-col                         { grid-column: 1; }
+  .log-callsign                        { grid-column: 2; }
+  .log-time                            { grid-column: 3; }
+  .log-chevron-col                     { grid-column: 4; }
+  .log-list-header > span:nth-child(5) { grid-column: 3; }
 
   /* Hide middle columns */
   .log-type  { display: none; }
