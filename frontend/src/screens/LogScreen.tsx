@@ -50,6 +50,12 @@ function formatAlt(ft: number | null): string {
   return `${Math.round(ft / 100) * 100}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' ft';
 }
 
+// Converts a Date to the value expected by <input type="datetime-local">
+function toDateTimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // ── Icons ────────────────────────────────────────────────────────────────────
 
 function Chevron({ open }: { open: boolean }) {
@@ -279,16 +285,21 @@ const CLASS_PILLS: { key: ClassFilter; label: string }[] = [
   { key: 'unknown',    label: 'Unknown'    },
 ];
 
+const DATE_PRESETS: { label: string; range: () => [Date, Date] }[] = [
+  { label: 'Today', range: () => { const n = new Date(); const s = new Date(n); s.setHours(0,0,0,0); return [s, n]; } },
+  { label: '24h',   range: () => { const n = new Date(); return [new Date(n.getTime() - 86_400_000), n]; } },
+  { label: '7d',    range: () => { const n = new Date(); return [new Date(n.getTime() - 7 * 86_400_000), n]; } },
+  { label: '30d',   range: () => { const n = new Date(); return [new Date(n.getTime() - 30 * 86_400_000), n]; } },
+];
+
 interface FilterBarProps {
   search: string;
   onSearch: (v: string) => void;
   classFilter: ClassFilter;
   onClass: (v: ClassFilter) => void;
-  dateFrom: string;
-  onDateFrom: (v: string) => void;
-  dateTo: string;
-  onDateTo: (v: string) => void;
-  onClearDates: () => void;
+  appliedFrom: string;
+  appliedTo: string;
+  onApplyDates: (fromISO: string, toISO: string) => void;
   count: number;
   total: number;
 }
@@ -296,14 +307,49 @@ interface FilterBarProps {
 function FilterBar({
   search, onSearch,
   classFilter, onClass,
-  dateFrom, onDateFrom,
-  dateTo, onDateTo,
-  onClearDates,
+  appliedFrom, appliedTo, onApplyDates,
   count, total,
 }: FilterBarProps) {
-  const hasDates = dateFrom || dateTo;
+  const [draftFrom,    setDraftFrom   ] = useState('');
+  const [draftTo,      setDraftTo     ] = useState('');
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+
+  const isApplied = !!(appliedFrom || appliedTo);
+  const isDirty   = draftFrom !== '' || draftTo !== '';
+
+  function applyPreset(label: string, range: () => [Date, Date]) {
+    const [s, e] = range();
+    setDraftFrom(toDateTimeLocal(s));
+    setDraftTo(toDateTimeLocal(e));
+    setActivePreset(label);
+    onApplyDates(s.toISOString(), e.toISOString());
+  }
+
+  function handleApply() {
+    setActivePreset(null);
+    onApplyDates(
+      draftFrom ? new Date(draftFrom).toISOString() : '',
+      draftTo   ? new Date(draftTo).toISOString()   : '',
+    );
+  }
+
+  function handleClear() {
+    setDraftFrom('');
+    setDraftTo('');
+    setActivePreset(null);
+    onApplyDates('', '');
+  }
+
+  function handleInput(which: 'from' | 'to', val: string) {
+    if (which === 'from') setDraftFrom(val);
+    else                  setDraftTo(val);
+    setActivePreset(null);
+  }
+
   return (
     <div className="log-filter-bar">
+
+      {/* ── Row 1: search + date range ── */}
       <div className="log-filter-row log-filter-top">
         <input
           className="log-search"
@@ -313,26 +359,58 @@ function FilterBar({
           onChange={(e) => onSearch(e.target.value)}
           spellCheck={false}
         />
-        <div className="log-date-range">
-          <span className="log-date-label">From</span>
-          <input
-            className="log-date-input"
-            type="datetime-local"
-            value={dateFrom}
-            onChange={(e) => onDateFrom(e.target.value)}
-          />
-          <span className="log-date-label">To</span>
-          <input
-            className="log-date-input"
-            type="datetime-local"
-            value={dateTo}
-            onChange={(e) => onDateTo(e.target.value)}
-          />
-          {hasDates && (
-            <button className="log-date-clear" onClick={onClearDates} title="Clear date range">✕</button>
-          )}
+
+        <div className={`log-date-filter${isApplied ? ' applied' : ''}`}>
+          {/* Quick presets */}
+          <div className="log-preset-group">
+            {DATE_PRESETS.map(({ label, range }) => (
+              <button
+                key={label}
+                className={`log-preset-btn${activePreset === label ? ' active' : ''}`}
+                onClick={() => applyPreset(label, range)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <span className="log-date-divider" aria-hidden="true" />
+
+          {/* Manual inputs */}
+          <div className="log-date-inputs">
+            <div className="log-date-field">
+              <span className="log-date-field-label">From</span>
+              <input
+                className="log-date-input"
+                type="datetime-local"
+                value={draftFrom}
+                onChange={(e) => handleInput('from', e.target.value)}
+              />
+            </div>
+            <span className="log-date-arrow" aria-hidden="true">→</span>
+            <div className="log-date-field">
+              <span className="log-date-field-label">To</span>
+              <input
+                className="log-date-input"
+                type="datetime-local"
+                value={draftTo}
+                onChange={(e) => handleInput('to', e.target.value)}
+              />
+            </div>
+            <button
+              className={`log-date-apply${isDirty ? ' ready' : ''}`}
+              onClick={handleApply}
+            >
+              Apply
+            </button>
+            {isApplied && (
+              <button className="log-date-clear" onClick={handleClear} title="Clear date filter">✕</button>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ── Row 2: classification pills + count ── */}
       <div className="log-filter-row log-filter-bottom">
         <div className="log-filter-pills">
           {CLASS_PILLS.map(({ key, label }) => (
@@ -350,6 +428,7 @@ function FilterBar({
           {count < total ? `${count} / ${total}` : total.toLocaleString()} events
         </span>
       </div>
+
     </div>
   );
 }
@@ -366,19 +445,18 @@ export default function LogScreen() {
   const [error,       setError      ] = useState<string | null>(null);
   const [search,      setSearch     ] = useState('');
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
-  const [dateFrom,    setDateFrom   ] = useState('');
-  const [dateTo,      setDateTo     ] = useState('');
+  // Only ISO strings committed by Apply/preset — never changes on raw input
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo,   setAppliedTo  ] = useState('');
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const fromISO = dateFrom ? new Date(dateFrom).toISOString() : undefined;
-    const toISO   = dateTo   ? new Date(dateTo).toISOString()   : undefined;
-    fetchLog(limit, 0, fromISO, toISO)
+    fetchLog(limit, 0, appliedFrom || undefined, appliedTo || undefined)
       .then(({ flights, total }) => { setFlights(flights); setTotal(total); })
       .catch(() => setError('Failed to load flight log.'))
       .finally(() => setLoading(false));
-  }, [limit, dateFrom, dateTo]);
+  }, [limit, appliedFrom, appliedTo]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -423,11 +501,9 @@ export default function LogScreen() {
           onSearch={setSearch}
           classFilter={classFilter}
           onClass={setClassFilter}
-          dateFrom={dateFrom}
-          onDateFrom={setDateFrom}
-          dateTo={dateTo}
-          onDateTo={setDateTo}
-          onClearDates={() => { setDateFrom(''); setDateTo(''); }}
+          appliedFrom={appliedFrom}
+          appliedTo={appliedTo}
+          onApplyDates={(from, to) => { setAppliedFrom(from); setAppliedTo(to); }}
           count={filtered.length}
           total={total}
         />
