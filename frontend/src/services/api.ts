@@ -60,8 +60,13 @@ export const fetchStatsMostSeen     = () => statsGet<StatsMostSeenData>('most-se
 export async function fetchLog(
   limit: number,
   offset = 0,
+  fromDate?: string,
+  toDate?: string,
 ): Promise<{ flights: Flight[]; total: number }> {
-  const res = await apiFetch(`${BASE_URL}/api/log?limit=${limit}&offset=${offset}`);
+  let url = `${BASE_URL}/api/log?limit=${limit}&offset=${offset}`;
+  if (fromDate) url += `&from=${encodeURIComponent(fromDate)}`;
+  if (toDate)   url += `&to=${encodeURIComponent(toDate)}`;
+  const res = await apiFetch(url);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

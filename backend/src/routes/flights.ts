@@ -110,11 +110,13 @@ router.get('/:hex/history', (req: Request, res: Response) => {
   res.json(history);
 });
 
-// GET /api/log?limit=50&offset=0
+// GET /api/log?limit=50&offset=0&from=ISO&to=ISO
 router.get('/log', (req: Request, res: Response) => {
-  const limit  = Math.min(parseInt(req.query.limit  as string) || 50, 200);
-  const offset = parseInt(req.query.offset as string) || 0;
-  res.json(getLog(limit, offset, req.userId));
+  const limit    = Math.min(parseInt(req.query.limit  as string) || 50, 200);
+  const offset   = parseInt(req.query.offset as string) || 0;
+  const fromDate = (req.query.from as string | undefined) || undefined;
+  const toDate   = (req.query.to   as string | undefined) || undefined;
+  res.json(getLog(limit, offset, req.userId, fromDate, toDate));
 });
 
 export default router;

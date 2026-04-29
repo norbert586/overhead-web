@@ -1662,29 +1662,66 @@ body {
   filter: drop-shadow(0 0 4px rgba(126,184,224,0.5));
 }
 
-/* Expanded detail panel */
+/* ── Expanded detail panel ──────────────────────────────────── */
 .log-detail {
-  padding: 12px 0 16px 22px;
   border-top: 1px solid var(--glass-border);
-  display: flex;
-  gap: 24px;
-  align-items: flex-start;
   background: rgba(126, 184, 224, 0.015);
   animation: row-expand 0.2s ease forwards;
 }
 
-.log-detail-grid {
-  flex: none;
-  width: 460px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
+/* Tab bar */
+.log-detail-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--glass-border);
+  padding: 0 22px;
+  gap: 0;
+}
+
+.log-detail-tab {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 9px 16px 7px;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.log-detail-tab:hover {
+  color: var(--text-secondary);
+}
+
+.log-detail-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Tab body */
+.log-detail-body {
+  padding: 14px 22px 18px;
+}
+
+.log-tab-content {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+.log-tab-details .log-detail-col {
+  min-width: 220px;
 }
 
 .log-detail-col {
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1;
+  max-width: 380px;
 }
 
 .log-detail-section-label {
@@ -1703,15 +1740,16 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2px 0;
-  gap: 12px;
+  padding: 3px 0;
+  gap: 16px;
 }
 
 .log-detail-label {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   flex-shrink: 0;
+  letter-spacing: 0.3px;
 }
 
 .log-detail-value {
@@ -1725,10 +1763,10 @@ body {
   white-space: nowrap;
 }
 
-/* Photo section */
+/* Photo section (inside details tab) */
 .log-photo-section {
-  flex: 1;
-  min-width: 240px;
+  flex: 0 0 260px;
+  min-width: 0;
 }
 
 .log-photo-btn {
@@ -1766,13 +1804,13 @@ body {
 
 .log-photo-img {
   width: 100%;
-  max-height: 280px;
-  border-radius: 6px;
+  max-height: 200px;
+  border-radius: 5px;
   border: 1px solid var(--glass-border);
-  object-fit: contain;
+  object-fit: cover;
   display: block;
-  filter: saturate(0.5) brightness(1.05);
-  opacity: 0.92;
+  filter: saturate(0.55) brightness(1.05);
+  opacity: 0.9;
   background: var(--bg-card);
   box-shadow: var(--card-shadow);
 }
@@ -1800,14 +1838,20 @@ body {
   color: var(--class-government);
 }
 
-/* Filter bar */
+/* ── Filter bar ─────────────────────────────────────────────── */
 .log-filter-bar {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 28px 10px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 28px;
   border-bottom: 1px solid var(--glass-border);
+}
+
+.log-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -1819,7 +1863,7 @@ body {
   border: 1px solid var(--glass-border);
   border-radius: 5px;
   padding: 6px 12px;
-  width: 240px;
+  width: 220px;
   outline: none;
   letter-spacing: 0.3px;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -1834,6 +1878,69 @@ body {
   box-shadow: 0 0 0 3px rgba(126, 184, 224, 0.06);
 }
 
+/* Date range */
+.log-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-date-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.log-date-input {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  outline: none;
+  letter-spacing: 0.3px;
+  color-scheme: dark;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.log-date-input:focus {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 3px rgba(126, 184, 224, 0.06);
+}
+
+.log-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.5) sepia(1) saturate(0.5);
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.log-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.9;
+}
+
+.log-date-clear {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 3px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.log-date-clear:hover {
+  color: var(--text-primary);
+  border-color: rgba(126, 184, 224, 0.22);
+}
+
+/* Classification pills */
 .log-filter-pills {
   display: flex;
   align-items: center;
@@ -1876,6 +1983,107 @@ body {
   color: var(--text-dim);
   letter-spacing: 0.5px;
   margin-left: auto;
+}
+
+/* ── Mobile responsive ──────────────────────────────────────── */
+@media (max-width: 680px) {
+  .log-header {
+    padding: 12px 16px 10px;
+  }
+
+  .log-list {
+    padding: 0 14px 20px;
+  }
+
+  .log-filter-bar {
+    padding: 10px 14px;
+  }
+
+  /* Search stretches full width */
+  .log-search {
+    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Stack search + date on separate rows */
+  .log-filter-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  /* Date range wraps cleanly */
+  .log-date-range {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .log-date-input {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  /* Pills scroll horizontally */
+  .log-filter-pills {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .log-filter-pills::-webkit-scrollbar { display: none; }
+
+  /* Compact row grid: dot | callsign | time | chevron */
+  .log-list-header,
+  .log-row-main {
+    grid-template-columns: 16px 1fr 80px 28px;
+  }
+
+  /* Explicit column placement for visible cells */
+  .log-dot-col                        { grid-column: 1; }
+  .log-callsign                       { grid-column: 2; }
+  .log-time                           { grid-column: 3; }
+  .log-chevron-col                    { grid-column: 4; }
+  .log-list-header > span:nth-child(5){ grid-column: 3; }
+
+  /* Hide middle columns */
+  .log-type  { display: none; }
+  .log-route { display: none; }
+  .log-seen  { display: none; }
+
+  .log-col-aircraft,
+  .log-col-route,
+  .log-col-seen { display: none; }
+
+  /* Expanded panel */
+  .log-detail-tabs {
+    padding: 0 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .log-detail-tabs::-webkit-scrollbar { display: none; }
+
+  .log-detail-body {
+    padding: 12px 14px 16px;
+  }
+
+  /* Stack photo below data on mobile */
+  .log-tab-content {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .log-detail-col {
+    max-width: 100%;
+  }
+
+  .log-photo-section {
+    flex: none;
+    width: 100%;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

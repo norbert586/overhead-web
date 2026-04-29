@@ -248,12 +248,28 @@ export function getFlightHistory(hex: string, userId: number) {
   );
 }
 
-export function getLog(limit: number, offset: number, userId: number): { flights: Flight[]; total: number } {
+export function getLog(
+  limit: number,
+  offset: number,
+  userId: number,
+  fromDate?: string,
+  toDate?: string,
+): { flights: Flight[]; total: number } {
+  const conds: string[] = ['user_id = ?'];
+  const base: (string | number)[] = [userId];
+
+  if (fromDate) { conds.push('last_seen >= ?'); base.push(fromDate); }
+  if (toDate)   { conds.push('last_seen <= ?'); base.push(toDate);   }
+
+  const where = conds.join(' AND ');
   const rows = all<FlightRow>(
-    'SELECT * FROM flights WHERE user_id = ? ORDER BY last_seen DESC LIMIT ? OFFSET ?',
-    [userId, limit, offset],
+    `SELECT * FROM flights WHERE ${where} ORDER BY last_seen DESC LIMIT ? OFFSET ?`,
+    [...base, limit, offset],
   );
-  const countRow = get<{ count: number }>('SELECT COUNT(*) as count FROM flights WHERE user_id = ?', [userId]);
+  const countRow = get<{ count: number }>(
+    `SELECT COUNT(*) as count FROM flights WHERE ${where}`,
+    base,
+  );
   return {
     flights: rows.map(rowToFlight),
     total: countRow?.count ?? 0,
