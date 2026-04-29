@@ -33,10 +33,18 @@ const SettingsIcon = () => (
   </svg>
 );
 
+const ProfileIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
 const ITEMS: { view: View; label: string; Icon: () => ReactElement }[] = [
   { view: 'flight',   label: 'Flight',   Icon: FlightIcon },
   { view: 'log',      label: 'Log',      Icon: LogIcon },
   { view: 'stats',    label: 'Stats',    Icon: StatsIcon },
+  { view: 'profile',  label: 'Profile',  Icon: ProfileIcon },
   { view: 'settings', label: 'Settings', Icon: SettingsIcon },
 ];
 
