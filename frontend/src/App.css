@@ -4156,6 +4156,25 @@ body {
   line-height: 1.5;
 }
 
+.achievement-country-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.achievement-country-flag {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.achievement-country-name {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+
 .achievement-unlocked-at {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 9px;
