@@ -7,7 +7,8 @@ export type AchievementCategory =
   | 'collection'
   | 'rare'
   | 'persistence'
-  | 'signal';
+  | 'signal'
+  | 'country';
 
 export interface AchievementDef {
   id: string;
@@ -247,7 +248,69 @@ export const ACHIEVEMENTS: AchievementDef[] = [
       return (r?.count ?? 0) >= 30;
     },
   },
+
+  // ── Country contacts ─────────────────────────────────────────────────────────
+  ...makeCountryAchievements(),
 ];
+
+// Builds all country achievements from a compact definition table.
+// Checks the aircraft registration country (most reliably populated field).
+function makeCountryAchievements(): AchievementDef[] {
+  const defs: [id: string, label: string, description: string, country: string][] = [
+    ['country_usa',     'Stars and Stripes',    'Loud, constant, everywhere.',              'United States'],
+    ['country_gbr',     'Crown and Steel',      'Old power. Still moving.',                 'United Kingdom'],
+    ['country_fra',     'Tricolore',            'Style, precision, and presence.',          'France'],
+    ['country_deu',     'Iron Order',           'Engineered. Controlled. Relentless.',      'Germany'],
+    ['country_ita',     'Roman Blood',          'History runs deep here.',                  'Italy'],
+    ['country_esp',     'Matador',              'Bold moves. No hesitation.',               'Spain'],
+    ['country_nld',     'House of Orange',      'Small nation. Big reach.',                 'Netherlands'],
+    ['country_che',     'Silent Vault',         'Quiet. Precise. Untouchable.',             'Switzerland'],
+    ['country_swe',     'Nordic Steel',         'Cold. Clean. Efficient.',                  'Sweden'],
+    ['country_nor',     'Fjordborn',            'Carved from harsh terrain.',               'Norway'],
+    ['country_pol',     'Winged Hussars',       'When they show up, things change.',        'Poland'],
+    ['country_tur',     'Gatekeeper',           'Where worlds collide.',                    'Turkey'],
+    ['country_are',     'Desert Kings',         'Built fast. Built big.',                   'United Arab Emirates'],
+    ['country_sau',     'Sandstorm',            'Power hidden in the heat.',                'Saudi Arabia'],
+    ['country_qat',     'Black Gold',           'Small footprint. Massive influence.',      'Qatar'],
+    ['country_ind',     'Monsoon',              'Intense. Unstoppable.',                    'India'],
+    ['country_chn',     'Red Dragon',           'Ancient force. Modern scale.',             'China'],
+    ['country_jpn',     'Rising Sun',           'Discipline meets precision.',              'Japan'],
+    ['country_kor',     'Tiger Nation',         'Fast, sharp, relentless.',                 'South Korea'],
+    ['country_sgp',     'Lion City',            'Small, but never overlooked.',             'Singapore'],
+    ['country_tha',     'Golden Kingdom',       'Rich roots, strong presence.',             'Thailand'],
+    ['country_idn',     'Island Empire',        'Spread wide. Hard to pin down.',           'Indonesia'],
+    ['country_aus',     'Outback',              'Harsh land. Hard people.',                 'Australia'],
+    ['country_nzl',     'All Blacks',           'Silent. Then overwhelming.',               'New Zealand'],
+    ['country_bra',     'Carnival',             'Energy you can\'t ignore.',                'Brazil'],
+    ['country_arg',     'Silver Nation',        'Pride runs deep.',                         'Argentina'],
+    ['country_chl',     'Spine of the Earth',   'Long. Narrow. Unyielding.',               'Chile'],
+    ['country_zaf',     'Springbok',            'Strength and resilience.',                 'South Africa'],
+    ['country_egy',     'Pharaoh',              'Power that outlived time.',                'Egypt'],
+    ['country_mar',     'Atlas',                'Gateway between worlds.',                  'Morocco'],
+    ['country_eth',     'Abyssinia',            'Ancient and unbroken.',                    'Ethiopia'],
+    ['country_ken',     'Equator',              'Right down the middle.',                   'Kenya'],
+    ['country_nga',     'Giant of Africa',      'Loud. Growing. Impossible to ignore.',     'Nigeria'],
+    ['country_rus',     'Iron Curtain',         'Vast. Cold. Watching.',                    'Russia'],
+    ['country_ukr',     'Steppe',               'Open ground. Strong will.',                'Ukraine'],
+    ['country_grc',     'Spartan',              'Discipline above all.',                    'Greece'],
+    ['country_irl',     'Emerald Isle',         'Quiet, but never soft.',                   'Ireland'],
+    ['country_prt',     'Navigators',           'Always pushing outward.',                  'Portugal'],
+  ];
+
+  return defs.map(([id, label, description, country]) => ({
+    id,
+    label,
+    description,
+    category: 'country' as AchievementCategory,
+    check: (userId: number) => {
+      const r = get<{ count: number }>(
+        `SELECT COUNT(*) as count FROM flights WHERE user_id = ? AND country = ?`,
+        [userId, country],
+      );
+      return (r?.count ?? 0) >= 1;
+    },
+  }));
+}
 
 // ── Achievement query helpers ─────────────────────────────────────────────────
 
