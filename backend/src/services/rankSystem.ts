@@ -28,31 +28,31 @@ export const RANK_TIERS: RankTier[] = [
   {
     tier: 'ANALYST',
     label: 'Analyst',
-    minScore: 100,
+    minScore: 500,
     description: 'Consistent observation. Signal emerging.',
   },
   {
     tier: 'TRACKER',
     label: 'Tracker',
-    minScore: 300,
+    minScore: 2000,
     description: 'Sustained coverage. Multiple classifications logged.',
   },
   {
     tier: 'SPOTTER',
     label: 'Spotter',
-    minScore: 700,
+    minScore: 6000,
     description: 'High-volume operation. Rare contacts recorded.',
   },
   {
     tier: 'SENTINEL',
     label: 'Sentinel',
-    minScore: 1500,
+    minScore: 15000,
     description: 'Continuous long-term surveillance. Deep dataset.',
   },
   {
     tier: 'INTELLIGENCE',
     label: 'Intelligence',
-    minScore: 3500,
+    minScore: 40000,
     description: 'Full-spectrum persistent observer. Maximum coverage.',
   },
 ];

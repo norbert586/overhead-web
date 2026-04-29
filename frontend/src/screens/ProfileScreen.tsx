@@ -34,10 +34,11 @@ const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   rare:        'Rare Signal',
   persistence: 'Persistence',
   signal:      'Signal',
+  country:     'Country Contacts',
 };
 
 const CATEGORY_ORDER: AchievementCategory[] = [
-  'detection', 'collection', 'rare', 'persistence', 'signal',
+  'detection', 'collection', 'rare', 'persistence', 'signal', 'country',
 ];
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -98,12 +99,24 @@ function IconSignal() {
   );
 }
 
+function IconCountry() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M12 3a14.5 14.5 0 0 1 4 9 14.5 14.5 0 0 1-4 9 14.5 14.5 0 0 1-4-9 14.5 14.5 0 0 1 4-9z"
+        fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 const CATEGORY_ICONS: Record<AchievementCategory, () => ReactElement> = {
   detection:   IconDetection,
   collection:  IconCollection,
   rare:        IconRare,
   persistence: IconPersistence,
   signal:      IconSignal,
+  country:     IconCountry,
 };
 
 // ── Achievement ID → specific icon override ───────────────────────────────────
@@ -157,6 +170,37 @@ function AchievementIcon({ id, category, unlocked }: {
   return (
     <div className={`achievement-icon${unlocked ? ' unlocked' : ' locked'}`}>
       <Icon />
+    </div>
+  );
+}
+
+// ── Score explainer ───────────────────────────────────────────────────────────
+
+const FORMULA_ROWS = [
+  { component: 'Total Sightings',  multiplier: '× 1', note: 'Raw observation volume' },
+  { component: 'Unique Aircraft',  multiplier: '× 2', note: 'Breadth of airspace coverage' },
+  { component: 'Rare Signals',     multiplier: '× 5', note: 'Military / government contacts', highlight: true },
+  { component: 'Active Days',      multiplier: '× 3', note: 'Sustained, consistent operation' },
+];
+
+function ScoreExplainer() {
+  return (
+    <div className="profile-score-explainer">
+      <div className="profile-section-label">How Scoring Works</div>
+      <div className="score-formula-table">
+        {FORMULA_ROWS.map(({ component, multiplier, note, highlight }) => (
+          <div key={component} className={`score-formula-row${highlight ? ' score-formula-highlight' : ''}`}>
+            <span className="score-formula-component">{component}</span>
+            <span className="score-formula-multiplier">{multiplier}</span>
+            <span className="score-formula-note">{note}</span>
+          </div>
+        ))}
+      </div>
+      <p className="score-formula-context">
+        Rare signals (military and government aircraft) are weighted 5× because they represent genuine
+        intelligence value — difficult to acquire, high signal-to-noise ratio. Rank reflects
+        the quality and persistence of observation, not session count alone.
+      </p>
     </div>
   );
 }
@@ -380,6 +424,8 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
         {!loading && !error && tab === 'rank' && rank && (
           <div className="profile-rank-section">
             <RankCard rank={rank} />
+
+            <ScoreExplainer />
 
             <div className="profile-tiers-section">
               <div className="profile-section-label">Rank Progression</div>

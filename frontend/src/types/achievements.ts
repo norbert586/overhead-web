@@ -1,4 +1,4 @@
-export type AchievementCategory = 'detection' | 'collection' | 'rare' | 'persistence' | 'signal';
+export type AchievementCategory = 'detection' | 'collection' | 'rare' | 'persistence' | 'signal' | 'country';
 
 export interface UnlockedAchievement {
   id: string;

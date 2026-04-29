@@ -3710,13 +3710,18 @@ body {
 
 .profile-rank-tier {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--tier-color, var(--accent));
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.35;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  overflow: hidden;
+  padding: 0 5px;
+  width: 100%;
 }
 
 .profile-rank-meta {
@@ -3842,6 +3847,77 @@ body {
   font-size: 9px;
   color: var(--text-ghost);
   letter-spacing: 0.5px;
+}
+
+/* Score explainer */
+.profile-score-explainer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.score-formula-table {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.score-formula-row {
+  display: grid;
+  grid-template-columns: 1fr 40px 1fr;
+  align-items: center;
+  gap: 0;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.score-formula-row:last-child {
+  border-bottom: none;
+}
+
+.score-formula-highlight {
+  background: rgba(212, 107, 107, 0.04);
+}
+
+.score-formula-component {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.score-formula-multiplier {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+}
+
+.score-formula-highlight .score-formula-multiplier {
+  color: #d46b6b;
+}
+
+.score-formula-note {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+  text-align: right;
+}
+
+.score-formula-context {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-ghost);
+  letter-spacing: 0.2px;
+  line-height: 1.6;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  margin: 0;
 }
 
 /* Rank progression list */
