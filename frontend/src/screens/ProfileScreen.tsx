@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactElement } from 'react';
 import { fetchAchievements, fetchRank } from '../services/api';
+import { countryToFlag } from '../utils/formatting';
 import type {
   AchievementsResponse,
   RankResponse,
@@ -290,6 +291,49 @@ function RankCard({ rank }: { rank: RankResponse }) {
   );
 }
 
+// ── Country metadata for flag + name display ─────────────────────────────────
+
+const COUNTRY_META: Record<string, { iso: string; name: string }> = {
+  country_usa: { iso: 'US', name: 'United States' },
+  country_gbr: { iso: 'GB', name: 'United Kingdom' },
+  country_fra: { iso: 'FR', name: 'France' },
+  country_deu: { iso: 'DE', name: 'Germany' },
+  country_ita: { iso: 'IT', name: 'Italy' },
+  country_esp: { iso: 'ES', name: 'Spain' },
+  country_nld: { iso: 'NL', name: 'Netherlands' },
+  country_che: { iso: 'CH', name: 'Switzerland' },
+  country_swe: { iso: 'SE', name: 'Sweden' },
+  country_nor: { iso: 'NO', name: 'Norway' },
+  country_pol: { iso: 'PL', name: 'Poland' },
+  country_tur: { iso: 'TR', name: 'Turkey' },
+  country_are: { iso: 'AE', name: 'United Arab Emirates' },
+  country_sau: { iso: 'SA', name: 'Saudi Arabia' },
+  country_qat: { iso: 'QA', name: 'Qatar' },
+  country_ind: { iso: 'IN', name: 'India' },
+  country_chn: { iso: 'CN', name: 'China' },
+  country_jpn: { iso: 'JP', name: 'Japan' },
+  country_kor: { iso: 'KR', name: 'South Korea' },
+  country_sgp: { iso: 'SG', name: 'Singapore' },
+  country_tha: { iso: 'TH', name: 'Thailand' },
+  country_idn: { iso: 'ID', name: 'Indonesia' },
+  country_aus: { iso: 'AU', name: 'Australia' },
+  country_nzl: { iso: 'NZ', name: 'New Zealand' },
+  country_bra: { iso: 'BR', name: 'Brazil' },
+  country_arg: { iso: 'AR', name: 'Argentina' },
+  country_chl: { iso: 'CL', name: 'Chile' },
+  country_zaf: { iso: 'ZA', name: 'South Africa' },
+  country_egy: { iso: 'EG', name: 'Egypt' },
+  country_mar: { iso: 'MA', name: 'Morocco' },
+  country_eth: { iso: 'ET', name: 'Ethiopia' },
+  country_ken: { iso: 'KE', name: 'Kenya' },
+  country_nga: { iso: 'NG', name: 'Nigeria' },
+  country_rus: { iso: 'RU', name: 'Russia' },
+  country_ukr: { iso: 'UA', name: 'Ukraine' },
+  country_grc: { iso: 'GR', name: 'Greece' },
+  country_irl: { iso: 'IE', name: 'Ireland' },
+  country_prt: { iso: 'PT', name: 'Portugal' },
+};
+
 // ── Achievement Card ──────────────────────────────────────────────────────────
 
 function AchievementCard({
@@ -307,12 +351,21 @@ function AchievementCard({
   unlocked: boolean;
   unlockedAt?: string;
 }) {
+  const countryMeta = COUNTRY_META[id];
+  const flag = countryMeta ? countryToFlag(countryMeta.iso) : null;
+
   return (
     <div className={`achievement-card${unlocked ? ' achievement-unlocked' : ' achievement-locked'}`}>
       <AchievementIcon id={id} category={category} unlocked={unlocked} />
       <div className="achievement-text">
         <div className="achievement-label">{label}</div>
         <div className="achievement-description">{description}</div>
+        {countryMeta && (
+          <div className="achievement-country-tag">
+            {flag && <span className="achievement-country-flag">{flag}</span>}
+            <span className="achievement-country-name">{countryMeta.name}</span>
+          </div>
+        )}
         {unlocked && unlockedAt && (
           <div className="achievement-unlocked-at">{timeAgo(unlockedAt)}</div>
         )}
