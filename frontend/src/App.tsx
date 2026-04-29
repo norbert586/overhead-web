@@ -7,6 +7,7 @@ import FlightScreen from './screens/FlightScreen';
 import LogScreen from './screens/LogScreen';
 import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import { useSettings } from './hooks/useSettings';
@@ -14,7 +15,7 @@ import { useFlightData } from './hooks/useFlightData';
 import { useAuth } from './hooks/useAuth';
 import { fetchProfile, updateProfile } from './services/api';
 
-export type View = 'flight' | 'log' | 'stats' | 'settings';
+export type View = 'flight' | 'log' | 'stats' | 'settings' | 'profile';
 type AuthView = 'login' | 'register';
 
 function App() {
@@ -124,6 +125,10 @@ function App() {
 
     if (view === 'stats') {
       return <StatsScreen />;
+    }
+
+    if (view === 'profile') {
+      return <ProfileScreen userEmail={user?.email} />;
     }
 
     // Flight view

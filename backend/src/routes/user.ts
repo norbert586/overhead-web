@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { findUserById, getUserSettings, updateUserSettings } from '../database/queries';
+import { getUserAchievements, ACHIEVEMENTS } from '../services/achievementEngine';
+import { calculateUserRank, RANK_TIERS } from '../services/rankSystem';
 
 const router = Router();
 
@@ -54,6 +56,23 @@ router.put('/profile', requireAuth, (req: Request, res: Response) => {
     radiusNm: radius,
     pollIntervalSec: interval,
   });
+});
+
+// GET /api/user/achievements
+router.get('/achievements', requireAuth, (_req: Request, res: Response) => {
+  const { unlocked, locked } = getUserAchievements(_req.userId);
+  res.json({
+    unlocked,
+    locked,
+    total: ACHIEVEMENTS.length,
+    unlockedCount: unlocked.length,
+  });
+});
+
+// GET /api/user/rank
+router.get('/rank', requireAuth, (_req: Request, res: Response) => {
+  const rank = calculateUserRank(_req.userId);
+  res.json({ ...rank, tiers: RANK_TIERS.map(({ tier, label, minScore, description }) => ({ tier, label, minScore, description })) });
 });
 
 export default router;

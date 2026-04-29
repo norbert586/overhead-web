@@ -3,6 +3,7 @@ import { upsertFlight } from '../database/queries';
 import { fetchAll } from './adsb';
 import { enrichAircraft, enrichCallsign } from './enrichment';
 import { classify } from './classifier';
+import { evaluateAchievements } from './achievementEngine';
 import type { AdsbAircraft } from '../types/flight';
 
 const SCAN_INTERVAL_MS = 12_000;
@@ -81,6 +82,9 @@ async function scanAll(): Promise<void> {
             console.error(`[scanner] processAircraft error hex=${ac.hex}:`, err);
           }
         }
+
+        // Evaluate achievements after each user's batch — non-blocking
+        evaluateAchievements(user.id);
       } catch (err) {
         console.error(`[scanner] user=${user.id} scan error:`, err);
       }

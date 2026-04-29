@@ -3504,3 +3504,626 @@ body {
     letter-spacing: 4px;
   }
 }
+
+/* ── ProfileScreen ──────────────────────────────────────────── */
+
+.profile-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px 0;
+  flex-shrink: 0;
+}
+
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-avatar svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--text-dim);
+  fill: none;
+}
+
+.profile-email {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.profile-tier-inline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+.profile-summary-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.profile-summary-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.profile-summary-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-summary-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+
+/* Tabs */
+.profile-tabs {
+  display: flex;
+  gap: 0;
+  padding: 16px 28px 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.profile-tab {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 16px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.profile-tab:hover {
+  color: var(--text-secondary);
+}
+
+.profile-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.profile-tab-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-radius: 8px;
+  padding: 1px 5px;
+  line-height: 1.4;
+}
+
+/* Content area */
+.profile-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 28px 28px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.profile-content::-webkit-scrollbar { width: 4px; }
+.profile-content::-webkit-scrollbar-track { background: transparent; }
+.profile-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.profile-loading,
+.profile-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 120px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.profile-loading-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Rank section */
+.profile-rank-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 680px;
+}
+
+.profile-rank-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.profile-rank-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.profile-rank-badge {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--tier-color, var(--accent));
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(126,184,224,0.03);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--tier-color, var(--accent)) 25%, transparent);
+}
+
+.profile-rank-tier {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--tier-color, var(--accent));
+  text-align: center;
+  line-height: 1.2;
+}
+
+.profile-rank-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 2px;
+}
+
+.profile-rank-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+}
+
+.profile-rank-description {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  line-height: 1.5;
+}
+
+.profile-rank-score {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.profile-rank-score-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.profile-rank-score-unit {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Progress bar */
+.profile-rank-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-rank-progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.profile-rank-progress-fill {
+  height: 100%;
+  background: var(--tier-color, var(--accent));
+  border-radius: 2px;
+  transition: width 0.6s ease;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--tier-color, var(--accent)) 60%, transparent);
+}
+
+.profile-rank-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.profile-rank-progress-next,
+.profile-rank-max {
+  color: var(--text-secondary);
+}
+
+/* Score breakdown */
+.profile-rank-breakdown {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.profile-rank-breakdown-item {
+  background: var(--bg-primary);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.profile-breakdown-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.profile-breakdown-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.profile-breakdown-pts {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--text-ghost);
+  letter-spacing: 0.5px;
+}
+
+/* Rank progression list */
+.profile-tiers-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.profile-tiers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-tier-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border-radius: 3px;
+  background: var(--bg-card);
+  border: 1px solid transparent;
+  transition: background 0.15s;
+}
+
+.profile-tier-row.current {
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
+.profile-tier-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.profile-tier-row.achieved .profile-tier-indicator {
+  box-shadow: 0 0 6px currentColor;
+}
+
+.profile-tier-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-tier-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-tier-current-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  font-weight: 400;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(126,184,224,0.3);
+  border-radius: 2px;
+  padding: 1px 5px;
+}
+
+.profile-tier-desc {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-ghost);
+  letter-spacing: 0.2px;
+}
+
+.profile-tier-threshold {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+/* ── Achievements section ──────────────────────────────────── */
+
+.profile-achievements-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.achievement-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.achievement-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.achievement-group-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.achievement-group-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-ghost);
+}
+
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.achievement-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: border-color 0.15s;
+}
+
+.achievement-card.achievement-unlocked {
+  border-color: rgba(126,184,224,0.2);
+  background: var(--bg-elevated);
+}
+
+.achievement-card.achievement-unlocked:hover {
+  border-color: rgba(126,184,224,0.35);
+}
+
+.achievement-card.achievement-locked {
+  opacity: 0.45;
+}
+
+/* Achievement icon */
+.achievement-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+}
+
+.achievement-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.achievement-icon.unlocked {
+  background: rgba(126,184,224,0.06);
+  border-color: rgba(126,184,224,0.25);
+  color: var(--accent);
+  fill: var(--accent);
+}
+
+.achievement-icon.unlocked svg {
+  fill: var(--accent);
+  stroke: none;
+}
+
+.achievement-icon.locked {
+  background: var(--bg-primary);
+  color: var(--text-ghost);
+  fill: var(--text-ghost);
+}
+
+.achievement-icon.locked svg {
+  fill: var(--text-ghost);
+  stroke: none;
+}
+
+/* For icons that use stroke instead of fill */
+.achievement-icon.unlocked svg[fill="none"] {
+  fill: none;
+  stroke: var(--accent);
+}
+
+.achievement-icon.locked svg[fill="none"] {
+  fill: none;
+  stroke: var(--text-ghost);
+}
+
+.achievement-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.achievement-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.achievement-description {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.2px;
+  line-height: 1.5;
+}
+
+.achievement-unlocked-at {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  opacity: 0.7;
+}
+
+/* ── Profile responsive ─────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 18px 0;
+  }
+
+  .profile-tabs {
+    padding: 14px 18px 0;
+  }
+
+  .profile-content {
+    padding: 16px 18px 20px;
+  }
+
+  .profile-rank-breakdown {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .profile-rank-header {
+    flex-wrap: wrap;
+  }
+
+  .profile-rank-score {
+    align-items: flex-start;
+    width: 100%;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 5px;
+  }
+
+  .achievement-grid {
+    grid-template-columns: 1fr;
+  }
+}

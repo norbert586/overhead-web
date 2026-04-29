@@ -2,6 +2,7 @@
 // Wraps all calls to the Overhead backend.
 
 import type { Flight, FlightsResponse } from '../types/flight';
+import type { AchievementsResponse, RankResponse } from '../types/achievements';
 import type {
   StatsSummaryData,
   StatsAltitudeData,
@@ -138,5 +139,17 @@ export async function updateProfile(settings: {
     body: JSON.stringify(settings),
   });
   if (!res.ok) throw new Error(`Profile update failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchAchievements(): Promise<AchievementsResponse> {
+  const res = await apiFetch(`${BASE_URL}/api/user/achievements`);
+  if (!res.ok) throw new Error(`Achievements fetch failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchRank(): Promise<RankResponse> {
+  const res = await apiFetch(`${BASE_URL}/api/user/rank`);
+  if (!res.ok) throw new Error(`Rank fetch failed (${res.status})`);
   return res.json();
 }

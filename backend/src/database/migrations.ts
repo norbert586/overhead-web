@@ -102,5 +102,26 @@ export function runMigrations(): void {
   try { exec(`ALTER TABLE users ADD COLUMN radius_nm INTEGER DEFAULT 25`); } catch { /* exists */ }
   try { exec(`ALTER TABLE users ADD COLUMN poll_interval_sec INTEGER DEFAULT 12`); } catch { /* exists */ }
 
+  // Achievement + rank tables
+  exec(`
+    CREATE TABLE IF NOT EXISTS user_achievements (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id        INTEGER NOT NULL REFERENCES users(id),
+      achievement_id TEXT NOT NULL,
+      unlocked_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, achievement_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_achievements_user
+      ON user_achievements(user_id);
+
+    CREATE TABLE IF NOT EXISTS user_rank_cache (
+      user_id     INTEGER PRIMARY KEY REFERENCES users(id),
+      score       INTEGER NOT NULL DEFAULT 0,
+      tier        TEXT    NOT NULL DEFAULT 'OBSERVER',
+      computed_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   console.log('Migrations complete.');
 }
