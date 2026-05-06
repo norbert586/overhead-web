@@ -4,11 +4,17 @@ import MapCard from './MapCard';
 import TelemetryGrid from './TelemetryGrid';
 import AircraftPhoto from './AircraftPhoto';
 
-export type EmptyVariant = 'no-settings' | 'no-aircraft';
+export type EmptyVariant =
+  | 'no-settings'
+  | 'no-aircraft'
+  | 'geo-loading'
+  | 'geo-denied'
+  | 'no-aircraft-overhead';
 
 interface EmptyStateProps {
   variant: EmptyVariant;
   onOpenSettings?: () => void;
+  onRetry?: () => void;
 }
 
 function PlaneIcon({ className }: { className?: string }) {
@@ -68,7 +74,47 @@ function NoAircraft() {
   );
 }
 
-export default function EmptyState({ variant, onOpenSettings }: EmptyStateProps) {
-  if (variant === 'no-settings') return <NoSettings onOpenSettings={onOpenSettings} />;
+function GeoLoading() {
+  return (
+    <div className="empty-full">
+      <PlaneIcon className="empty-icon" />
+      <div className="empty-title">Locating you…</div>
+      <div className="empty-body">Reading your device's location to find aircraft directly overhead.</div>
+    </div>
+  );
+}
+
+function GeoDenied({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div className="empty-full empty-error">
+      <PlaneIcon className="empty-icon empty-icon-error" />
+      <div className="empty-title empty-title-error">Location permission denied</div>
+      <div className="empty-body empty-body-error">
+        Please allow location permissions in your browser to use the Overhead view.
+      </div>
+      {onRetry && (
+        <button type="button" className="empty-error-retry" onClick={onRetry}>
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NoAircraftOverhead() {
+  return (
+    <div className="empty-full">
+      <PlaneIcon className="empty-icon" />
+      <div className="empty-title">Nothing overhead right now</div>
+      <div className="empty-body">No aircraft within range of your current location. Try again in a moment.</div>
+    </div>
+  );
+}
+
+export default function EmptyState({ variant, onOpenSettings, onRetry }: EmptyStateProps) {
+  if (variant === 'no-settings')          return <NoSettings onOpenSettings={onOpenSettings} />;
+  if (variant === 'geo-loading')          return <GeoLoading />;
+  if (variant === 'geo-denied')           return <GeoDenied onRetry={onRetry} />;
+  if (variant === 'no-aircraft-overhead') return <NoAircraftOverhead />;
   return <NoAircraft />;
 }

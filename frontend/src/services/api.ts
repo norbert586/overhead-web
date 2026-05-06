@@ -36,8 +36,10 @@ export async function fetchFlights(
   lat: number,
   lon: number,
   radius: number,
+  record = true,
 ): Promise<FlightsResponse> {
-  const res = await apiFetch(`${BASE_URL}/api/flights?lat=${lat}&lon=${lon}&radius=${radius}`);
+  const recordParam = record ? '' : '&record=false';
+  const res = await apiFetch(`${BASE_URL}/api/flights?lat=${lat}&lon=${lon}&radius=${radius}${recordParam}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

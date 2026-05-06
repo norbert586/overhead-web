@@ -4222,3 +4222,281 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Flight tabs (Home / Overhead) ─────────────────────────── */
+.flight-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.flight-tabs-strip {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  padding: 8px 28px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.flight-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.flight-tab:hover {
+  color: var(--text-primary);
+  background: var(--accent-micro);
+}
+
+.flight-tab.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--border-accent);
+  border-bottom-color: transparent;
+  margin-bottom: -1px;
+}
+
+.flight-tab .tab-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* The Overhead tab gets a touch of purple even when on the Home theme,
+   so users can see at a glance that it's a different surface. */
+.flight-tab.overhead-tab {
+  color: #b89fe0;
+}
+
+.flight-tab.overhead-tab.active {
+  color: #d4bff5;
+  background: rgba(184, 159, 224, 0.14);
+  border-color: rgba(184, 159, 224, 0.32);
+}
+
+.flight-tabs-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  touch-action: pan-y;
+}
+
+.flight-tabs-track {
+  display: flex;
+  width: 200%;
+  height: 100%;
+  will-change: transform;
+}
+
+.flight-tabs-pane {
+  width: 50%;
+  height: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* ── Overhead theme (purple) ──────────────────────────────── */
+[data-theme="overhead"] {
+  --bg-primary:      #0d0818;
+  --bg-card:         #14102a;
+  --bg-elevated:     #1c1638;
+  --border:          #2a2148;
+  --border-subtle:   #1a1330;
+
+  --accent:          #b89fe0;
+  --accent-dim:      rgba(184, 159, 224, 0.12);
+  --accent-micro:    rgba(184, 159, 224, 0.05);
+
+  --glass-bg:        rgba(20, 14, 40, 0.72);
+  --glass-border:    rgba(184, 159, 224, 0.12);
+  --glass-bg-hover:  rgba(28, 20, 56, 0.80);
+
+  --accent-grad:         linear-gradient(135deg, #d4bff5 0%, #b89fe0 60%, #8a6fc7 100%);
+  --accent-grad-subtle:  linear-gradient(135deg, rgba(184,159,224,0.20) 0%, rgba(138,111,199,0.06) 100%);
+  --accent-glow:         0 0 20px rgba(184,159,224,0.20), 0 0 40px rgba(184,159,224,0.07);
+  --accent-glow-strong:  0 0 12px rgba(184,159,224,0.38);
+
+  --card-shadow-elevated: 0 2px 8px rgba(0,0,0,0.6), 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(184,159,224,0.08);
+  --border-accent:        rgba(184, 159, 224, 0.24);
+  --border-active:        rgba(184, 159, 224, 0.42);
+
+  --text-primary:    #e6dcf2;
+  --text-secondary:  #9d8eb8;
+  --text-dim:        #6b5d85;
+  --text-ghost:      #3a3050;
+
+  background:
+    radial-gradient(1200px 800px at 80% -10%, rgba(184,159,224,0.10) 0%, transparent 60%),
+    radial-gradient(900px 600px at -10% 110%, rgba(138,111,199,0.08) 0%, transparent 55%),
+    var(--bg-primary);
+}
+
+[data-theme="overhead"] .flight-screen {
+  /* No right column intel/photo cards; switch to a 2-column lean toward the photo. */
+  grid-template-columns: 320px 1fr 320px;
+}
+
+/* ── Overhead nearby list (right column) ──────────────────── */
+.overhead-nearby-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: var(--card-shadow);
+}
+
+.overhead-nearby-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.overhead-nearby-count {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.overhead-nearby-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.overhead-nearby-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent-micro);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.overhead-nearby-row:hover {
+  background: var(--accent-dim);
+}
+
+.overhead-nearby-row.active {
+  background: var(--accent-dim);
+  border-color: var(--border-active);
+  box-shadow: var(--accent-glow);
+}
+
+.overhead-nearby-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overhead-nearby-callsign {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.overhead-nearby-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overhead-nearby-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.overhead-ephemeral-note {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* ── Empty state error variant (geo denied) ───────────────── */
+.empty-full.empty-error {
+  /* Same layout, red accent treatment. */
+}
+
+.empty-icon-error {
+  fill: #e06b6b;
+  filter: drop-shadow(0 0 12px rgba(224, 107, 107, 0.35));
+}
+
+.empty-title-error {
+  color: #e06b6b;
+}
+
+.empty-body-error {
+  color: #d09090;
+}
+
+.empty-error-retry {
+  margin-top: 14px;
+  padding: 8px 18px;
+  background: transparent;
+  border: 1px solid rgba(224, 107, 107, 0.45);
+  border-radius: 6px;
+  color: #e06b6b;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.empty-error-retry:hover {
+  background: rgba(224, 107, 107, 0.12);
+  color: #f08585;
+}
+
+@media (max-width: 900px) {
+  .flight-tabs-strip {
+    padding: 8px 14px 0;
+  }
+
+  [data-theme="overhead"] .flight-screen {
+    grid-template-columns: 1fr;
+  }
+}

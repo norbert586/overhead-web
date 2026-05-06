@@ -4,6 +4,10 @@ import TopBar from './components/TopBar';
 import BottomBar from './components/BottomBar';
 import EmptyState from './components/EmptyState';
 import FlightScreen from './screens/FlightScreen';
+import OverheadFlightScreen from './screens/OverheadFlightScreen';
+import FlightTabs from './components/FlightTabs';
+import type { TabKey } from './components/FlightTabs';
+import { useGeolocation } from './hooks/useGeolocation';
 import LogScreen from './screens/LogScreen';
 import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -22,6 +26,7 @@ function App() {
   const { user, isAuthenticated, login, logout } = useAuth();
   const [authView, setAuthView] = useState<AuthView>('login');
   const [view, setView] = useState<View>('flight');
+  const [flightTab, setFlightTab] = useState<TabKey>('home');
   const { settings, saveSettings, syncFromServer, hasSettings } = useSettings();
   const profileFetched = useRef(false);
 
@@ -91,6 +96,21 @@ function App() {
     enabled:         isAuthenticated,
   });
 
+  // Live device location for the Overhead tab. Only requested when the user is
+  // authenticated, on the flight view, and actually viewing the Overhead tab —
+  // we don't want to ask for location permission until they ask for it.
+  const overheadGeoEnabled = isAuthenticated && view === 'flight' && flightTab === 'overhead';
+  const overheadGeo = useGeolocation({ enabled: overheadGeoEnabled });
+
+  const overhead = useFlightData({
+    latitude:        overheadGeo.latitude,
+    longitude:       overheadGeo.longitude,
+    radiusNm:        10,
+    pollIntervalSec: settings.pollIntervalSec,
+    enabled:         overheadGeoEnabled && overheadGeo.status === 'ready',
+    record:          false,
+  });
+
   if (!isAuthenticated) {
     if (authView === 'register') {
       return (
@@ -136,21 +156,42 @@ function App() {
       return <EmptyState variant="no-settings" onOpenSettings={() => setView('settings')} />;
     }
 
-    if (loading && !data) {
-      return <EmptyState variant="no-aircraft" />;
+    function renderHomePane() {
+      if (loading && !data)            return <EmptyState variant="no-aircraft" />;
+      if (error)                       return <EmptyState variant="no-aircraft" />;
+      const homeFlights = data?.flights ?? [];
+      if (homeFlights.length === 0)    return <EmptyState variant="no-aircraft" />;
+      return <FlightScreen flight={homeFlights[0]} />;
     }
 
-    if (error) {
-      return <EmptyState variant="no-aircraft" />;
+    function renderOverheadPane() {
+      if (overheadGeo.status === 'denied' || overheadGeo.status === 'unsupported') {
+        return <EmptyState variant="geo-denied" onRetry={overheadGeo.retry} />;
+      }
+      if (overheadGeo.status === 'idle' || overheadGeo.status === 'loading') {
+        return <EmptyState variant="geo-loading" />;
+      }
+      if (overheadGeo.status === 'error') {
+        return <EmptyState variant="geo-denied" onRetry={overheadGeo.retry} />;
+      }
+      if (overhead.loading && !overhead.data) {
+        return <EmptyState variant="no-aircraft-overhead" />;
+      }
+      const overheadFlights = overhead.data?.flights ?? [];
+      if (overheadFlights.length === 0) {
+        return <EmptyState variant="no-aircraft-overhead" />;
+      }
+      return <OverheadFlightScreen flights={overheadFlights} />;
     }
 
-    const flights = data?.flights ?? [];
-
-    if (flights.length === 0) {
-      return <EmptyState variant="no-aircraft" />;
-    }
-
-    return <FlightScreen flight={flights[0]} />;
+    return (
+      <FlightTabs
+        active={flightTab}
+        onChange={setFlightTab}
+        homePane={renderHomePane()}
+        overheadPane={renderOverheadPane()}
+      />
+    );
   }
 
   return (

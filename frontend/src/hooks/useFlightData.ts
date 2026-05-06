@@ -8,6 +8,7 @@ interface UseFlightDataParams {
   radiusNm: number;
   pollIntervalSec: number;
   enabled?: boolean;
+  record?: boolean;
 }
 
 export function useFlightData(params: UseFlightDataParams): {
@@ -23,7 +24,7 @@ export function useFlightData(params: UseFlightDataParams): {
   const abortRef = useRef<AbortController | null>(null);
 
   const poll = useCallback(async () => {
-    const { latitude, longitude, radiusNm, enabled = true } = params;
+    const { latitude, longitude, radiusNm, enabled = true, record = true } = params;
     if (!enabled || latitude === null || longitude === null) return;
 
     abortRef.current?.abort();
@@ -33,7 +34,7 @@ export function useFlightData(params: UseFlightDataParams): {
     setError(null);
 
     try {
-      const result = await fetchFlights(latitude, longitude, radiusNm);
+      const result = await fetchFlights(latitude, longitude, radiusNm, record);
       setData(result);
       setLastPollTime(new Date());
     } catch (err) {
@@ -43,7 +44,7 @@ export function useFlightData(params: UseFlightDataParams): {
     } finally {
       setLoading(false);
     }
-  }, [params.latitude, params.longitude, params.radiusNm]); // eslint-disable-line
+  }, [params.latitude, params.longitude, params.radiusNm, params.record]); // eslint-disable-line
 
   useEffect(() => {
     poll();
