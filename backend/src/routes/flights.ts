@@ -10,11 +10,13 @@ const router = Router();
 
 router.use(requireAuth);
 
-// GET /api/flights?lat=&lon=&radius=
+// GET /api/flights?lat=&lon=&radius=&record=
+// record=false → ephemeral mode (Overhead tab): skip DB writes and return up to 3 closest.
 router.get('/', async (req: Request, res: Response) => {
   const lat    = parseFloat(req.query.lat    as string);
   const lon    = parseFloat(req.query.lon    as string);
   const radius = parseFloat(req.query.radius as string) || 25;
+  const record = req.query.record !== 'false';
 
   if (isNaN(lat) || isNaN(lon)) {
     res.status(400).json({ error: 'lat and lon are required' });
@@ -27,7 +29,8 @@ router.get('/', async (req: Request, res: Response) => {
     if (!allAc.length) {
       console.log('[poll] adsb.lol: no aircraft in range → returning lastKnown');
       const dbStats = getSessionStats(req.userId);
-      const lastKnown = getLastKnownFlight(req.userId);
+      // Overhead mode is ephemeral — never resurface a stale lastKnown.
+      const lastKnown = record ? getLastKnownFlight(req.userId) : null;
       const response: FlightsResponse = {
         flights: lastKnown ? [lastKnown] : [],
         stats: { ...dbStats, activeCount: 0 },
@@ -37,10 +40,11 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    console.log(`[poll] adsb.lol: ${allAc.length} aircraft in range`);
+    console.log(`[poll] adsb.lol: ${allAc.length} aircraft in range (record=${record})`);
 
-    // Enrich + upsert all aircraft in parallel; display shows the closest (index 0)
-    const upserted = await Promise.all(allAc.map(async (ac) => {
+    // Enrich all aircraft in parallel; upsert only when record=true.
+    const nowIso = new Date().toISOString();
+    const processed = await Promise.all(allAc.map(async (ac) => {
       const callsign     = ac.flight?.trim() || null;
       const registration = ac.r?.trim()      || null;
 
@@ -61,7 +65,7 @@ router.get('/', async (req: Request, res: Response) => {
         typeCode: ac.t ?? null,
       });
 
-      return upsertFlight({
+      const base = {
         hex:                ac.hex,
         registration,
         callsign,
@@ -83,12 +87,25 @@ router.get('/', async (req: Request, res: Response) => {
         distanceNm:         ac.dst   ?? null,
         classification,
         photoUrl:           aircraftInfo.photoUrl ?? null,
-      }, req.userId);
+      };
+
+      if (record) {
+        return upsertFlight(base, req.userId);
+      }
+      return { ...base, timesSeen: 0, firstSeen: nowIso, lastSeen: nowIso };
     }));
+
+    // Closest first — adsb.lol returns sorted by distance, but enforce here so we can slice.
+    const sorted = processed.slice().sort((a, b) => {
+      const da = a.distanceNm ?? Number.POSITIVE_INFINITY;
+      const db = b.distanceNm ?? Number.POSITIVE_INFINITY;
+      return da - db;
+    });
 
     const dbStats = getSessionStats(req.userId);
     const response: FlightsResponse = {
-      flights: [upserted[0]],            // closest aircraft for the live display
+      // Home: only the closest. Overhead: up to 3 closest.
+      flights: record ? [sorted[0]] : sorted.slice(0, 3),
       stats: { ...dbStats, activeCount: allAc.length },
       timestamp: new Date().toISOString(),
     };
