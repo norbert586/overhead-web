@@ -39,6 +39,7 @@ function SunIcon() {
 }
 
 export default function FlightTabs({ active, onChange, homePane, overheadPane }: FlightTabsProps) {
+  const viewportRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const [dragDx, setDragDx] = useState(0);
@@ -71,7 +72,8 @@ export default function FlightTabs({ active, onChange, homePane, overheadPane }:
   }
 
   const baseOffset = active === 'home' ? 0 : -100;
-  const dragPercent = dragDx === 0 ? 0 : (dragDx / window.innerWidth) * 100;
+  const viewportWidth = viewportRef.current?.clientWidth ?? 0;
+  const dragPercent = dragDx === 0 || viewportWidth === 0 ? 0 : (dragDx / viewportWidth) * 100;
   const transform = `translateX(calc(${baseOffset}% + ${dragPercent}%))`;
 
   return (
@@ -98,6 +100,7 @@ export default function FlightTabs({ active, onChange, homePane, overheadPane }:
       </div>
 
       <div
+        ref={viewportRef}
         className="flight-tabs-viewport"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
