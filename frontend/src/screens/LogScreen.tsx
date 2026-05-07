@@ -69,10 +69,11 @@ function Chevron({ open }: { open: boolean }) {
 // ── Photo loader ─────────────────────────────────────────────────────────────
 
 function RowPhoto({ registration, aircraftType }: { registration: string | null; aircraftType?: string | null }) {
-  const [state,  setState ] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [src,    setSrc   ] = useState<string | null>(null);
-  const [fb,     setFb    ] = useState<string | null>(null);
-  const [source, setSource] = useState<'planespotters' | 'similar' | null>(null);
+  const [state,        setState       ] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [src,          setSrc         ] = useState<string | null>(null);
+  const [fb,           setFb          ] = useState<string | null>(null);
+  const [source,       setSource      ] = useState<'planespotters' | 'similar' | null>(null);
+  const [surrogateReg, setSurrogateReg] = useState<string | null>(null);
 
   if (!registration && !aircraftType) {
     return <div className="log-photo-unavailable">No registration — photo unavailable</div>;
@@ -87,17 +88,19 @@ function RowPhoto({ registration, aircraftType }: { registration: string | null;
         setSrc(url);
         if (fallback !== url) setFb(fallback);
         setSource('planespotters');
+        setSurrogateReg(null);
         setState('done');
         return;
       }
     }
     if (aircraftType) {
-      const url = await fetchPhotoByType(aircraftType);
-      if (url) {
-        const fallback = thumbnailFallback(url);
-        setSrc(url);
-        if (fallback !== url) setFb(fallback);
+      const match = await fetchPhotoByType(aircraftType, registration);
+      if (match) {
+        const fallback = thumbnailFallback(match.url);
+        setSrc(match.url);
+        if (fallback !== match.url) setFb(fallback);
         setSource('similar');
+        setSurrogateReg(match.registration);
         setState('done');
         return;
       }
@@ -121,13 +124,18 @@ function RowPhoto({ registration, aircraftType }: { registration: string | null;
   if (state === 'error' || !src) return <div className="log-photo-unavailable">No photo available</div>;
 
   const sourceLabel = source === 'similar'
-    ? `SIMILAR · ${aircraftType ?? ''}`
+    ? `SIMILAR · ${aircraftType ?? ''}${surrogateReg ? ` · ${surrogateReg}` : ''}`
     : 'PLANESPOTTERS';
 
   return (
     <div className="log-photo-wrap">
       <img className="log-photo-img" src={src} alt={registration ?? aircraftType ?? 'Aircraft'} onError={handleError} />
       <div className="log-photo-source">{sourceLabel}</div>
+      {source === 'similar' && (
+        <div className="log-photo-similar-note">
+          Different airframe, same model{surrogateReg ? ` (${surrogateReg})` : ''}.
+        </div>
+      )}
     </div>
   );
 }

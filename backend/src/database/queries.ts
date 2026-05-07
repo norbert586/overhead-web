@@ -333,6 +333,49 @@ export function setAircraftCache(
   );
 }
 
+// Last-resort photo fallback: any aircraft of the same ICAO type that we've
+// already seen and have a photo for. Pulls from aircraft_cache first (richer,
+// shared across users) and falls back to flights so a brand-new install still
+// has something the moment it's seen one airframe of the type.
+export interface PhotoByTypeRow extends Record<string, unknown> {
+  registration: string | null;
+  photo_url: string;
+}
+
+export function findPhotoByType(
+  aircraftType: string,
+  excludeRegistration: string | null,
+): { photoUrl: string; registration: string | null } | null {
+  const exclude = excludeRegistration ?? '';
+  const cacheRow = get<PhotoByTypeRow>(
+    `SELECT registration, photo_url
+       FROM aircraft_cache
+      WHERE aircraft_type = ?
+        AND photo_url IS NOT NULL
+        AND photo_url != ''
+        AND registration != ?
+      ORDER BY cached_at DESC
+      LIMIT 1`,
+    [aircraftType, exclude],
+  );
+  if (cacheRow) return { photoUrl: cacheRow.photo_url, registration: cacheRow.registration };
+
+  const flightRow = get<PhotoByTypeRow>(
+    `SELECT registration, photo_url
+       FROM flights
+      WHERE aircraft_type = ?
+        AND photo_url IS NOT NULL
+        AND photo_url != ''
+        AND (registration IS NULL OR registration != ?)
+      ORDER BY last_seen DESC
+      LIMIT 1`,
+    [aircraftType, exclude],
+  );
+  if (flightRow) return { photoUrl: flightRow.photo_url, registration: flightRow.registration };
+
+  return null;
+}
+
 // ── Callsign cache ───────────────────────────────────────────────────────────
 
 const CALLSIGN_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
