@@ -8,24 +8,38 @@ interface AircraftPhotoProps {
   aircraftType?: string | null;  // For similar-planes fallback
 }
 
-type Tier = 1 | 2 | 3;  // 1=adsbdb, 2=planespotters/reg, 3=planespotters/type
+type Tier = 1 | 2 | 3;  // 1=adsbdb, 2=planespotters/reg, 3=same-model surrogate from our DB
 
 export default function AircraftPhoto({ photoUrl, callsign, registration, aircraftType }: AircraftPhotoProps) {
   const [src,  setSrc ] = useState<string | null>(null);
   const [tier, setTier] = useState<Tier | null>(null);
   const [fbSrc, setFbSrc] = useState<string | null>(null);
+  // For Tier 3 (same-model surrogate): the registration of the *other* airframe we're showing.
+  const [surrogateReg, setSurrogateReg] = useState<string | null>(null);
 
-  function applyUrl(url: string, t: Tier) {
+  function applyUrl(url: string, t: Tier, surrogate: string | null = null) {
     setSrc(url);
     setTier(t);
+    setSurrogateReg(surrogate);
     const fb = thumbnailFallback(url);
     setFbSrc(fb !== url ? fb : null);
+  }
+
+  // Tier 3 lookup excludes the airframe we're trying to render so the backend
+  // doesn't echo back the (broken) photo we already failed on.
+  async function tryTier3(): Promise<boolean> {
+    if (!aircraftType) return false;
+    const match = await fetchPhotoByType(aircraftType, registration);
+    if (!match) return false;
+    applyUrl(match.url, 3, match.registration);
+    return true;
   }
 
   useEffect(() => {
     setSrc(null);
     setTier(null);
     setFbSrc(null);
+    setSurrogateReg(null);
     let cancelled = false;
 
     async function run() {
@@ -40,11 +54,11 @@ export default function AircraftPhoto({ photoUrl, callsign, registration, aircra
         if (cancelled) return;
         if (url) { applyUrl(url, 2); return; }
       }
-      // Tier 3: Planespotters by ICAO type (similar planes)
+      // Tier 3: same-model surrogate from our own DB
       if (aircraftType) {
-        const url = await fetchPhotoByType(aircraftType);
+        const ok = await tryTier3();
         if (cancelled) return;
-        if (url) { applyUrl(url, 3); return; }
+        if (ok) return;
       }
     }
 
@@ -67,19 +81,20 @@ export default function AircraftPhoto({ photoUrl, callsign, registration, aircra
       const url = await fetchPhoto(registration);
       if (url) { applyUrl(url, 2); return; }
     }
-    if ((tier === 1 || tier === 2) && aircraftType) {
-      const url = await fetchPhotoByType(aircraftType);
-      if (url) { applyUrl(url, 3); return; }
+    if (tier === 1 || tier === 2) {
+      if (await tryTier3()) return;
     }
     setSrc(null);
     setTier(null);
+    setSurrogateReg(null);
   }
 
   const sourceLabel =
     tier === 1 ? 'ADSBDB' :
     tier === 2 ? 'PLANESPOTTERS' :
-    tier === 3 ? (aircraftType ? `SIMILAR · ${aircraftType}` : 'SIMILAR') :
-    null;
+    tier === 3
+      ? `SIMILAR · ${aircraftType ?? '?'}${surrogateReg ? ` · ${surrogateReg}` : ''}`
+      : null;
 
   return (
     <div className="aircraft-photo-wrap">
@@ -91,6 +106,12 @@ export default function AircraftPhoto({ photoUrl, callsign, registration, aircra
       {callsign     && <div className="photo-callsign">{callsign}</div>}
       {registration && <div className="photo-registration">{registration}</div>}
       {sourceLabel  && <div className="photo-source-tag">{sourceLabel}</div>}
+      {tier === 3 && (
+        <div className="photo-similar-note">
+          Photo is of a different {aircraftType ?? 'aircraft'} of the same model
+          {surrogateReg ? ` (${surrogateReg})` : ''}, not the actual airframe overhead.
+        </div>
+      )}
     </div>
   );
 }

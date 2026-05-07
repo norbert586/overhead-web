@@ -255,6 +255,14 @@ All routes are under the `api_bp` Blueprint. All return JSON.
 | OpenFlights | GitHub raw CSV | Airport reference data | Yes — `airports` table |
 | Planespotters.net | `https://api.planespotters.net/pub/photos/reg/{reg}` | Aircraft photos | React in-memory state |
 
+Photo waterfall (used by `AircraftPhoto.tsx` and `LogScreen` row photos):
+
+1. `flights.photo_url` (populated from adsbdb at scan time).
+2. Planespotters by registration (live fetch).
+3. Same-model surrogate via `GET /api/flights/photo-by-type/:type?exclude=<reg>` — picks any aircraft of the same ICAO type that we've already cached a photo for. The matched registration is surfaced in the UI so users know it's a different airframe of the same model.
+
+A previous tier 3 (`https://api.planespotters.net/pub/photos/type/{type}`) was removed: that endpoint does not exist on the public Planespotters API and silently 404'd, leaving most fallbacks broken.
+
 ---
 
 ## Middleware & Routing

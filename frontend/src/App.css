@@ -828,6 +828,19 @@ body {
   z-index: 3;
 }
 
+.photo-similar-note {
+  margin-top: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+  color: rgba(212, 159, 107, 0.85);
+  background: rgba(40, 28, 18, 0.55);
+  border: 1px solid rgba(212, 159, 107, 0.25);
+  border-radius: 3px;
+  padding: 6px 8px;
+}
+
 /* ── Right column shared ────────────────────────────────────── */
 .stat-card {
   background: var(--glass-bg);
@@ -1822,6 +1835,17 @@ body {
   text-transform: uppercase;
   color: var(--text-ghost);
   opacity: 0.6;
+}
+
+.log-photo-similar-note {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  line-height: 1.4;
+  color: rgba(212, 159, 107, 0.85);
+  background: rgba(40, 28, 18, 0.45);
+  border: 1px solid rgba(212, 159, 107, 0.20);
+  border-radius: 3px;
+  padding: 5px 7px;
 }
 
 /* Empty / error states */

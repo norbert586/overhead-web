@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { fetchAll } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
-import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight } from '../database/queries';
+import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight, findPhotoByType } from '../database/queries';
 import { requireAuth } from '../middleware/auth';
 import type { FlightsResponse } from '../types/flight';
 
@@ -115,6 +115,25 @@ router.get('/', async (req: Request, res: Response) => {
     console.error('GET /api/flights error:', err);
     res.status(502).json({ error: 'Failed to fetch flight data' });
   }
+});
+
+// GET /api/flights/photo-by-type/:type?exclude=N12345
+// Last-resort photo fallback: returns any aircraft we've seen of the same ICAO
+// type that has a stored photo. Used by the frontend AircraftPhoto waterfall
+// when neither adsbdb nor Planespotters returns a hit for the actual airframe.
+router.get('/photo-by-type/:type', (req: Request, res: Response) => {
+  const type    = (req.params.type ?? '').trim().toUpperCase();
+  const exclude = ((req.query.exclude as string | undefined) ?? '').trim().toUpperCase() || null;
+  if (!type) {
+    res.status(400).json({ error: 'type is required' });
+    return;
+  }
+  const hit = findPhotoByType(type, exclude);
+  if (!hit) {
+    res.status(404).json({ error: 'No photo for type' });
+    return;
+  }
+  res.json(hit);
 });
 
 // GET /api/flights/:hex/history
