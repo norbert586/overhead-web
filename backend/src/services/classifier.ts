@@ -45,7 +45,10 @@ const MILITARY_TYPE_CODES = new Set([
 ]);
 
 // ── Government keywords ──────────────────────────────────────────────────────
-// Matched against lowercased operator OR owner.
+// Matched as whole words against the operator/owner. Word-boundary matching is
+// required: a plain substring check incorrectly flags "EnDEAvor" (Endeavor Air,
+// a Delta Connection regional) on "dea", and any commercial "Royal *" airline
+// (Royal Brunei, Royal Air Maroc, Royal Jordanian) on "royal".
 const GOVERNMENT_KEYWORDS = [
   // Military branches (generic)
   'air force', 'navy', 'army', 'military', 'marine corps', 'marines',
@@ -62,7 +65,14 @@ const GOVERNMENT_KEYWORDS = [
   'republic of', 'kingdom of', 'department of',
   'bundeswehr', 'bundespolizei', 'gendarm',
   'guardia civil', 'carabinieri',
-  'royal', // "Royal Canadian Air Force", "Royal Australian Air Force", etc.
+  // Royal armed forces (deliberately specific — bare "royal" matches commercial
+  // carriers like Royal Brunei, Royal Air Maroc, Royal Jordanian).
+  'royal air force', 'royal navy',
+  'royal australian air force', 'royal canadian air force',
+  'royal new zealand air force', 'royal saudi air force',
+  'royal thai air force', 'royal malaysian air force',
+  'royal netherlands air force', 'royal danish air force',
+  'royal norwegian air force', 'royal swedish air force',
 ];
 
 // ── Cargo operator keywords ──────────────────────────────────────────────────
@@ -121,6 +131,17 @@ const PRIVATE_PATTERNS = [
 
 // ── Main classifier ──────────────────────────────────────────────────────────
 
+// Build one alternation regex per keyword list, anchored on word boundaries so
+// short tokens (dea, fbi, ups, …) only match standalone words rather than
+// random substrings inside operator names.
+function buildKeywordRegex(keywords: readonly string[]): RegExp {
+  const escaped = keywords.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`\\b(?:${escaped.join('|')})\\b`, 'i');
+}
+
+const GOVERNMENT_RE = buildKeywordRegex(GOVERNMENT_KEYWORDS);
+const CARGO_RE      = buildKeywordRegex(CARGO_KEYWORDS);
+
 export function classify(params: {
   callsign: string | null;
   operator: string | null;
@@ -140,10 +161,10 @@ export function classify(params: {
   if (tc && MILITARY_TYPE_CODES.has(tc)) return 'military';
 
   // ── 3. Government — keyword in operator or owner ──────────────────────────
-  if (GOVERNMENT_KEYWORDS.some((k) => op.includes(k) || ow.includes(k))) return 'government';
+  if ((op && GOVERNMENT_RE.test(op)) || (ow && GOVERNMENT_RE.test(ow))) return 'government';
 
   // ── 4. Cargo — keyword in operator or owner ───────────────────────────────
-  if (CARGO_KEYWORDS.some((k) => op.includes(k) || ow.includes(k))) return 'cargo';
+  if ((op && CARGO_RE.test(op)) || (ow && CARGO_RE.test(ow))) return 'cargo';
 
   // ── 5. Cargo — ICAO type code ─────────────────────────────────────────────
   if (tc && CARGO_TYPE_CODES.has(tc)) return 'cargo';
