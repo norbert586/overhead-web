@@ -165,23 +165,25 @@ function App() {
     }
 
     function renderOverheadPane() {
+      const overheadFlights = overhead.data?.flights ?? [];
+
+      // Whenever we have any flight data, show it — even if a refetch is in
+      // flight or geolocation briefly flickered back to 'loading'. Empty
+      // states should only appear when we genuinely have nothing to show.
+      if (overheadFlights.length > 0) {
+        return <OverheadFlightScreen flights={overheadFlights} />;
+      }
+
       if (overheadGeo.status === 'denied' || overheadGeo.status === 'unsupported') {
+        return <EmptyState variant="geo-denied" onRetry={overheadGeo.retry} />;
+      }
+      if (overheadGeo.status === 'error') {
         return <EmptyState variant="geo-denied" onRetry={overheadGeo.retry} />;
       }
       if (overheadGeo.status === 'idle' || overheadGeo.status === 'loading') {
         return <EmptyState variant="geo-loading" />;
       }
-      if (overheadGeo.status === 'error') {
-        return <EmptyState variant="geo-denied" onRetry={overheadGeo.retry} />;
-      }
-      if (overhead.loading && !overhead.data) {
-        return <EmptyState variant="no-aircraft-overhead" />;
-      }
-      const overheadFlights = overhead.data?.flights ?? [];
-      if (overheadFlights.length === 0) {
-        return <EmptyState variant="no-aircraft-overhead" />;
-      }
-      return <OverheadFlightScreen flights={overheadFlights} />;
+      return <EmptyState variant="no-aircraft-overhead" />;
     }
 
     return (
