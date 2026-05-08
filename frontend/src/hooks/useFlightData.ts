@@ -23,8 +23,14 @@ export function useFlightData(params: UseFlightDataParams): {
   const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Keep the latest params in a ref so `poll` stays stable across GPS updates.
+  // watchPosition fires often; recreating the interval on every fix would
+  // cancel in-flight fetches and leave the UI stuck in a loading state.
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+
   const poll = useCallback(async () => {
-    const { latitude, longitude, radiusNm, enabled = true, record = true } = params;
+    const { latitude, longitude, radiusNm, enabled = true, record = true } = paramsRef.current;
     if (!enabled || latitude === null || longitude === null) return;
 
     abortRef.current?.abort();
@@ -44,16 +50,28 @@ export function useFlightData(params: UseFlightDataParams): {
     } finally {
       setLoading(false);
     }
-  }, [params.latitude, params.longitude, params.radiusNm, params.record]); // eslint-disable-line
+  }, []);
 
+  // Drive the polling interval off `enabled` and `pollIntervalSec` only.
+  // GPS jitter changes lat/lon constantly but should not restart the interval.
+  const { enabled = true, pollIntervalSec } = params;
   useEffect(() => {
+    if (!enabled) return;
     poll();
-    const id = setInterval(poll, params.pollIntervalSec * 1000);
+    const id = setInterval(poll, pollIntervalSec * 1000);
     return () => {
       clearInterval(id);
       abortRef.current?.abort();
     };
-  }, [poll, params.pollIntervalSec]);
+  }, [poll, enabled, pollIntervalSec]);
+
+  // Trigger an immediate refetch the first time coordinates become available
+  // (null → number), so the user doesn't wait a full interval after a cold
+  // start or after geolocation finally resolves.
+  const hasCoords = params.latitude !== null && params.longitude !== null;
+  useEffect(() => {
+    if (enabled && hasCoords) poll();
+  }, [poll, enabled, hasCoords]);
 
   return { data, loading, error, lastPollTime };
 }
