@@ -102,6 +102,11 @@ export function runMigrations(): void {
   try { exec(`ALTER TABLE users ADD COLUMN radius_nm INTEGER DEFAULT 25`); } catch { /* exists */ }
   try { exec(`ALTER TABLE users ADD COLUMN poll_interval_sec INTEGER DEFAULT 12`); } catch { /* exists */ }
 
+  // Admin flag (granted manually via SQL; the very first user is auto-admin
+  // so a fresh install can reach the admin dashboard without DB surgery)
+  try { exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0`); } catch { /* exists */ }
+  run(`UPDATE users SET is_admin = 1 WHERE id = 1 AND is_admin = 0`, []);
+
   // Achievement + rank tables
   exec(`
     CREATE TABLE IF NOT EXISTS user_achievements (

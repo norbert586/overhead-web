@@ -5,6 +5,7 @@ interface HamburgerMenuProps {
   isOpen: boolean;
   view: View;
   userEmail?: string;
+  isAdmin?: boolean;
   onSelect: (view: View) => void;
   onLogout?: () => void;
 }
@@ -40,6 +41,14 @@ const ProfileIcon = () => (
   </svg>
 );
 
+const AdminIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"
+      fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const ITEMS: { view: View; label: string; Icon: () => ReactElement }[] = [
   { view: 'flight',   label: 'Flight',   Icon: FlightIcon },
   { view: 'log',      label: 'Log',      Icon: LogIcon },
@@ -48,19 +57,24 @@ const ITEMS: { view: View; label: string; Icon: () => ReactElement }[] = [
   { view: 'settings', label: 'Settings', Icon: SettingsIcon },
 ];
 
+const ADMIN_ITEM: { view: View; label: string; Icon: () => ReactElement } = {
+  view: 'admin', label: 'Admin', Icon: AdminIcon,
+};
+
 const LogoutIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
   </svg>
 );
 
-export default function HamburgerMenu({ isOpen, view, userEmail, onSelect, onLogout }: HamburgerMenuProps) {
+export default function HamburgerMenu({ isOpen, view, userEmail, isAdmin = false, onSelect, onLogout }: HamburgerMenuProps) {
+  const items = isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS;
   return (
     <div className={`menu-overlay${isOpen ? ' menu-open' : ''}`}>
       {userEmail && (
         <div className="menu-user">{userEmail}</div>
       )}
-      {ITEMS.map(({ view: v, label, Icon }) => (
+      {items.map(({ view: v, label, Icon }) => (
         <div
           key={v}
           className={`menu-item${view === v ? ' active' : ''}`}

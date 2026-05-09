@@ -6,6 +6,7 @@ const USER_KEY  = 'overhead_user';
 export interface AuthUser {
   id: number;
   email: string;
+  isAdmin?: boolean;
 }
 
 function loadUser(): AuthUser | null {
@@ -32,7 +33,18 @@ export function useAuth() {
     setUser(null);
   }, []);
 
-  return { user, isAuthenticated: !!user, login, logout };
+  // Used to fold in fields the server returns later (e.g. isAdmin) without
+  // logging the user out.
+  const refreshUser = useCallback((patch: Partial<AuthUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem(USER_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  return { user, isAuthenticated: !!user, login, logout, refreshUser };
 }
 
 export function getToken(): string | null {

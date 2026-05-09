@@ -117,10 +117,55 @@ export interface UserProfile {
   id: number;
   email: string;
   createdAt: string;
+  isAdmin: boolean;
   latitude: number | null;
   longitude: number | null;
   radiusNm: number;
   pollIntervalSec: number;
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export interface AdminOverview {
+  totalUsers: number;
+  adminUsers: number;
+  usersWithLocation: number;
+  newUsers24h: number;
+  newUsers7d: number;
+  totalFlights: number;
+  uniqueAircraftAllUsers: number;
+  flights24h: number;
+  cachedAircraft: number;
+  cachedCallsigns: number;
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  createdAt: string;
+  isAdmin: boolean;
+  hasLocation: boolean;
+  totalFlights: number;
+  uniqueAircraft: number;
+  lastSeenAt: string | null;
+}
+
+export async function fetchAdminOverview(): Promise<AdminOverview> {
+  const res = await apiFetch(`${BASE_URL}/api/admin/overview`);
+  if (!res.ok) throw new Error(`Admin overview failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchAdminUsers(): Promise<{ users: AdminUser[] }> {
+  const res = await apiFetch(`${BASE_URL}/api/admin/users`);
+  if (!res.ok) throw new Error(`Admin users fetch failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchChangelog(): Promise<{ markdown: string }> {
+  const res = await apiFetch(`${BASE_URL}/api/admin/changelog`);
+  if (!res.ok) throw new Error(`Changelog fetch failed (${res.status})`);
+  return res.json();
 }
 
 export async function fetchProfile(): Promise<UserProfile> {

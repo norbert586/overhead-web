@@ -10,6 +10,7 @@ interface TopBarProps {
   latitude?: number | null;
   longitude?: number | null;
   userEmail?: string;
+  isAdmin?: boolean;
   onLogout?: () => void;
 }
 
@@ -21,6 +22,7 @@ export default function TopBar({
   latitude,
   longitude,
   userEmail,
+  isAdmin = false,
   onLogout,
 }: TopBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -78,6 +80,7 @@ export default function TopBar({
         isOpen={menuOpen}
         view={view}
         userEmail={userEmail}
+        isAdmin={isAdmin}
         onSelect={(v) => {
           setView(v);
           setMenuOpen(false);
