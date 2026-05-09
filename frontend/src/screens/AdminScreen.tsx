@@ -3,6 +3,7 @@ import {
   fetchAdminOverview,
   fetchAdminUsers,
   fetchChangelog,
+  resetUserPassword,
   type AdminOverview,
   type AdminUser,
 } from '../services/api';
@@ -83,6 +84,12 @@ function renderChangelog(md: string) {
   return out;
 }
 
+interface ResetResult {
+  userId: number;
+  email: string;
+  password: string;
+}
+
 export default function AdminScreen() {
   const [tab, setTab] = useState<Tab>('overview');
   const [overview, setOverview] = useState<AdminOverview | null>(null);
@@ -90,6 +97,43 @@ export default function AdminScreen() {
   const [changelog, setChangelog] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<number | null>(null);
+  const [resetResult, setResetResult] = useState<ResetResult | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleReset(user: AdminUser) {
+    const ok = window.confirm(
+      `Reset password for ${user.email}?\n\n` +
+      `Their existing password will stop working immediately. ` +
+      `The new password is shown once — copy it before closing the banner.`,
+    );
+    if (!ok) return;
+
+    setResettingId(user.id);
+    setResetError(null);
+    setResetResult(null);
+    setCopied(false);
+    try {
+      const r = await resetUserPassword(user.id);
+      setResetResult({ userId: user.id, email: r.email, password: r.password });
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : 'Reset failed');
+    } finally {
+      setResettingId(null);
+    }
+  }
+
+  async function copyPassword() {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.password);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — user can still select & copy manually */
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -147,36 +191,72 @@ export default function AdminScreen() {
       )}
 
       {!loading && !error && tab === 'users' && users && (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Email</th>
-                <th>Joined</th>
-                <th>Last seen</th>
-                <th className="admin-num">Flights</th>
-                <th className="admin-num">Unique</th>
-                <th>Loc</th>
-                <th>Admin</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.id}</td>
-                  <td className="admin-email">{u.email}</td>
-                  <td>{formatDate(u.createdAt)}</td>
-                  <td>{timeAgo(u.lastSeenAt)}</td>
-                  <td className="admin-num">{u.totalFlights.toLocaleString()}</td>
-                  <td className="admin-num">{u.uniqueAircraft.toLocaleString()}</td>
-                  <td>{u.hasLocation ? '✓' : '—'}</td>
-                  <td>{u.isAdmin ? '✓' : '—'}</td>
+        <>
+          {resetError && (
+            <div className="admin-reset-error">Reset failed: {resetError}</div>
+          )}
+          {resetResult && (
+            <div className="admin-reset-banner">
+              <div className="admin-reset-banner-head">
+                <span className="admin-reset-banner-label">New password for {resetResult.email}</span>
+                <button
+                  className="admin-reset-banner-close"
+                  onClick={() => setResetResult(null)}
+                  aria-label="Dismiss"
+                >×</button>
+              </div>
+              <div className="admin-reset-banner-row">
+                <code className="admin-reset-password">{resetResult.password}</code>
+                <button className="admin-reset-copy-btn" onClick={copyPassword}>
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <div className="admin-reset-banner-note">
+                Shown once. Save it now — you can't recover it later.
+              </div>
+            </div>
+          )}
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Email</th>
+                  <th>Joined</th>
+                  <th>Last seen</th>
+                  <th className="admin-num">Flights</th>
+                  <th className="admin-num">Unique</th>
+                  <th>Loc</th>
+                  <th>Admin</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.id}</td>
+                    <td className="admin-email">{u.email}</td>
+                    <td>{formatDate(u.createdAt)}</td>
+                    <td>{timeAgo(u.lastSeenAt)}</td>
+                    <td className="admin-num">{u.totalFlights.toLocaleString()}</td>
+                    <td className="admin-num">{u.uniqueAircraft.toLocaleString()}</td>
+                    <td>{u.hasLocation ? '✓' : '—'}</td>
+                    <td>{u.isAdmin ? '✓' : '—'}</td>
+                    <td>
+                      <button
+                        className="admin-row-btn"
+                        onClick={() => handleReset(u)}
+                        disabled={resettingId === u.id}
+                      >
+                        {resettingId === u.id ? 'Resetting…' : 'Reset password'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {!loading && !error && tab === 'changelog' && (

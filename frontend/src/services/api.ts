@@ -168,6 +168,17 @@ export async function fetchChangelog(): Promise<{ markdown: string }> {
   return res.json();
 }
 
+export async function resetUserPassword(userId: number): Promise<{ email: string; password: string }> {
+  const res = await apiFetch(`${BASE_URL}/api/admin/users/${userId}/reset-password`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Reset failed (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function fetchProfile(): Promise<UserProfile> {
   const res = await apiFetch(`${BASE_URL}/api/user/profile`);
   if (!res.ok) throw new Error(`Profile fetch failed (${res.status})`);
