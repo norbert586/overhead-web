@@ -971,10 +971,10 @@ export function getAdminOverview(): AdminOverview {
     [cutoff24h, cutoff7d],
   );
 
-  const flightRow = get<{ total: number; unique: number; recent: number }>(
+  const flightRow = get<{ total: number; unique_aircraft: number; recent: number }>(
     `SELECT
        COUNT(*) AS total,
-       COUNT(DISTINCT hex) AS unique,
+       COUNT(DISTINCT hex) AS unique_aircraft,
        SUM(CASE WHEN last_seen >= ? THEN 1 ELSE 0 END) AS recent
      FROM flights`,
     [cutoff24h],
@@ -989,9 +989,9 @@ export function getAdminOverview(): AdminOverview {
     usersWithLocation:      userRow?.located     ?? 0,
     newUsers24h:            userRow?.new_24h     ?? 0,
     newUsers7d:             userRow?.new_7d      ?? 0,
-    totalFlights:           flightRow?.total     ?? 0,
-    uniqueAircraftAllUsers: flightRow?.unique    ?? 0,
-    flights24h:             flightRow?.recent    ?? 0,
+    totalFlights:           flightRow?.total           ?? 0,
+    uniqueAircraftAllUsers: flightRow?.unique_aircraft ?? 0,
+    flights24h:             flightRow?.recent          ?? 0,
     cachedAircraft:         acRow?.count         ?? 0,
     cachedCallsigns:        csRow?.count         ?? 0,
   };
