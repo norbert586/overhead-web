@@ -12,6 +12,7 @@ import LogScreen from './screens/LogScreen';
 import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import AdminScreen from './screens/AdminScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import { useSettings } from './hooks/useSettings';
@@ -19,11 +20,11 @@ import { useFlightData } from './hooks/useFlightData';
 import { useAuth } from './hooks/useAuth';
 import { fetchProfile, updateProfile } from './services/api';
 
-export type View = 'flight' | 'log' | 'stats' | 'settings' | 'profile';
+export type View = 'flight' | 'log' | 'stats' | 'settings' | 'profile' | 'admin';
 type AuthView = 'login' | 'register';
 
 function App() {
-  const { user, isAuthenticated, login, logout } = useAuth();
+  const { user, isAuthenticated, login, logout, refreshUser } = useAuth();
   const [authView, setAuthView] = useState<AuthView>('login');
   const [view, setView] = useState<View>('flight');
   const [flightTab, setFlightTab] = useState<TabKey>('home');
@@ -45,6 +46,7 @@ function App() {
 
     fetchProfile()
       .then((profile) => {
+        refreshUser({ isAdmin: profile.isAdmin });
         const serverHasLocation = profile.latitude !== null && profile.longitude !== null;
 
         if (serverHasLocation) {
@@ -151,6 +153,13 @@ function App() {
       return <ProfileScreen userEmail={user?.email} />;
     }
 
+    if (view === 'admin') {
+      if (!user?.isAdmin) {
+        return <EmptyState variant="no-aircraft" />;
+      }
+      return <AdminScreen />;
+    }
+
     // Flight view
     if (!hasSettings) {
       return <EmptyState variant="no-settings" onOpenSettings={() => setView('settings')} />;
@@ -206,6 +215,7 @@ function App() {
         latitude={settings.latitude}
         longitude={settings.longitude}
         userEmail={user?.email}
+        isAdmin={user?.isAdmin ?? false}
         onLogout={logout}
       />
       <main className="app-main">

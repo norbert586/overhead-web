@@ -39,7 +39,7 @@ router.post('/register', async (req: Request, res: Response) => {
   // Fire-and-forget — never blocks the response
   sendWelcomeEmail(email).catch(() => {});
 
-  res.status(201).json({ token, user: { id: user.id, email: user.email } });
+  res.status(201).json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.is_admin } });
 });
 
 // POST /api/auth/login
@@ -64,7 +64,7 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, email: user.email } });
+  res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.is_admin } });
 });
 
 // GET /api/auth/me
@@ -74,7 +74,7 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
     res.status(404).json({ error: 'User not found' });
     return;
   }
-  res.json({ id: user.id, email: user.email });
+  res.json({ id: user.id, email: user.email, isAdmin: !!user.is_admin });
 });
 
 export default router;

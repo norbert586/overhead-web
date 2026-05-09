@@ -13,6 +13,7 @@ interface UserRow extends Record<string, unknown> {
   longitude: number | null;
   radius_nm: number | null;
   poll_interval_sec: number | null;
+  is_admin: number | null;
 }
 
 export function createUser(email: string, passwordHash: string, inviteCode: string): UserRow {
@@ -883,6 +884,116 @@ export function getStatsMostSeen(userId: number) {
       lastSeenEver:   r.last_seen_ever,
       classification: r.classification,
     })),
+  };
+}
+
+// ── Admin ────────────────────────────────────────────────────────────────────
+
+export interface AdminUserRow {
+  id: number;
+  email: string;
+  createdAt: string;
+  isAdmin: boolean;
+  hasLocation: boolean;
+  totalFlights: number;
+  uniqueAircraft: number;
+  lastSeenAt: string | null;
+}
+
+export function listAdminUsers(): AdminUserRow[] {
+  const rows = all<{
+    id: number;
+    email: string;
+    created_at: string;
+    is_admin: number | null;
+    latitude: number | null;
+    longitude: number | null;
+    total_flights: number;
+    unique_aircraft: number;
+    last_seen_at: string | null;
+  }>(
+    `SELECT
+       u.id,
+       u.email,
+       u.created_at,
+       u.is_admin,
+       u.latitude,
+       u.longitude,
+       COUNT(f.id)              AS total_flights,
+       COUNT(DISTINCT f.hex)    AS unique_aircraft,
+       MAX(f.last_seen)         AS last_seen_at
+     FROM users u
+     LEFT JOIN flights f ON f.user_id = u.id
+     GROUP BY u.id
+     ORDER BY u.created_at ASC`,
+    [],
+  );
+  return rows.map((r) => ({
+    id:             r.id,
+    email:          r.email,
+    createdAt:      r.created_at,
+    isAdmin:        !!r.is_admin,
+    hasLocation:    r.latitude !== null && r.longitude !== null,
+    totalFlights:   r.total_flights ?? 0,
+    uniqueAircraft: r.unique_aircraft ?? 0,
+    lastSeenAt:     r.last_seen_at,
+  }));
+}
+
+export interface AdminOverview {
+  totalUsers: number;
+  adminUsers: number;
+  usersWithLocation: number;
+  newUsers24h: number;
+  newUsers7d: number;
+  totalFlights: number;
+  uniqueAircraftAllUsers: number;
+  flights24h: number;
+  cachedAircraft: number;
+  cachedCallsigns: number;
+}
+
+export function getAdminOverview(): AdminOverview {
+  const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const cutoff7d  = new Date(Date.now() - 7  * 24 * 60 * 60 * 1000).toISOString();
+
+  const userRow = get<{
+    total: number; admins: number; located: number;
+    new_24h: number; new_7d: number;
+  }>(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN is_admin = 1 THEN 1 ELSE 0 END) AS admins,
+       SUM(CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 1 ELSE 0 END) AS located,
+       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS new_24h,
+       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS new_7d
+     FROM users`,
+    [cutoff24h, cutoff7d],
+  );
+
+  const flightRow = get<{ total: number; unique: number; recent: number }>(
+    `SELECT
+       COUNT(*) AS total,
+       COUNT(DISTINCT hex) AS unique,
+       SUM(CASE WHEN last_seen >= ? THEN 1 ELSE 0 END) AS recent
+     FROM flights`,
+    [cutoff24h],
+  );
+
+  const acRow = get<{ count: number }>(`SELECT COUNT(*) AS count FROM aircraft_cache`, []);
+  const csRow = get<{ count: number }>(`SELECT COUNT(*) AS count FROM callsign_cache`, []);
+
+  return {
+    totalUsers:             userRow?.total       ?? 0,
+    adminUsers:             userRow?.admins      ?? 0,
+    usersWithLocation:      userRow?.located     ?? 0,
+    newUsers24h:            userRow?.new_24h     ?? 0,
+    newUsers7d:             userRow?.new_7d      ?? 0,
+    totalFlights:           flightRow?.total     ?? 0,
+    uniqueAircraftAllUsers: flightRow?.unique    ?? 0,
+    flights24h:             flightRow?.recent    ?? 0,
+    cachedAircraft:         acRow?.count         ?? 0,
+    cachedCallsigns:        csRow?.count         ?? 0,
   };
 }
 
