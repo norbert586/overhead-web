@@ -102,10 +102,13 @@ export function runMigrations(): void {
   try { exec(`ALTER TABLE users ADD COLUMN radius_nm INTEGER DEFAULT 25`); } catch { /* exists */ }
   try { exec(`ALTER TABLE users ADD COLUMN poll_interval_sec INTEGER DEFAULT 12`); } catch { /* exists */ }
 
-  // Admin flag (granted manually via SQL; the very first user is auto-admin
-  // so a fresh install can reach the admin dashboard without DB surgery)
+  // Admin flag — driven by the ADMIN_EMAILS env var (comma-separated).
+  // Authoritative on every startup: emails in the list are admins, every
+  // other user is demoted. If ADMIN_EMAILS is unset we leave the column
+  // alone so misconfiguration (e.g. forgetting to copy .env) can't silently
+  // strip admin from everyone.
   try { exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0`); } catch { /* exists */ }
-  run(`UPDATE users SET is_admin = 1 WHERE id = 1 AND is_admin = 0`, []);
+  syncAdminAllowlist();
 
   // Achievement + rank tables
   exec(`
@@ -129,4 +132,22 @@ export function runMigrations(): void {
   `);
 
   console.log('Migrations complete.');
+}
+
+function syncAdminAllowlist(): void {
+  const raw = process.env.ADMIN_EMAILS ?? '';
+  const emails = raw
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (emails.length === 0) {
+    console.log('ADMIN_EMAILS not set — skipping admin allowlist sync.');
+    return;
+  }
+
+  const placeholders = emails.map(() => '?').join(',');
+  run(`UPDATE users SET is_admin = 0 WHERE LOWER(email) NOT IN (${placeholders})`, emails);
+  run(`UPDATE users SET is_admin = 1 WHERE LOWER(email) IN (${placeholders})`, emails);
+  console.log(`Admin allowlist applied: ${emails.join(', ')}`);
 }
