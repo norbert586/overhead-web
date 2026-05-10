@@ -4667,6 +4667,88 @@ body {
   word-break: break-all;
 }
 
+.admin-row-action {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.admin-row-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.admin-row-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.admin-modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 22px 26px;
+  max-width: 460px;
+  width: 90%;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.admin-modal-title {
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 12px;
+}
+
+.admin-modal-body {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.admin-modal-password {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg, rgba(0, 0, 0, 0.3));
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.admin-modal-password code {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.admin-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .admin-changelog {
   background: var(--panel-bg);
   border: 1px solid var(--border);

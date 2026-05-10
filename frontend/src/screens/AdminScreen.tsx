@@ -3,8 +3,10 @@ import {
   fetchAdminOverview,
   fetchAdminUsers,
   fetchChangelog,
+  adminResetUserPassword,
   type AdminOverview,
   type AdminUser,
+  type AdminResetPasswordResponse,
 } from '../services/api';
 
 type Tab = 'overview' | 'users' | 'changelog';
@@ -90,6 +92,43 @@ export default function AdminScreen() {
   const [changelog, setChangelog] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<number | null>(null);
+  const [resetResult, setResetResult] = useState<AdminResetPasswordResponse | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleResetPassword(user: AdminUser) {
+    const ok = window.confirm(
+      `Reset password for ${user.email}? Their current password will stop working immediately.`,
+    );
+    if (!ok) return;
+    setResettingId(user.id);
+    setResetError(null);
+    setCopied(false);
+    try {
+      const result = await adminResetUserPassword(user.id);
+      setResetResult(result);
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setResettingId(null);
+    }
+  }
+
+  async function copyTempPassword() {
+    if (!resetResult) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.tempPassword);
+      setCopied(true);
+    } catch {
+      // Clipboard API can fail on insecure contexts — fall back silently.
+    }
+  }
+
+  function closeResetModal() {
+    setResetResult(null);
+    setCopied(false);
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -147,35 +186,73 @@ export default function AdminScreen() {
       )}
 
       {!loading && !error && tab === 'users' && users && (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Email</th>
-                <th>Joined</th>
-                <th>Last seen</th>
-                <th className="admin-num">Flights</th>
-                <th className="admin-num">Unique</th>
-                <th>Loc</th>
-                <th>Admin</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.id}</td>
-                  <td className="admin-email">{u.email}</td>
-                  <td>{formatDate(u.createdAt)}</td>
-                  <td>{timeAgo(u.lastSeenAt)}</td>
-                  <td className="admin-num">{u.totalFlights.toLocaleString()}</td>
-                  <td className="admin-num">{u.uniqueAircraft.toLocaleString()}</td>
-                  <td>{u.hasLocation ? '✓' : '—'}</td>
-                  <td>{u.isAdmin ? '✓' : '—'}</td>
+        <>
+          {resetError && (
+            <div className="admin-error" style={{ marginBottom: 12 }}>
+              Reset failed: {resetError}
+            </div>
+          )}
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Email</th>
+                  <th>Joined</th>
+                  <th>Last seen</th>
+                  <th className="admin-num">Flights</th>
+                  <th className="admin-num">Unique</th>
+                  <th>Loc</th>
+                  <th>Admin</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.id}</td>
+                    <td className="admin-email">{u.email}</td>
+                    <td>{formatDate(u.createdAt)}</td>
+                    <td>{timeAgo(u.lastSeenAt)}</td>
+                    <td className="admin-num">{u.totalFlights.toLocaleString()}</td>
+                    <td className="admin-num">{u.uniqueAircraft.toLocaleString()}</td>
+                    <td>{u.hasLocation ? '✓' : '—'}</td>
+                    <td>{u.isAdmin ? '✓' : '—'}</td>
+                    <td>
+                      <button
+                        className="admin-row-action"
+                        onClick={() => handleResetPassword(u)}
+                        disabled={resettingId === u.id}
+                      >
+                        {resettingId === u.id ? 'Resetting…' : 'Reset password'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {resetResult && (
+        <div className="admin-modal-backdrop" onClick={closeResetModal}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="admin-modal-title">Temporary password generated</h3>
+            <p className="admin-modal-body">
+              Hand this to <strong>{resetResult.email}</strong> out-of-band.
+              It is shown only once.
+            </p>
+            <div className="admin-modal-password">
+              <code>{resetResult.tempPassword}</code>
+              <button className="admin-row-action" onClick={copyTempPassword}>
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <div className="admin-modal-actions">
+              <button className="admin-row-action" onClick={closeResetModal}>Done</button>
+            </div>
+          </div>
         </div>
       )}
 
