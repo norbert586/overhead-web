@@ -32,6 +32,10 @@ export function findUserById(id: number): UserRow | null {
   return get<UserRow>('SELECT * FROM users WHERE id = ?', [id]) ?? null;
 }
 
+export function setUserPasswordHash(userId: number, passwordHash: string): void {
+  run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
+}
+
 export interface UserSettings {
   latitude: number | null;
   longitude: number | null;

@@ -162,6 +162,23 @@ export async function fetchAdminUsers(): Promise<{ users: AdminUser[] }> {
   return res.json();
 }
 
+export interface AdminResetPasswordResponse {
+  userId: number;
+  email: string;
+  tempPassword: string;
+}
+
+export async function adminResetUserPassword(userId: number): Promise<AdminResetPasswordResponse> {
+  const res = await apiFetch(`${BASE_URL}/api/admin/users/${userId}/reset-password`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Password reset failed (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function fetchChangelog(): Promise<{ markdown: string }> {
   const res = await apiFetch(`${BASE_URL}/api/admin/changelog`);
   if (!res.ok) throw new Error(`Changelog fetch failed (${res.status})`);
