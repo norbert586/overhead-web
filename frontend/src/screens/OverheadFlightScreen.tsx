@@ -16,6 +16,7 @@ import type { Flight } from '../types/flight';
 
 interface OverheadFlightScreenProps {
   flights: Flight[];
+  matchedRadiusNm?: number;
 }
 
 function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: () => void; isActive: boolean }) {
@@ -47,7 +48,7 @@ function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: (
   );
 }
 
-export default function OverheadFlightScreen({ flights }: OverheadFlightScreenProps) {
+export default function OverheadFlightScreen({ flights, matchedRadiusNm }: OverheadFlightScreenProps) {
   const [activeIdx, setActiveIdx] = useState(0);
   const safeIdx = Math.min(activeIdx, flights.length - 1);
   const active = flights[safeIdx];
@@ -102,6 +103,9 @@ export default function OverheadFlightScreen({ flights }: OverheadFlightScreenPr
             <span>Overhead now</span>
             <span className="overhead-nearby-count">{flights.length}</span>
           </div>
+          {matchedRadiusNm ? (
+            <div className="overhead-expanded-note">Nearest within {matchedRadiusNm} nm</div>
+          ) : null}
           <div className="overhead-nearby-list">
             {flights.map((f, i) => (
               <NearbyRow

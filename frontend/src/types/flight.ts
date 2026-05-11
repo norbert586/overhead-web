@@ -46,4 +46,5 @@ export interface FlightsResponse {
   flights: Flight[];
   stats: SessionStats;
   timestamp: string;
+  matchedRadiusNm?: number;
 }
