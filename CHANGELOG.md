@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-05-11
+
+- Expand overhead tab search radius when initial query is empty ([#42](https://github.com/norbert586/overhead-web/pull/42))
+
 ## 2026-05-10
 
 - Add admin-initiated password reset for users ([#41](https://github.com/norbert586/overhead-web/pull/41))
