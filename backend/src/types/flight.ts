@@ -50,6 +50,8 @@ export interface FlightsResponse {
   flights: Flight[];
   stats: SessionStats;
   timestamp: string;
+  // Set only when the route expanded the search radius to find aircraft.
+  matchedRadiusNm?: number;
 }
 
 // Raw shape from adsb.lol

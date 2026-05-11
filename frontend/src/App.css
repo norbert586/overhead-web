@@ -4475,6 +4475,15 @@ body {
   text-align: center;
 }
 
+.overhead-expanded-note {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: center;
+}
+
 /* ── Empty state error variant (geo denied) ───────────────── */
 .empty-full.empty-error {
   /* Same layout, red accent treatment. */

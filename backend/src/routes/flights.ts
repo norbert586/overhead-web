@@ -24,7 +24,23 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const allAc = await fetchAll(lat, lon, radius);
+    let allAc = await fetchAll(lat, lon, radius);
+    let matchedRadius = radius;
+
+    // Overhead tab is often empty at small radii — expand the search so the user
+    // sees the nearest contact and its true distance, instead of an empty pane.
+    if (!allAc.length && !record) {
+      for (const r of [25, 50]) {
+        if (r <= radius) continue;
+        const expanded = await fetchAll(lat, lon, r);
+        if (expanded.length) {
+          allAc = expanded;
+          matchedRadius = r;
+          console.log(`[poll] adsb.lol: empty at ${radius}nm, found ${expanded.length} at ${r}nm`);
+          break;
+        }
+      }
+    }
 
     if (!allAc.length) {
       console.log('[poll] adsb.lol: no aircraft in range → returning lastKnown');
@@ -108,6 +124,7 @@ router.get('/', async (req: Request, res: Response) => {
       flights: record ? [sorted[0]] : sorted.slice(0, 3),
       stats: { ...dbStats, activeCount: allAc.length },
       timestamp: new Date().toISOString(),
+      ...(matchedRadius !== radius && { matchedRadiusNm: matchedRadius }),
     };
 
     res.json(response);

@@ -180,7 +180,7 @@ function App() {
       // flight or geolocation briefly flickered back to 'loading'. Empty
       // states should only appear when we genuinely have nothing to show.
       if (overheadFlights.length > 0) {
-        return <OverheadFlightScreen flights={overheadFlights} />;
+        return <OverheadFlightScreen flights={overheadFlights} matchedRadiusNm={overhead.data?.matchedRadiusNm} />;
       }
 
       if (overheadGeo.status === 'denied' || overheadGeo.status === 'unsupported') {
