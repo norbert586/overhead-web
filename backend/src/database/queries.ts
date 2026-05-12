@@ -2,6 +2,7 @@ import { run, get, all } from './db';
 import { logger } from '../logger';
 import type { Flight, InterestTier } from '../types/flight';
 import { scoreFlight, tierFor } from '../services/interestScore';
+import { analyseTrajectory, type TrackPoint } from '../services/trajectoryAnalysis';
 
 const log = logger.child({ module: 'db' });
 
@@ -220,6 +221,68 @@ export interface RawEventSignals {
   mlat: boolean;
 }
 
+// Position for the per-scan track. lat/lon may be missing on some events
+// (e.g. MLAT-only with stale fix) — in which case the track row is skipped.
+export interface EventPosition {
+  lat: number | null;
+  lon: number | null;
+}
+
+// Trajectory window pulled before scoring. Keeps the last N positions and
+// the most recent timestamp; older positions are kept on disk but ignored
+// by the detectors (analyseTrajectory does its own time-window cut).
+const TRACK_LOOKBACK = 60; // ~12 min at 12s scans — enough for any window
+
+function getRecentTrack(flightId: number): TrackPoint[] {
+  const rows = all<{
+    ts: string;
+    lat: number;
+    lon: number;
+    altitude_ft: number | null;
+    speed_kts: number | null;
+    bearing_deg: number | null;
+  }>(
+    `SELECT ts, lat, lon, altitude_ft, speed_kts, bearing_deg
+       FROM flight_track
+      WHERE flight_id = ?
+      ORDER BY ts DESC
+      LIMIT ?`,
+    [flightId, TRACK_LOOKBACK],
+  );
+  // Re-order oldest→newest for the pattern detectors.
+  return rows.reverse().map((r) => ({
+    ts:         r.ts,
+    lat:        r.lat,
+    lon:        r.lon,
+    altitudeFt: r.altitude_ft,
+    speedKts:   r.speed_kts,
+    bearingDeg: r.bearing_deg,
+  }));
+}
+
+function insertTrackPoint(
+  flightId: number,
+  ts: string,
+  position: EventPosition,
+  signals: RawEventSignals,
+  altitudeFt: number | null,
+  speedKts: number | null,
+  bearingDeg: number | null,
+): void {
+  if (position.lat == null || position.lon == null) return;
+  run(
+    `INSERT INTO flight_track
+       (flight_id, ts, lat, lon, altitude_ft, speed_kts, bearing_deg,
+        baro_rate_fpm, squawk)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      flightId, ts, position.lat, position.lon,
+      altitudeFt, speedKts, bearingDeg,
+      signals.baroRateFpm, signals.squawk,
+    ],
+  );
+}
+
 /**
  * Upsert logic — one row per unique aircraft (hex + user_id).
  *
@@ -237,15 +300,22 @@ export function upsertFlight(
     | 'squawk' | 'emergency' | 'baroRateFpm' | 'category' | 'mlat'
     | 'interestScore' | 'interestTier' | 'interestReasons'>,
   signals: RawEventSignals,
+  position: EventPosition,
   userId: number,
 ): Flight {
   const now = new Date().toISOString();
 
   // One canonical record per aircraft per user, keyed by hex
-  const existing = get<FlightRow>(
+  const existing = get<FlightRow & { id: number }>(
     'SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1',
     [flight.hex, userId],
   );
+
+  // ── Trajectory analysis (only meaningful when we have prior positions) ───
+  // Runs against the stored track for this flight row; for brand-new flights
+  // there's no track yet so the analysis is an empty score=0.
+  const track = existing ? getRecentTrack(existing.id) : [];
+  const traj  = analyseTrajectory(track, flight.originIata, flight.destinationIata);
 
   // ── Score this event ───────────────────────────────────────────────────────
   // Personal rarity is computed before the upsert so "first time" detection
@@ -274,6 +344,8 @@ export function upsertFlight(
     isFirstTypeForUser:     !!flight.aircraftType && (personalTypeSightings ?? 0) === 0,
     isFirstOperatorForUser: isFirstOperatorForUser(userId, flight.operator, flight.hex),
     isFirstRouteForUser:    personalRouteSightings === 0,
+    trajectoryScore:        traj.score,
+    trajectoryReasons:      traj.reasons,
   });
 
   if (existing) {
@@ -377,7 +449,7 @@ export function upsertFlight(
     );
   }
 
-  const saved = get<FlightRow>(
+  const saved = get<FlightRow & { id: number }>(
     'SELECT * FROM flights WHERE hex = ? AND user_id = ? ORDER BY last_seen DESC LIMIT 1',
     [flight.hex, userId],
   );
@@ -399,6 +471,16 @@ export function upsertFlight(
       interestReasons: score.reasons,
     } as Flight;
   }
+
+  // ── Append the new track point ──────────────────────────────────────────
+  // Done after upsert so we have a valid flight_id. The point we just inserted
+  // does not affect this event's score (it's analysed against the *prior*
+  // track); patterns develop and surface on the next event.
+  insertTrackPoint(
+    saved.id, now, position, signals,
+    flight.altitudeFt, flight.speedKts, flight.bearingDeg,
+  );
+
   return rowToFlight(saved);
 }
 

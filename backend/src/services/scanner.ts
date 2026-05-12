@@ -68,6 +68,9 @@ async function processAircraft(ac: AdsbAircraft, userId: number): Promise<void> 
     baroRateFpm,
     category:    ac.category?.trim() || null,
     mlat:        Array.isArray(ac.mlat) && ac.mlat.length > 0,
+  }, {
+    lat: typeof ac.lat === 'number' ? ac.lat : null,
+    lon: typeof ac.lon === 'number' ? ac.lon : null,
   }, userId);
 }
 

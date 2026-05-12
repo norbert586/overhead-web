@@ -429,24 +429,57 @@ export const VIP_HEX_PREFIXES: VipHexBlock[] = [
 
 // ── Geo helpers ─────────────────────────────────────────────────────────────
 
+const EARTH_RADIUS_NM = 3440.065; // mean Earth radius in nautical miles
+const toRad = (d: number) => (d * Math.PI) / 180;
+
+/** Haversine distance between two lat/lon points, in nautical miles. */
+export function haversineNm(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const dLat = toRad(bLat - aLat);
+  const dLon = toRad(bLon - aLon);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const h = Math.sin(dLat / 2) ** 2
+          + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_NM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
 /**
  * Great-circle distance between two airport coords, in nautical miles.
- * Uses the haversine formula. Returns null if either coord is missing.
+ * Returns null if either coord is missing.
  */
 export function greatCircleNm(
   a: AirportCoord | undefined,
   b: AirportCoord | undefined,
 ): number | null {
   if (!a || !b) return null;
-  const R_NM = 3440.065; // mean Earth radius in nautical miles
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2
-          + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-  return 2 * R_NM * Math.asin(Math.min(1, Math.sqrt(h)));
+  return haversineNm(a.lat, a.lon, b.lat, b.lon);
+}
+
+/**
+ * Cross-track distance: perpendicular distance in nm from point P to the
+ * great-circle path from A to B. Sign is dropped (always positive). Returns
+ * null if any input is missing. Uses the standard spherical formula.
+ */
+export function crossTrackNm(
+  pLat: number, pLon: number,
+  aLat: number, aLon: number,
+  bLat: number, bLon: number,
+): number {
+  const d13 = haversineNm(aLat, aLon, pLat, pLon) / EARTH_RADIUS_NM; // angular distance A→P
+  const θ13 = bearingDeg(aLat, aLon, pLat, pLon);
+  const θ12 = bearingDeg(aLat, aLon, bLat, bLon);
+  const dXt = Math.asin(Math.sin(d13) * Math.sin(toRad(θ13) - toRad(θ12)));
+  return Math.abs(dXt * EARTH_RADIUS_NM);
+}
+
+/** Initial bearing from A to B, in degrees [0..360). */
+export function bearingDeg(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const φ1 = toRad(aLat);
+  const φ2 = toRad(bLat);
+  const Δλ = toRad(bLon - aLon);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
 export function lookupAirport(iata: string | null): AirportCoord | undefined {

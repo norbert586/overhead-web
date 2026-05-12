@@ -34,6 +34,20 @@ export function run(sql: string, params: (string | number | null)[] = []): void 
   persist();
 }
 
+/**
+ * Run a write without immediately persisting to disk. Useful for bulk loops
+ * (e.g. backfills) — pair with `flush()` once at the end. Saves N disk writes
+ * for an N-row pass.
+ */
+export function runNoPersist(sql: string, params: (string | number | null)[] = []): void {
+  db().run(sql, params);
+}
+
+/** Force a single persist of the in-memory DB to disk. */
+export function flush(): void {
+  persist();
+}
+
 /** Execute raw SQL with no params (for migrations) */
 export function exec(sql: string): void {
   db().exec(sql);
