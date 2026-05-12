@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-05-12
+
+- Backfill changelog with all merged PRs from #1 through #42 ([#43](https://github.com/norbert586/overhead-web/pull/43))
+
 ## 2026-05-11
 
 - Expand overhead tab search radius when initial query is empty ([#42](https://github.com/norbert586/overhead-web/pull/42))
