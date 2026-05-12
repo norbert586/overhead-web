@@ -13,6 +13,7 @@ export interface InterestComponents {
   mission:     number; // 0..1
   rarity:      number; // 0..1  aircraft type / personal type rarity
   kinematic:   number; // 0..1  altitude / speed / vertical-rate anomaly
+  route:       number; // 0..1  long-haul, cross-continent, transoceanic
   firstSeen:   number; // 0..1  first hex / type / operator / route for this user
 }
 

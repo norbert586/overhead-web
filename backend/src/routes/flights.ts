@@ -170,8 +170,11 @@ router.get('/', async (req: Request, res: Response) => {
       // path for any persistence-driven view.
       const score = scoreFlight({
         classification,
+        hex:         base.hex,
         callsign,
         typeCode:    base.aircraftType,
+        originIata:  base.originIata,
+        destinationIata: base.destinationIata,
         altitudeFt,
         speedKts:    base.speedKts,
         baroRateFpm,
@@ -181,9 +184,11 @@ router.get('/', async (req: Request, res: Response) => {
         emergency:   signals.emergency,
         mlat:        signals.mlat,
         personalTypeSightings:  null,
+        personalRouteSightings: null,
         isFirstHexForUser:      false,
         isFirstTypeForUser:     false,
         isFirstOperatorForUser: false,
+        isFirstRouteForUser:    false,
       });
 
       return {
