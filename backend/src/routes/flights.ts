@@ -4,6 +4,7 @@ import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
 import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight, findPhotoByType } from '../database/queries';
 import { scoreFlight } from '../services/interestScore';
+import { isNightAt } from '../services/solar';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../logger';
 import type { FlightsResponse } from '../types/flight';
@@ -186,6 +187,9 @@ router.get('/', async (req: Request, res: Response) => {
         squawk:      signals.squawk,
         emergency:   signals.emergency,
         mlat:        signals.mlat,
+        isNight: (typeof ac.lat === 'number' && typeof ac.lon === 'number')
+          ? isNightAt(new Date(nowIso), ac.lat, ac.lon)
+          : false,
         personalTypeSightings:  null,
         personalRouteSightings: null,
         isFirstHexForUser:      false,

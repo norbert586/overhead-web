@@ -3078,6 +3078,47 @@ body {
 .nc-card--military::before    { background: var(--class-military); }
 .nc-card--unknown::before     { background: var(--class-unknown); }
 
+/* ── Emergency banner (Phase 4: 7500/7600/7700/7777 + emergency enum) ── */
+
+.nc-emergency-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 4px 9px 4px 8px;
+  border-radius: 2px;
+  color: #ffd0d0;
+  background: rgba(212, 70, 70, 0.18);
+  border: 1px solid rgba(212, 90, 90, 0.45);
+  box-shadow: 0 0 12px rgba(212, 80, 80, 0.20);
+  width: fit-content;
+}
+
+.nc-emergency-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff5050;
+  box-shadow: 0 0 0 0 rgba(255, 80, 80, 0.7);
+  animation: nc-emergency-pulse 1.4s ease-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes nc-emergency-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(255, 80, 80, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(255, 80, 80, 0);   }
+  100% { box-shadow: 0 0 0 0   rgba(255, 80, 80, 0);   }
+}
+
+.nc-card--emergency {
+  border-color: rgba(212, 90, 90, 0.40);
+  box-shadow: 0 0 0 1px rgba(212, 90, 90, 0.18), var(--card-shadow);
+}
+
 /* ── Interest tier (headline) ── */
 
 .nc-tier {

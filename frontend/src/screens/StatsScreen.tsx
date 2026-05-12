@@ -237,6 +237,22 @@ const TIER_LABEL: Record<string, string> = {
   routine:      'ROUTINE',
 };
 
+// Emergency squawks the carrier marks with a distinct red banner.
+const EMERGENCY_SQUAWKS = new Set(['7500', '7600', '7700', '7777']);
+
+function emergencyLabel(f: Flight): string | null {
+  if (f.squawk && EMERGENCY_SQUAWKS.has(f.squawk)) {
+    if (f.squawk === '7500') return 'HIJACK · SQ 7500';
+    if (f.squawk === '7600') return 'RADIO FAIL · SQ 7600';
+    if (f.squawk === '7700') return 'EMERGENCY · SQ 7700';
+    return 'INTERCEPT · SQ 7777';
+  }
+  if (f.emergency && f.emergency !== 'none') {
+    return `EMERGENCY · ${f.emergency.toUpperCase()}`;
+  }
+  return null;
+}
+
 function NotableCard({ f }: { f: Flight }) {
   const ident = f.callsign ?? f.registration ?? f.hex;
   const type  = [f.manufacturer, f.aircraftType].filter(Boolean).join(' ') || null;
@@ -244,9 +260,18 @@ function NotableCard({ f }: { f: Flight }) {
     ? `${f.originIata} → ${f.destinationIata}` : null;
   const flag  = f.country ? countryToFlag(f.country) : null;
   const tier  = f.interestTier ?? 'routine';
+  const emergency = emergencyLabel(f);
 
   return (
-    <div className={`nc-card nc-card--${f.classification} nc-tier--${tier}`}>
+    <div className={`nc-card nc-card--${f.classification} nc-tier--${tier}${emergency ? ' nc-card--emergency' : ''}`}>
+      {/* Emergency banner takes top billing when present */}
+      {emergency && (
+        <div className="nc-emergency-banner" role="alert">
+          <span className="nc-emergency-pulse" aria-hidden />
+          {emergency}
+        </div>
+      )}
+
       {/* Interest tier + score (replaces the old classification-only badge as the headline) */}
       <div className={`nc-tier nc-tier-badge--${tier}`}>
         <span className="nc-tier-label">{TIER_LABEL[tier] ?? tier}</span>
