@@ -1,5 +1,7 @@
-import { exec, run } from './db';
+import { exec, run, all, runNoPersist, flush } from './db';
 import { logger } from '../logger';
+import { scoreFlight } from '../services/interestScore';
+import type { Classification } from '../types/flight';
 
 const log = logger.child({ module: 'migrations' });
 
@@ -152,7 +154,83 @@ export function runMigrations(): void {
     );
   `);
 
+  // One-time pass: re-score flights still at the default score=0 so the
+  // Notable carousel populates without waiting for fresh sightings. Idempotent:
+  // re-running only touches rows whose score is still the schema default.
+  backfillInterestScores();
+
   log.info('migrations complete');
+}
+
+interface BackfillRow extends Record<string, unknown> {
+  id: number;
+  hex: string;
+  callsign: string | null;
+  aircraft_type: string | null;
+  origin_iata: string | null;
+  destination_iata: string | null;
+  altitude_ft: number | null;
+  speed_kts: number | null;
+  distance_nm: number | null;
+  classification: string;
+  squawk: string | null;
+  emergency: string | null;
+  baro_rate_fpm: number | null;
+  category: string | null;
+  mlat: number | null;
+}
+
+function backfillInterestScores(): void {
+  // Only target rows that still have the default — never overwrite a real
+  // score that may have come from a peak event (monotonic guarantee).
+  const rows = all<BackfillRow>(
+    `SELECT id, hex, callsign, aircraft_type, origin_iata, destination_iata,
+            altitude_ft, speed_kts, distance_nm, classification,
+            squawk, emergency, baro_rate_fpm, category, mlat
+       FROM flights
+      WHERE interest_score IS NULL OR interest_score = 0`,
+    [],
+  );
+  if (rows.length === 0) return;
+
+  let touched = 0;
+  for (const r of rows) {
+    // Personal-rarity inputs aren't reconstructable from a single row's data
+    // without an O(N²) sweep, so we feed neutral values. Next live event for
+    // each airframe will refresh those signals naturally.
+    const s = scoreFlight({
+      classification:  r.classification as Classification,
+      hex:             r.hex,
+      callsign:        r.callsign,
+      typeCode:        r.aircraft_type,
+      originIata:      r.origin_iata,
+      destinationIata: r.destination_iata,
+      altitudeFt:      r.altitude_ft,
+      speedKts:        r.speed_kts,
+      baroRateFpm:     r.baro_rate_fpm,
+      distanceNm:      r.distance_nm,
+      category:        r.category,
+      squawk:          r.squawk,
+      emergency:       r.emergency,
+      mlat:            !!r.mlat,
+      personalTypeSightings:  null,
+      personalRouteSightings: null,
+      isFirstHexForUser:      false,
+      isFirstTypeForUser:     false,
+      isFirstOperatorForUser: false,
+      isFirstRouteForUser:    false,
+    });
+    if (s.score === 0) continue; // leave untouched, don't write zeros
+    runNoPersist(
+      `UPDATE flights
+          SET interest_score = ?, interest_tier = ?, interest_reasons = ?
+        WHERE id = ?`,
+      [s.score, s.tier, JSON.stringify(s.reasons), r.id],
+    );
+    touched++;
+  }
+  if (touched > 0) flush();
+  log.info({ scanned: rows.length, touched }, 'interest-score backfill complete');
 }
 
 function syncAdminAllowlist(): void {
