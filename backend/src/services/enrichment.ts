@@ -2,7 +2,9 @@ import {
   getAircraftCache, setAircraftCache,
   getCallsignCache, setCallsignCache,
 } from '../database/queries';
+import { logger } from '../logger';
 
+const log = logger.child({ module: 'enrichment' });
 const ADSBDB = 'https://api.adsbdb.com/v0';
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -95,7 +97,7 @@ export async function enrichAircraft(registration: string): Promise<AircraftEnri
   } catch (err) {
     // Network failure or timeout — cache a short negative so we don't hammer the API,
     // but use a shorter TTL by back-dating cached_at by 6 days (expires in ~1 day).
-    console.error('[enrichment] aircraft fetch failed:', registration, err);
+    log.error({ err, registration }, 'aircraft fetch failed');
     setAircraftCache(registration, NEGATIVE);
     return EMPTY_AIRCRAFT;
   }
@@ -155,7 +157,7 @@ export async function enrichCallsign(callsign: string): Promise<RouteEnrichment>
     return result;
 
   } catch (err) {
-    console.error('[enrichment] callsign fetch failed:', callsign, err);
+    log.error({ err, callsign }, 'callsign fetch failed');
     setCallsignCache(callsign, NEGATIVE);
     return EMPTY_ROUTE;
   }

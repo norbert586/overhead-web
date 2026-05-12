@@ -1,4 +1,7 @@
 import { get, all, run } from '../database/db';
+import { logger } from '../logger';
+
+const log = logger.child({ module: 'achievements' });
 
 // ── Achievement definitions ───────────────────────────────────────────────────
 
@@ -438,17 +441,17 @@ export function evaluateAchievements(userId: number): string[] {
           newlyUnlocked.push(def.id);
         }
       } catch (err) {
-        console.error(`[achievements] check failed for ${def.id}:`, err);
+        log.error({ err, achievementId: def.id }, 'achievement check failed');
       }
     }
 
     if (newlyUnlocked.length > 0) {
-      console.log(`[achievements] user=${userId} unlocked: ${newlyUnlocked.join(', ')}`);
+      log.info({ userId, unlocked: newlyUnlocked }, 'achievements unlocked');
     }
 
     return newlyUnlocked;
   } catch (err) {
-    console.error('[achievements] evaluateAchievements error:', err);
+    log.error({ err }, 'evaluateAchievements error');
     return [];
   }
 }

@@ -1,4 +1,7 @@
 import nodemailer from 'nodemailer';
+import { logger } from '../logger';
+
+const log = logger.child({ module: 'email' });
 
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT ?? '587');
@@ -19,7 +22,7 @@ function getTransport() {
 export async function sendWelcomeEmail(to: string): Promise<void> {
   const transport = getTransport();
   if (!transport) {
-    console.log(`[email] SMTP not configured — skipping welcome email to ${to}`);
+    log.info({ to }, 'SMTP not configured — skipping welcome email');
     return;
   }
 
@@ -56,8 +59,8 @@ export async function sendWelcomeEmail(to: string): Promise<void> {
         </div>
       `,
     });
-    console.log(`[email] Welcome email sent to ${to}`);
+    log.info({ to }, 'welcome email sent');
   } catch (err) {
-    console.error(`[email] Failed to send welcome email to ${to}:`, err);
+    log.error({ err, to }, 'failed to send welcome email');
   }
 }

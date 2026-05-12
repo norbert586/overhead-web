@@ -1,9 +1,12 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import swaggerUi from 'swagger-ui-express';
 import { initDb } from './database/db';
 import { runMigrations } from './database/migrations';
 import { startScanner } from './services/scanner';
+import { swaggerSpec } from './swagger';
+import { logger, httpLogger } from './logger';
 import flightsRouter from './routes/flights';
 import statsRouter from './routes/stats';
 import authRouter from './routes/auth';
@@ -20,6 +23,10 @@ async function start() {
   const app = express();
   app.use(cors());
   app.use(express.json());
+  app.use(httpLogger);
+
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+  app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
 
   app.use('/api/auth', authRouter);
   app.use('/api/user', userRouter);
@@ -36,11 +43,11 @@ async function start() {
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Overhead backend running on http://0.0.0.0:${PORT}`);
+    logger.info({ port: PORT, docs: `/api/docs` }, `Overhead backend running on http://0.0.0.0:${PORT}`);
   });
 }
 
 start().catch((err) => {
-  console.error('Failed to start:', err);
+  logger.error({ err }, 'Failed to start');
   process.exit(1);
 });

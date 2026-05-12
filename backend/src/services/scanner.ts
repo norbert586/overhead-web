@@ -4,7 +4,10 @@ import { fetchAll } from './adsb';
 import { enrichAircraft, enrichCallsign } from './enrichment';
 import { classify } from './classifier';
 import { evaluateAchievements } from './achievementEngine';
+import { logger } from '../logger';
 import type { AdsbAircraft } from '../types/flight';
+
+const log = logger.child({ module: 'scanner' });
 
 const SCAN_INTERVAL_MS = 12_000;
 
@@ -68,10 +71,10 @@ async function scanAll(): Promise<void> {
       try {
         const aircraft = await fetchAll(user.latitude, user.longitude, user.radiusNm);
         if (!aircraft.length) {
-          console.log(`[scanner] user=${user.id}: 0 aircraft in range`);
+          log.debug({ userId: user.id }, 'no aircraft in range');
           continue;
         }
-        console.log(`[scanner] user=${user.id}: ${aircraft.length} aircraft — processing`);
+        log.info({ userId: user.id, count: aircraft.length }, 'processing aircraft batch');
 
         // Process sequentially to avoid hammering enrichment APIs
         // (enrichment is cached, so repeat aircraft are instant after the first hit)
@@ -79,14 +82,14 @@ async function scanAll(): Promise<void> {
           try {
             await processAircraft(ac, user.id);
           } catch (err) {
-            console.error(`[scanner] processAircraft error hex=${ac.hex}:`, err);
+            log.error({ err, hex: ac.hex }, 'processAircraft error');
           }
         }
 
         // Evaluate achievements after each user's batch — non-blocking
         evaluateAchievements(user.id);
       } catch (err) {
-        console.error(`[scanner] user=${user.id} scan error:`, err);
+        log.error({ err, userId: user.id }, 'scan error');
       }
     }
   } finally {
@@ -95,7 +98,7 @@ async function scanAll(): Promise<void> {
 }
 
 export function startScanner(): void {
-  console.log(`[scanner] Background scan loop started (interval: ${SCAN_INTERVAL_MS / 1000}s)`);
+  log.info({ intervalSec: SCAN_INTERVAL_MS / 1000 }, 'background scan loop started');
   void scanAll();
   setInterval(() => void scanAll(), SCAN_INTERVAL_MS);
 }
