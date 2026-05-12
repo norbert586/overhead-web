@@ -186,6 +186,26 @@ function isFirstOperatorForUser(userId: number, operator: string | null, exclude
   return (row?.count ?? 0) === 0;
 }
 
+// Distinct (origin, dest) sightings for this user — excludes the current row
+// (matched by hex) so the very event we're scoring doesn't count itself.
+function countPersonalRouteSightings(
+  userId: number,
+  originIata: string | null,
+  destinationIata: string | null,
+  excludeHex: string,
+): number | null {
+  if (!originIata || !destinationIata) return null;
+  const row = get<{ count: number }>(
+    `SELECT COUNT(*) AS count FROM flights
+       WHERE user_id = ?
+         AND origin_iata = ?
+         AND destination_iata = ?
+         AND hex != ?`,
+    [userId, originIata, destinationIata, excludeHex],
+  );
+  return row?.count ?? 0;
+}
+
 // If an aircraft reappears after this gap it counts as a new visit
 const EVENT_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
 
@@ -231,10 +251,15 @@ export function upsertFlight(
   // Personal rarity is computed before the upsert so "first time" detection
   // doesn't race against the row we're about to write.
   const personalTypeSightings = countPersonalTypeSightings(userId, flight.aircraftType);
+  const personalRouteSightings = countPersonalRouteSightings(
+    userId, flight.originIata, flight.destinationIata, flight.hex);
   const score = scoreFlight({
     classification: flight.classification,
+    hex:            flight.hex,
     callsign:       flight.callsign,
     typeCode:       flight.aircraftType,
+    originIata:     flight.originIata,
+    destinationIata: flight.destinationIata,
     altitudeFt:     flight.altitudeFt,
     speedKts:       flight.speedKts,
     baroRateFpm:    signals.baroRateFpm,
@@ -244,9 +269,11 @@ export function upsertFlight(
     emergency:      signals.emergency,
     mlat:           signals.mlat,
     personalTypeSightings,
+    personalRouteSightings,
     isFirstHexForUser:      !existing,
     isFirstTypeForUser:     !!flight.aircraftType && (personalTypeSightings ?? 0) === 0,
     isFirstOperatorForUser: isFirstOperatorForUser(userId, flight.operator, flight.hex),
+    isFirstRouteForUser:    personalRouteSightings === 0,
   });
 
   if (existing) {

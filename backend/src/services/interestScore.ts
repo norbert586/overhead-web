@@ -1,24 +1,38 @@
 import type { Classification, InterestComponents, InterestTier } from '../types/flight';
+import {
+  RARE_TYPES,
+  greatCircleNm,
+  lookupAirport,
+  lookupVipCallsign,
+  lookupVipHex,
+  type MissionSubtier,
+  type RareType,
+} from './referenceData';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Interest scoring — Phase 1
+// Interest scoring — Phase 2
 //
 // Pure, deterministic function. Each component is a 0..1 normalised sub-score.
 // The total is a weighted sum capped at 100, with the contributing reasons
 // returned alongside so the UI can explain *why* a flight is interesting.
-//
-// Weights are tuned so a single dominant signal (e.g. squawk 7700) is enough
-// to push a flight into the "rare" tier (>= 75), while a mix of weaker
-// signals (rare type + first-seen + low altitude) still gets surfaced.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Weights chosen so each *dominant* single signal lands in its natural tier:
+//   squawk 7700 alone  → ~80   (rare)
+//   B-2 / VC-25 / B-2  → ~78   (rare, rarity + mission compound)
+//   F-22 / F-35        → 70+   (interesting / rare edge)
+//   F-16 / Su-30       → ~50   (interesting)
+//   JFK → HKG          → ~30   (noteworthy, route alone)
+//   low overhead       → ~28   (noteworthy)
+//   first-ever type    → ~25   (noteworthy)
+// The raw sum is clamped to 100 so compound signals naturally pile up.
 const WEIGHTS = {
-  emergency: 35,
-  mission:   15,
-  rarity:    15,
-  kinematic: 10,
-  firstSeen:  5,
-  // route component is folded into rarity for Phase 1 (no airport coord table yet)
+  emergency: 80,
+  mission:   40,
+  rarity:    40,
+  kinematic: 35,
+  route:     30,
+  firstSeen: 25,
 } as const;
 
 const TIER_THRESHOLDS: { tier: InterestTier; min: number }[] = [
@@ -51,75 +65,45 @@ const EMERGENCY_ENUM: Record<string, { weight: number; reason: string }> = {
   downed:    { weight: 1.0, reason: 'Aircraft downed' },
 };
 
-// Aircraft type rarity — global, rough hand-tuned weights.
-// 0.5 = uncommon, 0.8 = rare, 1.0 = wow-that's-that-thing tier.
-const RARE_TYPES: Record<string, { weight: number; reason: string }> = {
-  // Heavy / iconic
-  A388: { weight: 0.95, reason: 'Airbus A380' },
-  A124: { weight: 1.00, reason: 'Antonov An-124' },
-  A225: { weight: 1.00, reason: 'Antonov An-225' },
-  B741: { weight: 0.70, reason: 'Boeing 747-100' },
-  B742: { weight: 0.75, reason: 'Boeing 747-200' },
-  B743: { weight: 0.70, reason: 'Boeing 747-300' },
-  B744: { weight: 0.55, reason: 'Boeing 747-400' },
-  B748: { weight: 0.60, reason: 'Boeing 747-8' },
-  MD11: { weight: 0.65, reason: 'McDonnell Douglas MD-11' },
-  DC10: { weight: 0.80, reason: 'McDonnell Douglas DC-10' },
-  L101: { weight: 0.90, reason: 'Lockheed L-1011 TriStar' },
-  CONC: { weight: 1.00, reason: 'Concorde' }, // here for completeness
-  IL76: { weight: 0.85, reason: 'Ilyushin Il-76' },
-  IL96: { weight: 0.85, reason: 'Ilyushin Il-96' },
-  TU54: { weight: 0.80, reason: 'Tupolev Tu-154' },
-  TU95: { weight: 0.95, reason: 'Tupolev Tu-95 Bear' },
-  // Military intel / special use (additive to mission, but stand-alone rare)
-  U2:   { weight: 0.95, reason: 'Lockheed U-2 reconnaissance' },
-  RC135:{ weight: 0.90, reason: 'Boeing RC-135 SIGINT' },
-  E3CF: { weight: 0.85, reason: 'E-3 Sentry AWACS' },
-  E3TF: { weight: 0.85, reason: 'E-3 Sentry AWACS' },
-  E4:   { weight: 0.95, reason: 'E-4B Nightwatch' },
-  E6B:  { weight: 0.90, reason: 'E-6B Mercury TACAMO' },
-  E8:   { weight: 0.85, reason: 'E-8 Joint STARS' },
-  P3:   { weight: 0.65, reason: 'P-3 Orion maritime patrol' },
-  P8:   { weight: 0.55, reason: 'P-8 Poseidon maritime patrol' },
-  B52:  { weight: 0.90, reason: 'B-52 Stratofortress' },
-  B1:   { weight: 0.85, reason: 'B-1 Lancer' },
-  B2:   { weight: 1.00, reason: 'B-2 Spirit stealth bomber' },
-  B21:  { weight: 1.00, reason: 'B-21 Raider' },
-  V22:  { weight: 0.70, reason: 'V-22 Osprey tiltrotor' },
-  C5:   { weight: 0.80, reason: 'C-5 Galaxy' },
-  C5M:  { weight: 0.80, reason: 'C-5M Super Galaxy' },
-  // Old / unusual GA & classics
-  DC3:  { weight: 0.85, reason: 'Douglas DC-3' },
-  DC6:  { weight: 0.90, reason: 'Douglas DC-6' },
-  CONI: { weight: 0.95, reason: 'Lockheed Constellation' },
+// Mission sub-tier → base score and prefix used in the reason string.
+// Combat aircraft and strategic bombers score highest on the mission axis;
+// transport / helo are floors above plain "military".
+const SUBTIER_SCORE: Record<MissionSubtier, { value: number; label: string }> = {
+  combat:    { value: 0.85, label: 'Combat aircraft' },
+  bomber:    { value: 0.95, label: 'Strategic bomber' },
+  isr:       { value: 0.90, label: 'ISR / reconnaissance' },
+  awacs:     { value: 0.85, label: 'Airborne early warning / command' },
+  tanker:    { value: 0.70, label: 'Air-refuelling tanker' },
+  transport: { value: 0.55, label: 'Military airlift' },
+  mpa:       { value: 0.60, label: 'Maritime patrol' },
+  helo:      { value: 0.50, label: 'Military rotary / tiltrotor' },
+  classic:   { value: 0.85, label: 'Vintage aircraft' },
+  heavy:     { value: 0.40, label: 'Iconic widebody' },
+  special:   { value: 0.80, label: 'Special-use aircraft' },
 };
 
-// Mission weight by classification + sub-signals.
+// Mission weight by VIP / sub-tier / classification fallback.
 function missionScore(opts: {
   classification: Classification;
   callsign: string | null;
-  typeCode: string | null;
-  emergency: string | null;
+  hex: string | null;
+  rareType: RareType | undefined;
 }): { value: number; reason: string | null } {
-  const cs = (opts.callsign ?? '').toUpperCase();
-  const tc = (opts.typeCode ?? '').toUpperCase();
+  // VIP / head-of-state — hex blocks take priority (most reliable)
+  const vipHex = lookupVipHex(opts.hex);
+  if (vipHex) return { value: vipHex.weight, reason: `VIP airframe — ${vipHex.reason}` };
 
-  // Head-of-state / VIP callsigns (subset; expand in Tier 2)
-  if (/^(AF1|AF2|SAM\d|EXEC1F|VENUS\d?|GAF\d|CFC\d|ROF\d|VC25)/.test(cs)) {
-    return { value: 1.0, reason: `VIP / head-of-state callsign (${cs})` };
+  // VIP callsign patterns
+  const vipCs = lookupVipCallsign(opts.callsign);
+  if (vipCs) return { value: vipCs.weight, reason: vipCs.reason };
+
+  // Sub-tier from the rare-types table
+  if (opts.rareType?.subtier) {
+    const t = SUBTIER_SCORE[opts.rareType.subtier];
+    return { value: t.value, reason: t.label };
   }
-  // Lifeguard / medevac — caught by emergency too, but works on callsign suffix
-  if (/LIFEGUARD|MEDEVAC|MEDIC/.test(cs)) {
-    return { value: 0.7, reason: 'Lifeguard / MEDEVAC mission' };
-  }
-  // Air refuelling tankers
-  if (/^(KC135|KC10|KC46)/.test(tc)) {
-    return { value: 0.7, reason: 'Air-refuelling tanker' };
-  }
-  // Fighters / bombers / stealth — already weighted via rarity but mission-flag too
-  if (/^(F14|F15|F16|F18|FA18|F22|F35|A10|B1|B2|B21|B52|SU2|SU3|MIG)/.test(tc)) {
-    return { value: 0.8, reason: 'Combat aircraft' };
-  }
+
+  // Plain classification fallback
   if (opts.classification === 'military')   return { value: 0.6, reason: 'Military flight' };
   if (opts.classification === 'government') return { value: 0.5, reason: 'Government flight' };
   return { value: 0, reason: null };
@@ -187,10 +171,51 @@ function kinematicScore(opts: {
   return { value: v, reasons };
 }
 
+// Route signals — long-haul, ultra-long-haul, cross-continent.
+// Returns 0 when either airport coord is unknown or the route is intra-continent
+// short-haul. Compound signals (long-haul + cross-continent) accumulate, capped
+// at 1.0.
+function routeScore(opts: {
+  originIata: string | null;
+  destinationIata: string | null;
+}): { value: number; reasons: string[] } {
+  const origin = lookupAirport(opts.originIata);
+  const dest   = lookupAirport(opts.destinationIata);
+  if (!origin || !dest) return { value: 0, reasons: [] };
+
+  const reasons: string[] = [];
+  let v = 0;
+
+  const dist = greatCircleNm(origin, dest);
+  if (dist != null) {
+    if (dist >= 6500) {
+      v = Math.max(v, 0.85);
+      reasons.push(`Ultra-long-haul route (${Math.round(dist).toLocaleString()} nm)`);
+    } else if (dist >= 4000) {
+      v = Math.max(v, 0.55);
+      reasons.push(`Long-haul route (${Math.round(dist).toLocaleString()} nm)`);
+    } else if (dist >= 2500) {
+      v = Math.max(v, 0.25);
+      reasons.push(`Medium-haul route (${Math.round(dist).toLocaleString()} nm)`);
+    }
+  }
+
+  if (origin.continent !== dest.continent) {
+    // Slight bump on top of distance. Trans-Pacific / trans-Atlantic / etc.
+    v = Math.min(1.0, v + 0.2);
+    reasons.push(`Cross-continent (${origin.continent} → ${dest.continent})`);
+  }
+
+  return { value: v, reasons };
+}
+
 export interface ScoreInputs {
   classification: Classification;
+  hex: string | null;
   callsign: string | null;
   typeCode: string | null;
+  originIata: string | null;
+  destinationIata: string | null;
   altitudeFt: number | null;
   speedKts: number | null;
   baroRateFpm: number | null;
@@ -201,9 +226,11 @@ export interface ScoreInputs {
   mlat: boolean;
   // Personal rarity inputs (computed by caller from DB)
   personalTypeSightings: number | null;   // null = unknown type
+  personalRouteSightings: number | null;  // null = no route data
   isFirstHexForUser: boolean;
   isFirstTypeForUser: boolean;
   isFirstOperatorForUser: boolean;
+  isFirstRouteForUser: boolean;
 }
 
 export interface ScoreResult {
@@ -229,37 +256,40 @@ export function scoreFlight(inp: ScoreInputs): ScoreResult {
     reasons.push(e.reason);
   }
 
-  // ── Mission ──────────────────────────────────────────────────────────────
-  const mission = missionScore({
-    classification: inp.classification,
-    callsign:       inp.callsign,
-    typeCode:       inp.typeCode,
-    emergency:      inp.emergency,
-  });
-  if (mission.reason) reasons.push(mission.reason);
-
-  // ── Rarity (aircraft type, global + personal) ────────────────────────────
+  // ── Rarity (aircraft type, global + personal + mlat) ─────────────────────
   let rarity = 0;
   const tc = (inp.typeCode ?? '').toUpperCase();
-  if (tc && RARE_TYPES[tc]) {
-    rarity = Math.max(rarity, RARE_TYPES[tc].weight);
-    reasons.push(`Rare type: ${RARE_TYPES[tc].reason}`);
+  const rareType = tc ? RARE_TYPES[tc] : undefined;
+  if (rareType) {
+    rarity = Math.max(rarity, rareType.weight);
+    reasons.push(`Rare type: ${rareType.reason}`);
   }
-  // Personal rarity: first time you've seen this type counts; <3 sightings still novel.
   if (inp.personalTypeSightings != null) {
     if (inp.personalTypeSightings === 0) {
       rarity = Math.max(rarity, 0.6);
-      // covered by firstSeen reason below if isFirstTypeForUser
+      // first-seen reason is added below
     } else if (inp.personalTypeSightings < 3) {
       rarity = Math.max(rarity, 0.35);
       reasons.push(`Uncommon for you (seen ${inp.personalTypeSightings}× before)`);
     }
   }
-  // MLAT-only = no ADS-B = older / non-cooperative
   if (inp.mlat) {
     rarity = Math.max(rarity, 0.3);
     reasons.push('MLAT-only (no ADS-B Out)');
   }
+  // VIP hex match — the airframe itself is rare (single-tail or limited fleet).
+  // missionScore reads the same lookup separately for its own purposes.
+  const vipHex = lookupVipHex(inp.hex);
+  if (vipHex) rarity = Math.max(rarity, vipHex.weight);
+
+  // ── Mission ──────────────────────────────────────────────────────────────
+  const mission = missionScore({
+    classification: inp.classification,
+    callsign:       inp.callsign,
+    hex:            inp.hex,
+    rareType,
+  });
+  if (mission.reason) reasons.push(mission.reason);
 
   // ── Kinematic ────────────────────────────────────────────────────────────
   const kin = kinematicScore({
@@ -270,6 +300,13 @@ export function scoreFlight(inp: ScoreInputs): ScoreResult {
     category:    inp.category,
   });
   reasons.push(...kin.reasons);
+
+  // ── Route ────────────────────────────────────────────────────────────────
+  const route = routeScore({
+    originIata:      inp.originIata,
+    destinationIata: inp.destinationIata,
+  });
+  reasons.push(...route.reasons);
 
   // ── First-seen ───────────────────────────────────────────────────────────
   let firstSeen = 0;
@@ -285,12 +322,20 @@ export function scoreFlight(inp: ScoreInputs): ScoreResult {
     firstSeen = Math.max(firstSeen, 0.6);
     reasons.push('First sighting from this operator');
   }
+  if (inp.isFirstRouteForUser && inp.originIata && inp.destinationIata) {
+    firstSeen = Math.max(firstSeen, 0.5);
+    reasons.push(`First ${inp.originIata} → ${inp.destinationIata} flight you’ve seen`);
+  } else if (inp.personalRouteSightings != null && inp.personalRouteSightings > 0
+             && inp.personalRouteSightings < 3) {
+    firstSeen = Math.max(firstSeen, 0.3);
+  }
 
   const components: InterestComponents = {
     emergency,
     mission: mission.value,
     rarity,
     kinematic: kin.value,
+    route: route.value,
     firstSeen,
   };
 
@@ -299,6 +344,7 @@ export function scoreFlight(inp: ScoreInputs): ScoreResult {
     + WEIGHTS.mission   * components.mission
     + WEIGHTS.rarity    * components.rarity
     + WEIGHTS.kinematic * components.kinematic
+    + WEIGHTS.route     * components.route
     + WEIGHTS.firstSeen * components.firstSeen;
 
   const score = Math.max(0, Math.min(100, Math.round(raw)));
