@@ -11,6 +11,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 - Add interest scoring for rare/interesting flights (Phase 1) ([#46](https://github.com/norbert586/overhead-web/pull/46))
 - Add route + reference data scoring (Phase 2) ([#47](https://github.com/norbert586/overhead-web/pull/47))
 - Add trajectory storage + pattern detection (Phase 3) ([#48](https://github.com/norbert586/overhead-web/pull/48))
+- Add night-flight signal, track retention, emergency banner (Phase 4) ([#49](https://github.com/norbert586/overhead-web/pull/49))
 
 ## 2026-05-11
 
