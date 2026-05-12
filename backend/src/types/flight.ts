@@ -6,6 +6,16 @@ export type Classification =
   | 'military'
   | 'unknown';
 
+export type InterestTier = 'routine' | 'noteworthy' | 'interesting' | 'rare';
+
+export interface InterestComponents {
+  emergency:   number; // 0..1
+  mission:     number; // 0..1
+  rarity:      number; // 0..1  aircraft type / personal type rarity
+  kinematic:   number; // 0..1  altitude / speed / vertical-rate anomaly
+  firstSeen:   number; // 0..1  first hex / type / operator / route for this user
+}
+
 export interface Flight {
   hex: string;
   registration: string | null;
@@ -31,6 +41,18 @@ export interface Flight {
   firstSeen: string;
   lastSeen: string;
   photoUrl: string | null;
+
+  // ── New raw event signals (kept from adsb.lol, no extra request) ──────────
+  squawk: string | null;          // 4-digit transponder code (e.g. "1200", "7700")
+  emergency: string | null;       // none|general|lifeguard|minfuel|nordo|unlawful|downed
+  baroRateFpm: number | null;     // vertical speed in ft/min (baro_rate || geom_rate)
+  category: string | null;        // ADS-B category code (A1..A7, B1..B7, C1..C3)
+  mlat: boolean;                  // true when position came from MLAT (no ADS-B out)
+
+  // ── Interest scoring ─────────────────────────────────────────────────────
+  interestScore: number;          // 0..100
+  interestTier: InterestTier;
+  interestReasons: string[];      // human-readable, top-down
 }
 
 export interface SessionStats {
@@ -54,18 +76,30 @@ export interface FlightsResponse {
   matchedRadiusNm?: number;
 }
 
-// Raw shape from adsb.lol
+// Raw shape from adsb.lol. Only the fields we read are typed.
+// adsb.lol v2 returns many more fields per aircraft; we capture the ones
+// that drive interest scoring without changing the request.
 export interface AdsbAircraft {
   hex: string;
   flight?: string;
-  r?: string;   // registration
-  t?: string;   // type code
+  r?: string;                       // registration
+  t?: string;                       // type code
   alt_baro?: number | 'ground';
   gs?: number;
   track?: number;
   lat?: number;
   lon?: number;
   dst?: number;
+
+  // Newly captured signals
+  squawk?: string;                  // "7700" etc.
+  emergency?: string;               // "none" | "general" | "lifeguard" | ...
+  baro_rate?: number;               // ft/min, may be negative
+  geom_rate?: number;               // ft/min, fallback when baro missing
+  category?: string;                // "A7" rotorcraft, "B6" UAV, ...
+  mlat?: unknown[];                 // present (non-empty) when MLAT-derived
+  alert?: number;                   // 1 if controller alert
+  spi?: number;                     // 1 if SPI ident
 }
 
 export interface AdsbResponse {

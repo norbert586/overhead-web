@@ -2,6 +2,8 @@
 
 export type Classification = 'commercial' | 'private' | 'cargo' | 'government' | 'military' | 'unknown';
 
+export type InterestTier = 'routine' | 'noteworthy' | 'interesting' | 'rare';
+
 export interface Flight {
   hex: string;
   registration: string | null;
@@ -26,7 +28,15 @@ export interface Flight {
   timesSeen: number;
   firstSeen: string;
   lastSeen: string;
-  photoUrl: string | null; // not stored in DB — fetched client-side from Planespotters
+  photoUrl: string | null;
+  squawk: string | null;
+  emergency: string | null;
+  baroRateFpm: number | null;
+  category: string | null;
+  mlat: boolean;
+  interestScore: number;
+  interestTier: InterestTier;
+  interestReasons: string[];
 }
 
 export interface SessionStats {

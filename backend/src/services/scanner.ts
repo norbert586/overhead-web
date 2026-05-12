@@ -32,6 +32,14 @@ async function processAircraft(ac: AdsbAircraft, userId: number): Promise<void> 
     typeCode: ac.t ?? null,
   });
 
+  // Raw event signals — straight from adsb.lol, no extra request.
+  // baro_rate is preferred; fall back to geom_rate when the aircraft lacks
+  // a barometric source.
+  const baroRateFpm =
+    typeof ac.baro_rate === 'number' ? ac.baro_rate
+    : typeof ac.geom_rate === 'number' ? ac.geom_rate
+    : null;
+
   upsertFlight({
     hex:                ac.hex,
     registration,
@@ -54,6 +62,12 @@ async function processAircraft(ac: AdsbAircraft, userId: number): Promise<void> 
     distanceNm:         ac.dst   ?? null,
     classification,
     photoUrl:           aircraftInfo.photoUrl ?? null,
+  }, {
+    squawk:      ac.squawk?.trim() || null,
+    emergency:   ac.emergency?.trim() || null,
+    baroRateFpm,
+    category:    ac.category?.trim() || null,
+    mlat:        Array.isArray(ac.mlat) && ac.mlat.length > 0,
   }, userId);
 }
 

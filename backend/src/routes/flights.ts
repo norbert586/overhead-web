@@ -3,6 +3,7 @@ import { fetchAll } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
 import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight, findPhotoByType } from '../database/queries';
+import { scoreFlight } from '../services/interestScore';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../logger';
 import type { FlightsResponse } from '../types/flight';
@@ -122,6 +123,12 @@ router.get('/', async (req: Request, res: Response) => {
         typeCode: ac.t ?? null,
       });
 
+      const altitudeFt = typeof ac.alt_baro === 'number' ? ac.alt_baro : null;
+      const baroRateFpm =
+        typeof ac.baro_rate === 'number' ? ac.baro_rate
+        : typeof ac.geom_rate === 'number' ? ac.geom_rate
+        : null;
+
       const base = {
         hex:                ac.hex,
         registration,
@@ -138,7 +145,7 @@ router.get('/', async (req: Request, res: Response) => {
         destinationIata:    routeInfo.destinationIata,
         destinationCity:    routeInfo.destinationCity,
         destinationCountry: routeInfo.destinationCountry,
-        altitudeFt:         typeof ac.alt_baro === 'number' ? ac.alt_baro : null,
+        altitudeFt,
         speedKts:           ac.gs    ?? null,
         bearingDeg:         ac.track ?? null,
         distanceNm:         ac.dst   ?? null,
@@ -146,10 +153,49 @@ router.get('/', async (req: Request, res: Response) => {
         photoUrl:           aircraftInfo.photoUrl ?? null,
       };
 
+      const signals = {
+        squawk:      ac.squawk?.trim() || null,
+        emergency:   ac.emergency?.trim() || null,
+        baroRateFpm,
+        category:    ac.category?.trim() || null,
+        mlat:        Array.isArray(ac.mlat) && ac.mlat.length > 0,
+      };
+
       if (record) {
-        return upsertFlight(base, req.userId);
+        return upsertFlight(base, signals, req.userId);
       }
-      return { ...base, timesSeen: 0, firstSeen: nowIso, lastSeen: nowIso };
+
+      // Ephemeral mode (Overhead tab) — score from the live event only.
+      // We don't probe per-user history here; the carousel uses the recorded
+      // path for any persistence-driven view.
+      const score = scoreFlight({
+        classification,
+        callsign,
+        typeCode:    base.aircraftType,
+        altitudeFt,
+        speedKts:    base.speedKts,
+        baroRateFpm,
+        distanceNm:  base.distanceNm,
+        category:    signals.category,
+        squawk:      signals.squawk,
+        emergency:   signals.emergency,
+        mlat:        signals.mlat,
+        personalTypeSightings:  null,
+        isFirstHexForUser:      false,
+        isFirstTypeForUser:     false,
+        isFirstOperatorForUser: false,
+      });
+
+      return {
+        ...base,
+        timesSeen: 0,
+        firstSeen: nowIso,
+        lastSeen:  nowIso,
+        ...signals,
+        interestScore:   score.score,
+        interestTier:    score.tier,
+        interestReasons: score.reasons,
+      };
     }));
 
     // Closest first — adsb.lol returns sorted by distance, but enforce here so we can slice.
