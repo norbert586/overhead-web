@@ -9,6 +9,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 - Add explanatory copy and live radius diagram to Settings screen ([#44](https://github.com/norbert586/overhead-web/pull/44))
 - Add backend developer tooling: ESLint, Swagger docs, pino logging ([#45](https://github.com/norbert586/overhead-web/pull/45))
 - Add interest scoring for rare/interesting flights (Phase 1) ([#46](https://github.com/norbert586/overhead-web/pull/46))
+- Add route + reference data scoring (Phase 2) ([#47](https://github.com/norbert586/overhead-web/pull/47))
 
 ## 2026-05-11
 
