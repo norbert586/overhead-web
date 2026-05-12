@@ -6,6 +6,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 ## 2026-05-12
 
 - Backfill changelog with all merged PRs from #1 through #42 ([#43](https://github.com/norbert586/overhead-web/pull/43))
+- Add explanatory copy and live radius diagram to Settings screen ([#44](https://github.com/norbert586/overhead-web/pull/44))
 
 ## 2026-05-11
 
