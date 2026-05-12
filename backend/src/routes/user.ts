@@ -6,7 +6,16 @@ import { calculateUserRank, RANK_TIERS } from '../services/rankSystem';
 
 const router = Router();
 
-// GET /api/user/profile
+/**
+ * @openapi
+ * /api/user/profile:
+ *   get:
+ *     summary: Get the authenticated user's profile and location settings
+ *     tags: [User]
+ *     responses:
+ *       200: { description: User profile }
+ *       404: { description: User not found }
+ */
 router.get('/profile', requireAuth, (req: Request, res: Response) => {
   const user = findUserById(req.userId);
   if (!user) {
@@ -26,7 +35,25 @@ router.get('/profile', requireAuth, (req: Request, res: Response) => {
   });
 });
 
-// PUT /api/user/profile
+/**
+ * @openapi
+ * /api/user/profile:
+ *   put:
+ *     summary: Update the authenticated user's location and polling settings
+ *     tags: [User]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               latitude: { type: number, nullable: true }
+ *               longitude: { type: number, nullable: true }
+ *               radiusNm: { type: number, minimum: 1, maximum: 500 }
+ *               pollIntervalSec: { type: number, minimum: 5, maximum: 300 }
+ *     responses:
+ *       200: { description: Updated profile }
+ */
 router.put('/profile', requireAuth, (req: Request, res: Response) => {
   const { latitude, longitude, radiusNm, pollIntervalSec } = req.body as {
     latitude?: number | null;
@@ -60,7 +87,15 @@ router.put('/profile', requireAuth, (req: Request, res: Response) => {
   });
 });
 
-// GET /api/user/achievements
+/**
+ * @openapi
+ * /api/user/achievements:
+ *   get:
+ *     summary: List unlocked and locked achievements for the authenticated user
+ *     tags: [User]
+ *     responses:
+ *       200: { description: Achievements }
+ */
 router.get('/achievements', requireAuth, (_req: Request, res: Response) => {
   const { unlocked, locked } = getUserAchievements(_req.userId);
   res.json({
@@ -71,7 +106,15 @@ router.get('/achievements', requireAuth, (_req: Request, res: Response) => {
   });
 });
 
-// GET /api/user/rank
+/**
+ * @openapi
+ * /api/user/rank:
+ *   get:
+ *     summary: Get the authenticated user's rank tier and progress
+ *     tags: [User]
+ *     responses:
+ *       200: { description: Rank info with tier definitions }
+ */
 router.get('/rank', requireAuth, (_req: Request, res: Response) => {
   const rank = calculateUserRank(_req.userId);
   res.json({ ...rank, tiers: RANK_TIERS.map(({ tier, label, minScore, description }) => ({ tier, label, minScore, description })) });

@@ -1,5 +1,8 @@
 import { run, get, all } from './db';
+import { logger } from '../logger';
 import type { Flight } from '../types/flight';
+
+const log = logger.child({ module: 'db' });
 
 // ── User management ──────────────────────────────────────────────────────────
 
@@ -161,7 +164,12 @@ export function upsertFlight(
   if (existing) {
     const gapMs = Date.now() - new Date(existing.last_seen as string).getTime();
     const isNewVisit = gapMs > EVENT_WINDOW_MS;
-    console.log(`[upsert] ${flight.hex} → ${isNewVisit ? 'NEW VISIT' : 'UPDATE'} | gap=${Math.round(gapMs/1000)}s | times_seen=${existing.times_seen as number}${isNewVisit ? ' → ' + ((existing.times_seen as number) + 1) : ''}`);
+    log.debug({
+      hex: flight.hex,
+      event: isNewVisit ? 'new_visit' : 'update',
+      gapSec: Math.round(gapMs / 1000),
+      timesSeen: existing.times_seen as number,
+    }, 'upsert flight');
 
     run(
       `UPDATE flights SET
@@ -199,7 +207,7 @@ export function upsertFlight(
     );
   } else {
     // Brand new aircraft — never seen before
-    console.log(`[upsert] ${flight.hex} → INSERT (first time)`);
+    log.debug({ hex: flight.hex, event: 'insert' }, 'upsert flight (first time)');
     run(
       `INSERT INTO flights (
         user_id, hex, registration, callsign, aircraft_type, manufacturer,
@@ -226,7 +234,7 @@ export function upsertFlight(
     [flight.hex, userId],
   );
   if (!saved) {
-    console.error(`[upsert] SELECT after write returned nothing for hex=${flight.hex}`);
+    log.error({ hex: flight.hex }, 'upsert: SELECT after write returned nothing');
     // Return a synthesised flight from the input so the caller still gets a valid object
     return {
       ...flight,

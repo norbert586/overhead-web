@@ -1,4 +1,7 @@
+import { logger } from '../logger';
 import type { AdsbAircraft } from '../types/flight';
+
+const log = logger.child({ module: 'adsb' });
 
 const BASE        = 'https://api.adsb.lol/v2/closest';
 const MAX_RETRIES = 3;
@@ -42,7 +45,7 @@ export async function fetchAll(
       if (!res.ok) throw new Error(`adsb.lol ${res.status}`);
 
       const json = await res.json() as { ac?: AdsbAircraft[] };
-      console.log('[adsb.lol] ac count:', json?.ac?.length ?? 0);
+      log.debug({ count: json?.ac?.length ?? 0 }, 'adsb.lol fetch ok');
       return json?.ac ?? [];
     } catch (err) {
       lastErr = err;
@@ -55,7 +58,7 @@ export async function fetchAll(
     }
   }
 
-  console.error('adsb.lol fetch error:', lastErr);
+  log.error({ err: lastErr }, 'adsb.lol fetch error');
   return [];
 }
 

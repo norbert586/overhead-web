@@ -1,4 +1,7 @@
 import { exec, run } from './db';
+import { logger } from '../logger';
+
+const log = logger.child({ module: 'migrations' });
 
 export function runMigrations(): void {
   // Core tables and safe indexes (no event_key yet)
@@ -131,7 +134,7 @@ export function runMigrations(): void {
     );
   `);
 
-  console.log('Migrations complete.');
+  log.info('migrations complete');
 }
 
 function syncAdminAllowlist(): void {
@@ -142,12 +145,12 @@ function syncAdminAllowlist(): void {
     .filter(Boolean);
 
   if (emails.length === 0) {
-    console.log('ADMIN_EMAILS not set — skipping admin allowlist sync.');
+    log.info('ADMIN_EMAILS not set — skipping admin allowlist sync');
     return;
   }
 
   const placeholders = emails.map(() => '?').join(',');
   run(`UPDATE users SET is_admin = 0 WHERE LOWER(email) NOT IN (${placeholders})`, emails);
   run(`UPDATE users SET is_admin = 1 WHERE LOWER(email) IN (${placeholders})`, emails);
-  console.log(`Admin allowlist applied: ${emails.join(', ')}`);
+  log.info({ emails }, 'admin allowlist applied');
 }

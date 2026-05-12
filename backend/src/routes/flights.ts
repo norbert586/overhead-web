@@ -4,14 +4,55 @@ import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
 import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight, findPhotoByType } from '../database/queries';
 import { requireAuth } from '../middleware/auth';
+import { logger } from '../logger';
 import type { FlightsResponse } from '../types/flight';
+
+const log = logger.child({ module: 'flights' });
 
 const router = Router();
 
 router.use(requireAuth);
 
-// GET /api/flights?lat=&lon=&radius=&record=
-// record=false → ephemeral mode (Overhead tab): skip DB writes and return up to 3 closest.
+/**
+ * @openapi
+ * /api/flights:
+ *   get:
+ *     summary: Poll nearby aircraft and (optionally) record sightings
+ *     description: |
+ *       record=false is ephemeral mode (Overhead tab) — skips DB writes and returns up to 3 closest aircraft.
+ *       Otherwise records sightings for the authenticated user and returns the closest one.
+ *     tags: [Flights]
+ *     parameters:
+ *       - in: query
+ *         name: lat
+ *         required: true
+ *         schema: { type: number }
+ *       - in: query
+ *         name: lon
+ *         required: true
+ *         schema: { type: number }
+ *       - in: query
+ *         name: radius
+ *         schema: { type: number, default: 25, description: Radius in nautical miles }
+ *       - in: query
+ *         name: record
+ *         schema: { type: string, enum: ['true', 'false'], default: 'true' }
+ *     responses:
+ *       200:
+ *         description: Flight data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 flights:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/Flight' }
+ *                 stats: { type: object }
+ *                 timestamp: { type: string, format: date-time }
+ *       400: { description: Missing lat/lon }
+ *       502: { description: Upstream fetch failed }
+ */
 router.get('/', async (req: Request, res: Response) => {
   const lat    = parseFloat(req.query.lat    as string);
   const lon    = parseFloat(req.query.lon    as string);
@@ -36,14 +77,14 @@ router.get('/', async (req: Request, res: Response) => {
         if (expanded.length) {
           allAc = expanded;
           matchedRadius = r;
-          console.log(`[poll] adsb.lol: empty at ${radius}nm, found ${expanded.length} at ${r}nm`);
+          log.debug({ radius, expandedRadius: r, count: expanded.length }, 'poll: expanded radius');
           break;
         }
       }
     }
 
     if (!allAc.length) {
-      console.log('[poll] adsb.lol: no aircraft in range → returning lastKnown');
+      log.debug('poll: no aircraft in range, returning lastKnown');
       const dbStats = getSessionStats(req.userId);
       // Overhead mode is ephemeral — never resurface a stale lastKnown.
       const lastKnown = record ? getLastKnownFlight(req.userId) : null;
@@ -56,7 +97,7 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    console.log(`[poll] adsb.lol: ${allAc.length} aircraft in range (record=${record})`);
+    log.debug({ count: allAc.length, record }, 'poll: aircraft in range');
 
     // Enrich all aircraft in parallel; upsert only when record=true.
     const nowIso = new Date().toISOString();
@@ -129,15 +170,30 @@ router.get('/', async (req: Request, res: Response) => {
 
     res.json(response);
   } catch (err) {
-    console.error('GET /api/flights error:', err);
+    log.error({ err }, 'GET /api/flights error');
     res.status(502).json({ error: 'Failed to fetch flight data' });
   }
 });
 
-// GET /api/flights/photo-by-type/:type?exclude=N12345
-// Last-resort photo fallback: returns any aircraft we've seen of the same ICAO
-// type that has a stored photo. Used by the frontend AircraftPhoto waterfall
-// when neither adsbdb nor Planespotters returns a hit for the actual airframe.
+/**
+ * @openapi
+ * /api/flights/photo-by-type/{type}:
+ *   get:
+ *     summary: Fallback photo lookup by ICAO aircraft type
+ *     tags: [Flights]
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema: { type: string }
+ *       - in: query
+ *         name: exclude
+ *         schema: { type: string, description: Registration to exclude from the result }
+ *     responses:
+ *       200: { description: Photo found }
+ *       400: { description: Missing type }
+ *       404: { description: No photo for type }
+ */
 router.get('/photo-by-type/:type', (req: Request, res: Response) => {
   const type    = (req.params.type ?? '').trim().toUpperCase();
   const exclude = ((req.query.exclude as string | undefined) ?? '').trim().toUpperCase() || null;
@@ -153,7 +209,21 @@ router.get('/photo-by-type/:type', (req: Request, res: Response) => {
   res.json(hit);
 });
 
-// GET /api/flights/:hex/history
+/**
+ * @openapi
+ * /api/flights/{hex}/history:
+ *   get:
+ *     summary: Get the per-user sighting history for a given ICAO hex code
+ *     tags: [Flights]
+ *     parameters:
+ *       - in: path
+ *         name: hex
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: History }
+ *       404: { description: Not found }
+ */
 router.get('/:hex/history', (req: Request, res: Response) => {
   const history = getFlightHistory(req.params.hex, req.userId);
   if (!history) {
@@ -163,7 +233,28 @@ router.get('/:hex/history', (req: Request, res: Response) => {
   res.json(history);
 });
 
-// GET /api/log?limit=50&offset=0&from=ISO&to=ISO
+/**
+ * @openapi
+ * /api/log:
+ *   get:
+ *     summary: Paginated log of sightings for the authenticated user
+ *     tags: [Flights]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 50, maximum: 200 }
+ *       - in: query
+ *         name: offset
+ *         schema: { type: integer, default: 0 }
+ *       - in: query
+ *         name: from
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: to
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200: { description: Sighting log }
+ */
 router.get('/log', (req: Request, res: Response) => {
   const limit    = Math.min(parseInt(req.query.limit  as string) || 50, 200);
   const offset   = parseInt(req.query.offset as string) || 0;
