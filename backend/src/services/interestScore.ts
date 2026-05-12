@@ -18,21 +18,21 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Weights chosen so each *dominant* single signal lands in its natural tier:
-//   squawk 7700 alone  → ~80   (rare)
-//   B-2 / VC-25 / B-2  → ~78   (rare, rarity + mission compound)
-//   F-22 / F-35        → 70+   (interesting / rare edge)
-//   F-16 / Su-30       → ~50   (interesting)
-//   JFK → HKG          → ~30   (noteworthy, route alone)
-//   low overhead       → ~28   (noteworthy)
-//   first-ever type    → ~25   (noteworthy)
+//   squawk 7700 alone   → ~80   (rare)
+//   B-2 / VC-25 / B-2   → ~78   (rare, rarity + mission compound)
+//   orbit / hold        → ~35   (noteworthy alone — usually compounds)
+//   F-22 / F-35         → 70+   (interesting / rare edge)
+//   F-16 / Su-30        → ~50   (interesting)
+//   JFK → HKG           → ~30   (noteworthy, route alone)
 // The raw sum is clamped to 100 so compound signals naturally pile up.
 const WEIGHTS = {
-  emergency: 80,
-  mission:   40,
-  rarity:    40,
-  kinematic: 35,
-  route:     30,
-  firstSeen: 25,
+  emergency:  80,
+  mission:    40,
+  rarity:     40,
+  kinematic:  35,
+  route:      30,
+  trajectory: 35,
+  firstSeen:  25,
 } as const;
 
 const TIER_THRESHOLDS: { tier: InterestTier; min: number }[] = [
@@ -231,6 +231,9 @@ export interface ScoreInputs {
   isFirstTypeForUser: boolean;
   isFirstOperatorForUser: boolean;
   isFirstRouteForUser: boolean;
+  // Trajectory analysis (caller pulls track + runs analyseTrajectory)
+  trajectoryScore: number;       // 0..1
+  trajectoryReasons: string[];   // pre-rendered reason strings
 }
 
 export interface ScoreResult {
@@ -308,6 +311,12 @@ export function scoreFlight(inp: ScoreInputs): ScoreResult {
   });
   reasons.push(...route.reasons);
 
+  // ── Trajectory ───────────────────────────────────────────────────────────
+  // Computed by the caller from the flight's recent track. The reasons are
+  // already rendered (e.g. "Orbiting / loitering", "Off-route by 137 nm").
+  const trajectory = Math.max(0, Math.min(1, inp.trajectoryScore));
+  reasons.push(...inp.trajectoryReasons);
+
   // ── First-seen ───────────────────────────────────────────────────────────
   let firstSeen = 0;
   if (inp.isFirstHexForUser) {
@@ -336,16 +345,18 @@ export function scoreFlight(inp: ScoreInputs): ScoreResult {
     rarity,
     kinematic: kin.value,
     route: route.value,
+    trajectory,
     firstSeen,
   };
 
   const raw =
-      WEIGHTS.emergency * components.emergency
-    + WEIGHTS.mission   * components.mission
-    + WEIGHTS.rarity    * components.rarity
-    + WEIGHTS.kinematic * components.kinematic
-    + WEIGHTS.route     * components.route
-    + WEIGHTS.firstSeen * components.firstSeen;
+      WEIGHTS.emergency  * components.emergency
+    + WEIGHTS.mission    * components.mission
+    + WEIGHTS.rarity     * components.rarity
+    + WEIGHTS.kinematic  * components.kinematic
+    + WEIGHTS.route      * components.route
+    + WEIGHTS.trajectory * components.trajectory
+    + WEIGHTS.firstSeen  * components.firstSeen;
 
   const score = Math.max(0, Math.min(100, Math.round(raw)));
   const tier  = tierFor(score);

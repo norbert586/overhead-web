@@ -162,7 +162,10 @@ router.get('/', async (req: Request, res: Response) => {
       };
 
       if (record) {
-        return upsertFlight(base, signals, req.userId);
+        return upsertFlight(base, signals, {
+          lat: typeof ac.lat === 'number' ? ac.lat : null,
+          lon: typeof ac.lon === 'number' ? ac.lon : null,
+        }, req.userId);
       }
 
       // Ephemeral mode (Overhead tab) — score from the live event only.
@@ -189,6 +192,9 @@ router.get('/', async (req: Request, res: Response) => {
         isFirstTypeForUser:     false,
         isFirstOperatorForUser: false,
         isFirstRouteForUser:    false,
+        // Ephemeral mode doesn't persist a track, so no trajectory analysis.
+        trajectoryScore:        0,
+        trajectoryReasons:      [],
       });
 
       return {

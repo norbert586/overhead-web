@@ -119,6 +119,29 @@ export function runMigrations(): void {
   try { exec(`CREATE INDEX IF NOT EXISTS idx_flights_interest_score ON flights(interest_score)`); }
   catch { /* already exists */ }
 
+  // ── Phase 3: per-scan position track for pattern detection ────────────────
+  // One row per scan per flight. Pattern detection reads the most recent
+  // ~6 min slice; older rows are kept for now (no prune in v1).
+  exec(`
+    CREATE TABLE IF NOT EXISTS flight_track (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      flight_id     INTEGER NOT NULL REFERENCES flights(id),
+      ts            TEXT NOT NULL,
+      lat           REAL NOT NULL,
+      lon           REAL NOT NULL,
+      altitude_ft   INTEGER,
+      speed_kts     REAL,
+      bearing_deg   REAL,
+      baro_rate_fpm INTEGER,
+      squawk        TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_flight_track_flight_id_ts
+      ON flight_track(flight_id, ts DESC);
+  `);
+
+  // Trajectory analysis surfaces as another reason; the column on flights
+  // is the same JSON list so no DDL needed there.
+
   // Add per-user location/scan settings
   try { exec(`ALTER TABLE users ADD COLUMN latitude REAL`); } catch { /* exists */ }
   try { exec(`ALTER TABLE users ADD COLUMN longitude REAL`); } catch { /* exists */ }
@@ -219,6 +242,9 @@ function backfillInterestScores(): void {
       isFirstTypeForUser:     false,
       isFirstOperatorForUser: false,
       isFirstRouteForUser:    false,
+      // Backfill predates the flight_track table; no trajectory data available.
+      trajectoryScore:        0,
+      trajectoryReasons:      [],
     });
     if (s.score === 0) continue; // leave untouched, don't write zeros
     runNoPersist(
