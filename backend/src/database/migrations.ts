@@ -236,6 +236,9 @@ function backfillInterestScores(): void {
       squawk:          r.squawk,
       emergency:       r.emergency,
       mlat:            !!r.mlat,
+      // Backfill rows don't carry lat/lon+timestamp pairs; night detection is
+      // skipped (the next live event for each airframe restores the signal).
+      isNight: false,
       personalTypeSightings:  null,
       personalRouteSightings: null,
       isFirstHexForUser:      false,

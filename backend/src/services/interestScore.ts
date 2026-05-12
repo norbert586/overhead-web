@@ -116,8 +116,9 @@ function kinematicScore(opts: {
   baroRateFpm: number | null;
   distanceNm: number | null;
   category:   string | null;
+  isNight:    boolean;
 }): { value: number; reasons: string[] } {
-  const { altitudeFt, speedKts, baroRateFpm, distanceNm, category } = opts;
+  const { altitudeFt, speedKts, baroRateFpm, distanceNm, category, isNight } = opts;
   let v = 0;
   const reasons: string[] = [];
 
@@ -166,6 +167,19 @@ function kinematicScore(opts: {
       && altitudeFt != null && altitudeFt > 100) {
     v = Math.max(v, 0.4);
     reasons.push(`Near-stationary (${speedKts} kts)`);
+  }
+
+  // Night flight — only flagged when the airframe is GA-ish (low / slow / light
+  // category). Commercial overnight cruise is common and shouldn't surface.
+  if (isNight) {
+    const isLightCat = category === 'A1' || category === 'A2' || category === 'A7'
+                    || category === 'B1' || category === 'B6';
+    const looksGa    = (altitudeFt != null && altitudeFt < 15000)
+                   || (speedKts   != null && speedKts   < 200);
+    if (isLightCat || looksGa) {
+      v = Math.max(v, 0.5);
+      reasons.push('Night flight (small / low-altitude)');
+    }
   }
 
   return { value: v, reasons };
@@ -224,6 +238,7 @@ export interface ScoreInputs {
   squawk: string | null;
   emergency: string | null;
   mlat: boolean;
+  isNight: boolean;
   // Personal rarity inputs (computed by caller from DB)
   personalTypeSightings: number | null;   // null = unknown type
   personalRouteSightings: number | null;  // null = no route data
@@ -301,6 +316,7 @@ export function scoreFlight(inp: ScoreInputs): ScoreResult {
     baroRateFpm: inp.baroRateFpm,
     distanceNm:  inp.distanceNm,
     category:    inp.category,
+    isNight:     inp.isNight,
   });
   reasons.push(...kin.reasons);
 

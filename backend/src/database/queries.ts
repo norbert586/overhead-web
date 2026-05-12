@@ -3,6 +3,7 @@ import { logger } from '../logger';
 import type { Flight, InterestTier } from '../types/flight';
 import { scoreFlight, tierFor } from '../services/interestScore';
 import { analyseTrajectory, type TrackPoint } from '../services/trajectoryAnalysis';
+import { isNightAt } from '../services/solar';
 
 const log = logger.child({ module: 'db' });
 
@@ -233,6 +234,11 @@ export interface EventPosition {
 // by the detectors (analyseTrajectory does its own time-window cut).
 const TRACK_LOOKBACK = 60; // ~12 min at 12s scans — enough for any window
 
+// Per-flight cap on persisted track points. ~40 min of history at 12s scans.
+// Older points are pruned on insert. The pattern detectors only look at the
+// last 6 min, so this is generous headroom without unbounded growth.
+const TRACK_KEEP_PER_FLIGHT = 200;
+
 function getRecentTrack(flightId: number): TrackPoint[] {
   const rows = all<{
     ts: string;
@@ -280,6 +286,21 @@ function insertTrackPoint(
       altitudeFt, speedKts, bearingDeg,
       signals.baroRateFpm, signals.squawk,
     ],
+  );
+  // Keep only the most recent TRACK_KEEP_PER_FLIGHT rows per flight. The
+  // NOT IN subquery picks the keepers by id; everything else gets deleted.
+  // Cheap at our scale — flights with >200 rows are uncommon and the index
+  // on (flight_id, ts DESC) keeps both halves of the query fast.
+  run(
+    `DELETE FROM flight_track
+       WHERE flight_id = ?
+         AND id NOT IN (
+           SELECT id FROM flight_track
+            WHERE flight_id = ?
+            ORDER BY ts DESC
+            LIMIT ?
+         )`,
+    [flightId, flightId, TRACK_KEEP_PER_FLIGHT],
   );
 }
 
@@ -338,6 +359,12 @@ export function upsertFlight(
     squawk:         signals.squawk,
     emergency:      signals.emergency,
     mlat:           signals.mlat,
+    // Night is computed at the aircraft's location at scan time. Falls back
+    // to false when we have no fix (no harm — kinematic just won't add the
+    // night-flight reason).
+    isNight: (position.lat != null && position.lon != null)
+      ? isNightAt(new Date(now), position.lat, position.lon)
+      : false,
     personalTypeSightings,
     personalRouteSightings,
     isFirstHexForUser:      !existing,
