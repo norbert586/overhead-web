@@ -3078,7 +3078,91 @@ body {
 .nc-card--military::before    { background: var(--class-military); }
 .nc-card--unknown::before     { background: var(--class-unknown); }
 
-/* ── Badge ── */
+/* ── Interest tier (headline) ── */
+
+.nc-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 3px 8px 3px 8px;
+  border-radius: 2px;
+  width: fit-content;
+}
+
+.nc-tier-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+}
+
+.nc-tier-badge--rare {
+  color: #f5c84a;
+  background: rgba(245,200,74,0.10);
+  border: 1px solid rgba(245,200,74,0.30);
+  text-shadow: 0 0 12px rgba(245,200,74,0.25);
+}
+.nc-tier-badge--interesting {
+  color: #d4864a;
+  background: rgba(212,134,74,0.10);
+  border: 1px solid rgba(212,134,74,0.28);
+}
+.nc-tier-badge--noteworthy {
+  color: #7eb8e0;
+  background: rgba(126,184,224,0.08);
+  border: 1px solid rgba(126,184,224,0.22);
+}
+.nc-tier-badge--routine {
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.nc-tier--rare {
+  border-color: rgba(245,200,74,0.35);
+  box-shadow: 0 0 0 1px rgba(245,200,74,0.10), var(--card-shadow);
+}
+
+/* ── Reasons (the "why it's interesting") ── */
+
+.nc-reasons {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nc-reason {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  line-height: 1.35;
+  padding-left: 10px;
+  position: relative;
+}
+
+.nc-reason::before {
+  content: '·';
+  position: absolute;
+  left: 2px;
+  color: var(--text-ghost);
+}
+
+.nc-squawk {
+  color: var(--class-government) !important;
+  letter-spacing: 0.8px !important;
+}
+
+/* ── Classification chip ── */
 
 .nc-badge {
   display: inline-flex;

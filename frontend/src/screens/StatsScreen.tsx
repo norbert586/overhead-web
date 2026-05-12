@@ -230,16 +230,30 @@ const CLASS_LABEL: Record<string, string> = {
   unknown:    'Unknown',
 };
 
+const TIER_LABEL: Record<string, string> = {
+  rare:         'RARE',
+  interesting:  'INTERESTING',
+  noteworthy:   'NOTEWORTHY',
+  routine:      'ROUTINE',
+};
+
 function NotableCard({ f }: { f: Flight }) {
   const ident = f.callsign ?? f.registration ?? f.hex;
   const type  = [f.manufacturer, f.aircraftType].filter(Boolean).join(' ') || null;
   const route = f.originIata && f.destinationIata
     ? `${f.originIata} → ${f.destinationIata}` : null;
   const flag  = f.country ? countryToFlag(f.country) : null;
+  const tier  = f.interestTier ?? 'routine';
 
   return (
-    <div className={`nc-card nc-card--${f.classification}`}>
-      {/* Classification badge */}
+    <div className={`nc-card nc-card--${f.classification} nc-tier--${tier}`}>
+      {/* Interest tier + score (replaces the old classification-only badge as the headline) */}
+      <div className={`nc-tier nc-tier-badge--${tier}`}>
+        <span className="nc-tier-label">{TIER_LABEL[tier] ?? tier}</span>
+        <span className="nc-tier-score">{f.interestScore}</span>
+      </div>
+
+      {/* Secondary classification chip */}
       <div className={`nc-badge nc-badge--${f.classification}`}>
         <span className={`log-dot ${f.classification}`} />
         {CLASS_LABEL[f.classification] ?? f.classification}
@@ -250,6 +264,15 @@ function NotableCard({ f }: { f: Flight }) {
 
       {/* Aircraft type */}
       {type && <div className="nc-type">{type}</div>}
+
+      {/* Why it's interesting — top reasons from the scoring engine */}
+      {f.interestReasons && f.interestReasons.length > 0 && (
+        <ul className="nc-reasons">
+          {f.interestReasons.slice(0, 3).map((r) => (
+            <li key={r} className="nc-reason">{r}</li>
+          ))}
+        </ul>
+      )}
 
       {/* Country + operator */}
       <div className="nc-intel">
@@ -282,6 +305,7 @@ function NotableCard({ f }: { f: Flight }) {
         <div className="nc-telem">
           {f.altitudeFt != null && <span>{fmtAlt(f.altitudeFt)}</span>}
           {f.speedKts   != null && <span>{f.speedKts} kts</span>}
+          {f.squawk && <span className="nc-squawk">sq {f.squawk}</span>}
         </div>
         <div className="nc-seen-wrap">
           <span className="nc-seen">×{f.timesSeen}</span>

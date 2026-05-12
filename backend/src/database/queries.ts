@@ -1,6 +1,7 @@
 import { run, get, all } from './db';
 import { logger } from '../logger';
-import type { Flight } from '../types/flight';
+import type { Flight, InterestTier } from '../types/flight';
+import { scoreFlight, tierFor } from '../services/interestScore';
 
 const log = logger.child({ module: 'db' });
 
@@ -108,6 +109,24 @@ interface FlightRow extends Record<string, unknown> {
   first_seen: string;
   last_seen: string;
   photo_url: string | null;
+  squawk: string | null;
+  emergency: string | null;
+  baro_rate_fpm: number | null;
+  category: string | null;
+  mlat: number | null;
+  interest_score: number | null;
+  interest_tier: string | null;
+  interest_reasons: string | null; // JSON string
+}
+
+function parseReasons(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((r) => typeof r === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function rowToFlight(row: FlightRow): Flight {
@@ -136,11 +155,50 @@ function rowToFlight(row: FlightRow): Flight {
     firstSeen: row.first_seen,
     lastSeen: row.last_seen,
     photoUrl: row.photo_url ?? null,
+    squawk:      row.squawk ?? null,
+    emergency:   row.emergency ?? null,
+    baroRateFpm: row.baro_rate_fpm ?? null,
+    category:    row.category ?? null,
+    mlat:        !!row.mlat,
+    interestScore:   row.interest_score ?? 0,
+    interestTier:    (row.interest_tier as InterestTier) ?? 'routine',
+    interestReasons: parseReasons(row.interest_reasons),
   };
+}
+
+// ── Personal-rarity helpers (used by the scoring engine on every event) ─────
+
+function countPersonalTypeSightings(userId: number, typeCode: string | null): number | null {
+  if (!typeCode) return null;
+  const row = get<{ count: number }>(
+    'SELECT COUNT(*) AS count FROM flights WHERE user_id = ? AND aircraft_type = ?',
+    [userId, typeCode],
+  );
+  return row?.count ?? 0;
+}
+
+function isFirstOperatorForUser(userId: number, operator: string | null, excludeHex: string): boolean {
+  if (!operator) return false;
+  const row = get<{ count: number }>(
+    'SELECT COUNT(*) AS count FROM flights WHERE user_id = ? AND operator = ? AND hex != ?',
+    [userId, operator, excludeHex],
+  );
+  return (row?.count ?? 0) === 0;
 }
 
 // If an aircraft reappears after this gap it counts as a new visit
 const EVENT_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
+
+// Inputs the scanner now passes alongside the persisted flight fields. These
+// raw signals come straight off the adsb.lol payload and are stored on every
+// event for use by the scoring engine and any future trajectory features.
+export interface RawEventSignals {
+  squawk: string | null;
+  emergency: string | null;
+  baroRateFpm: number | null;
+  category: string | null;
+  mlat: boolean;
+}
 
 /**
  * Upsert logic — one row per unique aircraft (hex + user_id).
@@ -148,9 +206,17 @@ const EVENT_WINDOW_MS = 20 * 60 * 1000; // 20 minutes
  * Within the 20-min window  → update telemetry only, times_seen stays the same
  * Beyond the 20-min window  → update telemetry + increment times_seen
  * Never seen before         → insert with times_seen = 1
+ *
+ * Interest score is computed on every event and stored monotonically — a
+ * flight's score never decreases between events, so a single emergency squawk
+ * keeps it surfaced even if the next sweep is back to normal telemetry.
  */
 export function upsertFlight(
-  flight: Omit<Flight, 'timesSeen' | 'firstSeen' | 'lastSeen'>,
+  flight: Omit<Flight,
+    | 'timesSeen' | 'firstSeen' | 'lastSeen'
+    | 'squawk' | 'emergency' | 'baroRateFpm' | 'category' | 'mlat'
+    | 'interestScore' | 'interestTier' | 'interestReasons'>,
+  signals: RawEventSignals,
   userId: number,
 ): Flight {
   const now = new Date().toISOString();
@@ -161,14 +227,50 @@ export function upsertFlight(
     [flight.hex, userId],
   );
 
+  // ── Score this event ───────────────────────────────────────────────────────
+  // Personal rarity is computed before the upsert so "first time" detection
+  // doesn't race against the row we're about to write.
+  const personalTypeSightings = countPersonalTypeSightings(userId, flight.aircraftType);
+  const score = scoreFlight({
+    classification: flight.classification,
+    callsign:       flight.callsign,
+    typeCode:       flight.aircraftType,
+    altitudeFt:     flight.altitudeFt,
+    speedKts:       flight.speedKts,
+    baroRateFpm:    signals.baroRateFpm,
+    distanceNm:     flight.distanceNm,
+    category:       signals.category,
+    squawk:         signals.squawk,
+    emergency:      signals.emergency,
+    mlat:           signals.mlat,
+    personalTypeSightings,
+    isFirstHexForUser:      !existing,
+    isFirstTypeForUser:     !!flight.aircraftType && (personalTypeSightings ?? 0) === 0,
+    isFirstOperatorForUser: isFirstOperatorForUser(userId, flight.operator, flight.hex),
+  });
+
   if (existing) {
     const gapMs = Date.now() - new Date(existing.last_seen as string).getTime();
     const isNewVisit = gapMs > EVENT_WINDOW_MS;
+
+    // Monotonic-only: keep the peak score across this aircraft's history.
+    const prevScore = existing.interest_score ?? 0;
+    const peakScore = Math.max(prevScore, score.score);
+    const peakTier  = tierFor(peakScore);
+    // When this event is what set the peak, use its reasons; otherwise keep
+    // the stored ones. This avoids overwriting "Squawk 7700" from an earlier
+    // event with a routine "rotorcraft" reason on the next sweep.
+    const reasonsJson = score.score >= prevScore
+      ? JSON.stringify(score.reasons)
+      : existing.interest_reasons ?? JSON.stringify(score.reasons);
+
     log.debug({
       hex: flight.hex,
       event: isNewVisit ? 'new_visit' : 'update',
       gapSec: Math.round(gapMs / 1000),
       timesSeen: existing.times_seen as number,
+      interest: peakScore,
+      tier: peakTier,
     }, 'upsert flight');
 
     run(
@@ -191,7 +293,15 @@ export function upsertFlight(
         origin_country   = COALESCE(?, origin_country),
         destination_iata = COALESCE(?, destination_iata),
         destination_city = COALESCE(?, destination_city),
-        destination_country = COALESCE(?, destination_country)
+        destination_country = COALESCE(?, destination_country),
+        squawk           = ?,
+        emergency        = ?,
+        baro_rate_fpm    = ?,
+        category         = COALESCE(?, category),
+        mlat             = ?,
+        interest_score   = ?,
+        interest_tier    = ?,
+        interest_reasons = ?
       WHERE id = ?`,
       [
         isNewVisit ? 1 : 0,
@@ -202,12 +312,18 @@ export function upsertFlight(
         flight.photoUrl,
         flight.originIata, flight.originCity, flight.originCountry,
         flight.destinationIata, flight.destinationCity, flight.destinationCountry,
+        signals.squawk, signals.emergency, signals.baroRateFpm,
+        signals.category, signals.mlat ? 1 : 0,
+        peakScore, peakTier, reasonsJson,
         existing.id as number,
       ],
     );
   } else {
     // Brand new aircraft — never seen before
-    log.debug({ hex: flight.hex, event: 'insert' }, 'upsert flight (first time)');
+    log.debug({
+      hex: flight.hex, event: 'insert',
+      interest: score.score, tier: score.tier,
+    }, 'upsert flight (first time)');
     run(
       `INSERT INTO flights (
         user_id, hex, registration, callsign, aircraft_type, manufacturer,
@@ -215,8 +331,10 @@ export function upsertFlight(
         origin_iata, origin_city, origin_country,
         destination_iata, destination_city, destination_country,
         altitude_ft, speed_kts, bearing_deg, distance_nm,
-        classification, times_seen, first_seen, last_seen
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        classification, times_seen, first_seen, last_seen,
+        squawk, emergency, baro_rate_fpm, category, mlat,
+        interest_score, interest_tier, interest_reasons
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         userId, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
         flight.manufacturer, flight.owner, flight.operator, flight.country, flight.countryIso,
@@ -225,6 +343,9 @@ export function upsertFlight(
         flight.destinationIata, flight.destinationCity, flight.destinationCountry,
         flight.altitudeFt, flight.speedKts, flight.bearingDeg, flight.distanceNm,
         flight.classification, 1, now, now,
+        signals.squawk, signals.emergency, signals.baroRateFpm,
+        signals.category, signals.mlat ? 1 : 0,
+        score.score, score.tier, JSON.stringify(score.reasons),
       ],
     );
   }
@@ -235,12 +356,20 @@ export function upsertFlight(
   );
   if (!saved) {
     log.error({ hex: flight.hex }, 'upsert: SELECT after write returned nothing');
-    // Return a synthesised flight from the input so the caller still gets a valid object
+    // Synthesised fallback so callers always get a valid Flight object.
     return {
       ...flight,
       timesSeen: 1,
       firstSeen: now,
       lastSeen:  now,
+      squawk:      signals.squawk,
+      emergency:   signals.emergency,
+      baroRateFpm: signals.baroRateFpm,
+      category:    signals.category,
+      mlat:        signals.mlat,
+      interestScore:   score.score,
+      interestTier:    score.tier,
+      interestReasons: score.reasons,
     } as Flight;
   }
   return rowToFlight(saved);
@@ -578,11 +707,11 @@ export function getAllStats(userId: number) {
     GROUP BY origin_iata, destination_iata
     ORDER BY event_count DESC LIMIT 12`, [userId]);
 
-  // Recent notable — gov/mil or frequently seen
+  // Recent notable — anything the scoring engine flagged as interesting+
   const notableRows = all<FlightRow>(`
     SELECT * FROM flights
-    WHERE user_id = ? AND (classification IN ('government','military') OR times_seen >= 5)
-    ORDER BY last_seen DESC LIMIT 20`, [userId]);
+    WHERE user_id = ? AND interest_score >= 50
+    ORDER BY interest_score DESC, last_seen DESC LIMIT 20`, [userId]);
 
   // Most seen aircraft (grouped by hex across all events)
   const mostSeenRows = all<{
@@ -859,8 +988,8 @@ export function getStatsRoutes(userId: number) {
 export function getStatsNotable(userId: number) {
   const notableRows = all<FlightRow>(`
     SELECT * FROM flights
-    WHERE user_id = ? AND (classification IN ('government','military') OR times_seen >= 5)
-    ORDER BY last_seen DESC LIMIT 20`, [userId]);
+    WHERE user_id = ? AND interest_score >= 50
+    ORDER BY interest_score DESC, last_seen DESC LIMIT 20`, [userId]);
 
   return { recentNotable: notableRows.map(rowToFlight) };
 }

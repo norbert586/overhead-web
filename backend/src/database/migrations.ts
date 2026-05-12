@@ -99,6 +99,24 @@ export function runMigrations(): void {
     exec(`ALTER TABLE flights ADD COLUMN photo_url TEXT`);
   } catch { /* column already exists — fine */ }
 
+  // ── Phase 1 interest-score columns + raw event signals ────────────────────
+  // Raw ADS-B fields we now persist (previously dropped at the type boundary)
+  try { exec(`ALTER TABLE flights ADD COLUMN squawk TEXT`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE flights ADD COLUMN emergency TEXT`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE flights ADD COLUMN baro_rate_fpm INTEGER`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE flights ADD COLUMN category TEXT`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE flights ADD COLUMN mlat INTEGER DEFAULT 0`); } catch { /* exists */ }
+
+  // Interest score is monotonic-only (peak score across the flight's life).
+  // Tier is derived from score; reasons are a JSON-encoded string array.
+  try { exec(`ALTER TABLE flights ADD COLUMN interest_score INTEGER DEFAULT 0`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE flights ADD COLUMN interest_tier TEXT DEFAULT 'routine'`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE flights ADD COLUMN interest_reasons TEXT`); } catch { /* exists */ }
+
+  // Drives the new notable query and any "Interest >= X" filter.
+  try { exec(`CREATE INDEX IF NOT EXISTS idx_flights_interest_score ON flights(interest_score)`); }
+  catch { /* already exists */ }
+
   // Add per-user location/scan settings
   try { exec(`ALTER TABLE users ADD COLUMN latitude REAL`); } catch { /* exists */ }
   try { exec(`ALTER TABLE users ADD COLUMN longitude REAL`); } catch { /* exists */ }
