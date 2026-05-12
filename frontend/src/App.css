@@ -566,6 +566,141 @@ body {
 
 .settings-saved.visible { opacity: 1; }
 
+/* ── Settings: helper text, mode cards, diagram, tips ──────── */
+.settings-help {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+
+.settings-mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.settings-mode-card {
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.settings-mode-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.settings-mode-body {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.settings-location-grid {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 20px;
+  align-items: start;
+}
+
+.settings-location-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-radius-diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.settings-radius-caption {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.settings-geo-error {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--class-government);
+}
+
+.settings-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+}
+
+.settings-tips-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.settings-tips-list {
+  margin: 0;
+  padding: 0 0 0 14px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-tips-list li {
+  position: relative;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.settings-tips-list li::before {
+  content: '›';
+  position: absolute;
+  left: -14px;
+  color: var(--accent);
+}
+
+@media (max-width: 680px) {
+  .settings-mode-cards {
+    grid-template-columns: 1fr;
+  }
+  .settings-location-grid {
+    grid-template-columns: 1fr;
+  }
+  .settings-radius-diagram {
+    max-width: 240px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
 /* ── EmptyState ─────────────────────────────────────────────── */
 .empty-full {
   height: 100%;
