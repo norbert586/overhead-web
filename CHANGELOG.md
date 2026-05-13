@@ -6,6 +6,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 ## 2026-05-13
 
 - Add flight rarity UI, photo lightbox, and tiered seen badges ([#50](https://github.com/norbert586/overhead-web/pull/50))
+- Surface rarity + seen badges more often; sort achievements by date ([#51](https://github.com/norbert586/overhead-web/pull/51))
 
 ## 2026-05-12
 
