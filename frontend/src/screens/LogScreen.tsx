@@ -222,9 +222,9 @@ type SeenTier = 'new' | 'familiar' | 'regular' | 'frequent' | 'signature';
 
 function seenTier(count: number): SeenTier {
   if (count >= 50) return 'signature';
-  if (count >= 25) return 'frequent';
-  if (count >= 10) return 'regular';
-  if (count >= 5)  return 'familiar';
+  if (count >= 20) return 'frequent';
+  if (count >= 8)  return 'regular';
+  if (count >= 3)  return 'familiar';
   return 'new';
 }
 
@@ -248,7 +248,7 @@ function SeenBadge({ count }: { count: number }) {
 }
 
 function RarityChip({ tier, score }: { tier: InterestTier; score: number }) {
-  if (tier === 'routine' || tier === 'noteworthy') return null;
+  if (tier === 'routine') return null;
   return (
     <span className={`log-rarity-chip tier-${tier}`} title={`Interest score ${score}/100`}>
       {TIER_LABEL[tier]}
