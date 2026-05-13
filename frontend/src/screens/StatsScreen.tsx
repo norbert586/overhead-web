@@ -334,7 +334,12 @@ function NotableCard({ f }: { f: Flight }) {
         </div>
         <div className="nc-seen-wrap">
           <span className="nc-seen">×{f.timesSeen}</span>
-          <span className="nc-time">{timeAgo(f.lastSeen)}</span>
+          <span className="nc-last-seen">
+            <span className="nc-last-seen-label">Last seen</span>
+            <span className="nc-last-seen-time" title={new Date(f.lastSeen).toLocaleString()}>
+              {timeAgo(f.lastSeen)}
+            </span>
+          </span>
         </div>
       </div>
     </div>

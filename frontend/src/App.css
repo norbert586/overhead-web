@@ -1830,9 +1830,9 @@ body {
 }
 
 .log-seen-badge.seen-tier-new {
-  color: var(--text-dim);
-  background: transparent;
-  border-color: transparent;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .log-seen-badge.seen-tier-familiar {
@@ -2223,6 +2223,12 @@ body {
   color: var(--tier-int);
   background: var(--tier-int-bg);
   border-color: var(--tier-int-border);
+}
+
+.log-rarity-chip.tier-noteworthy {
+  color: var(--tier-note);
+  background: var(--tier-note-bg);
+  border-color: var(--tier-note-border);
 }
 
 /* Rarity tab — score readout + bar */
@@ -3724,6 +3730,31 @@ body {
   font-size: 9px;
   color: var(--text-ghost);
   letter-spacing: 0.5px;
+}
+
+.nc-last-seen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.nc-last-seen-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.nc-last-seen-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.4px;
+  line-height: 1.2;
 }
 
 /* ── Scroll dots ── */

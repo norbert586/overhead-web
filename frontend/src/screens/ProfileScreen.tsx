@@ -501,11 +501,15 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
       });
   }, []);
 
-  // Group achievements by category for the grid
+  // Group achievements by category for the grid. Within each category,
+  // unlocked achievements are sorted by unlock date (most recent first).
   const grouped = achievements
     ? CATEGORY_ORDER.reduce<Record<string, { unlocked: typeof achievements.unlocked[0][]; locked: typeof achievements.locked[0][] }>>((acc, cat) => {
         acc[cat] = {
-          unlocked: achievements.unlocked.filter((a) => a.category === cat),
+          unlocked: achievements.unlocked
+            .filter((a) => a.category === cat)
+            .slice()
+            .sort((a, b) => b.unlockedAt.localeCompare(a.unlockedAt)),
           locked:   achievements.locked.filter((a) => a.category === cat),
         };
         return acc;
