@@ -1668,7 +1668,7 @@ body {
 /* Column header */
 .log-list-header {
   display: grid;
-  grid-template-columns: 22px 110px 150px 1fr 100px 50px 32px;
+  grid-template-columns: 22px 110px 150px 1fr 100px 92px 64px 32px;
   align-items: center;
   padding: 10px 0 8px;
   border-bottom: 1px solid var(--glass-border);
@@ -1678,6 +1678,11 @@ body {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 5;
+}
+
+.log-col-rarity {
+  text-align: left;
+  padding-left: 4px;
 }
 
 .log-col-label {
@@ -1715,7 +1720,7 @@ body {
 .log-row-main {
   width: 100%;
   display: grid;
-  grid-template-columns: 22px 110px 150px 1fr 100px 50px 32px;
+  grid-template-columns: 22px 110px 150px 1fr 100px 92px 64px 32px;
   align-items: center;
   padding: 11px 0;
   background: none;
@@ -1723,6 +1728,13 @@ body {
   cursor: pointer;
   text-align: left;
   color: inherit;
+}
+
+.log-rarity-col {
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  min-width: 0;
 }
 
 /* Dot */
@@ -1788,6 +1800,64 @@ body {
   font-size: 13px;
   color: var(--text-dim);
   text-align: right;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Times-seen tiered badge */
+.log-seen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.log-seen-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.log-seen-flame {
+  font-size: 10px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.log-seen-badge.seen-tier-new {
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+}
+
+.log-seen-badge.seen-tier-familiar {
+  color: #b58a5a;
+  background: rgba(181, 138, 90, 0.10);
+  border-color: rgba(181, 138, 90, 0.28);
+}
+
+.log-seen-badge.seen-tier-regular {
+  color: #b8c2cc;
+  background: rgba(184, 194, 204, 0.10);
+  border-color: rgba(184, 194, 204, 0.30);
+}
+
+.log-seen-badge.seen-tier-frequent {
+  color: #d4b65a;
+  background: rgba(212, 182, 90, 0.12);
+  border-color: rgba(212, 182, 90, 0.35);
+}
+
+.log-seen-badge.seen-tier-signature {
+  color: #e89a4f;
+  background: rgba(232, 154, 79, 0.14);
+  border-color: rgba(232, 154, 79, 0.45);
+  box-shadow: 0 0 8px rgba(232, 154, 79, 0.20);
 }
 
 .log-chevron-col {
@@ -1981,6 +2051,295 @@ body {
   border: 1px solid rgba(212, 159, 107, 0.20);
   border-radius: 3px;
   padding: 5px 7px;
+}
+
+/* Clickable photo (opens lightbox) */
+.log-photo-zoom-btn {
+  position: relative;
+  display: block;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: zoom-in;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.log-photo-zoom-btn:hover .log-photo-img {
+  filter: saturate(0.75) brightness(1.1);
+  opacity: 1;
+}
+
+.log-photo-zoom-btn:hover .log-photo-zoom-hint {
+  opacity: 1;
+}
+
+.log-photo-zoom-hint {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: rgba(8, 12, 20, 0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+/* ── Photo lightbox modal ───────────────────────────────────── */
+.log-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(2, 5, 12, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  cursor: zoom-out;
+  animation: lightbox-fade 0.18s ease;
+}
+
+@keyframes lightbox-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.log-lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 16px;
+  color: var(--text-secondary);
+  background: rgba(10, 16, 28, 0.7);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.log-lightbox-close:hover {
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+  background: var(--glass-bg-hover);
+}
+
+.log-lightbox-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(1200px, 92vw);
+  max-height: 92vh;
+  cursor: default;
+}
+
+.log-lightbox-img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 5px;
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  background: var(--bg-card);
+}
+
+.log-lightbox-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.log-lightbox-caption {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+
+.log-lightbox-source {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  opacity: 0.7;
+}
+
+/* ── Rarity / interest chips and panel ──────────────────────── */
+/* Tier color tokens — fall back gracefully on themes without overrides */
+.log-rarity-chip,
+.log-rarity-tier-pill,
+.log-rarity-bar,
+.log-rarity-summary {
+  --tier-rare:        #d46b6b;
+  --tier-rare-bg:     rgba(212, 107, 107, 0.14);
+  --tier-rare-border: rgba(212, 107, 107, 0.40);
+  --tier-int:         #d4a35a;
+  --tier-int-bg:      rgba(212, 163, 90, 0.13);
+  --tier-int-border:  rgba(212, 163, 90, 0.36);
+  --tier-note:        #7eb8e0;
+  --tier-note-bg:     rgba(126, 184, 224, 0.10);
+  --tier-note-border: rgba(126, 184, 224, 0.30);
+  --tier-routine:     var(--text-dim);
+  --tier-routine-bg:  rgba(85, 102, 122, 0.10);
+  --tier-routine-border: rgba(85, 102, 122, 0.25);
+}
+
+.log-rarity-chip {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.log-rarity-chip.tier-rare {
+  color: var(--tier-rare);
+  background: var(--tier-rare-bg);
+  border-color: var(--tier-rare-border);
+}
+
+.log-rarity-chip.tier-interesting {
+  color: var(--tier-int);
+  background: var(--tier-int-bg);
+  border-color: var(--tier-int-border);
+}
+
+/* Rarity tab — score readout + bar */
+.log-tab-rarity .log-detail-col {
+  max-width: 520px;
+  flex: 1;
+  min-width: 0;
+}
+
+.log-rarity-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  background: rgba(10, 16, 28, 0.40);
+  margin-bottom: 14px;
+}
+
+.log-rarity-summary.tier-rare        { border-color: var(--tier-rare-border);    background: var(--tier-rare-bg); }
+.log-rarity-summary.tier-interesting { border-color: var(--tier-int-border);     background: var(--tier-int-bg); }
+.log-rarity-summary.tier-noteworthy  { border-color: var(--tier-note-border);    background: var(--tier-note-bg); }
+.log-rarity-summary.tier-routine     { border-color: var(--tier-routine-border); background: var(--tier-routine-bg); }
+
+.log-rarity-score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.log-rarity-score {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+}
+
+.log-rarity-score-out {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-right: auto;
+}
+
+.log-rarity-tier-pill {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.log-rarity-tier-pill.tier-rare        { color: var(--tier-rare);    border-color: var(--tier-rare-border); }
+.log-rarity-tier-pill.tier-interesting { color: var(--tier-int);     border-color: var(--tier-int-border); }
+.log-rarity-tier-pill.tier-noteworthy  { color: var(--tier-note);    border-color: var(--tier-note-border); }
+.log-rarity-tier-pill.tier-routine     { color: var(--tier-routine); border-color: var(--tier-routine-border); }
+
+.log-rarity-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.log-rarity-bar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.log-rarity-bar-fill.tier-rare        { background: var(--tier-rare); }
+.log-rarity-bar-fill.tier-interesting { background: var(--tier-int); }
+.log-rarity-bar-fill.tier-noteworthy  { background: var(--tier-note); }
+.log-rarity-bar-fill.tier-routine     { background: var(--tier-routine); }
+
+.log-rarity-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log-rarity-reason-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.log-rarity-reason {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  padding: 4px 0 4px 14px;
+  position: relative;
+}
+
+.log-rarity-reason::before {
+  content: '·';
+  position: absolute;
+  left: 4px;
+  color: var(--accent);
+  opacity: 0.6;
+}
+
+.log-rarity-reasons-empty {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.4px;
 }
 
 /* Empty / error states */

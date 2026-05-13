@@ -165,6 +165,34 @@ function AchievementIcon({ id, category, unlocked }: {
         <path d="M21 13v2a4 4 0 0 1-4 4H3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     ),
+    rare_tier_contact: () => (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <polygon points="12,2 14.9,8.6 22,9.3 16.6,14 18.2,21 12,17.3 5.8,21 7.4,14 2,9.3 9.1,8.6"
+          fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      </svg>
+    ),
+    score_hunter: () => (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      </svg>
+    ),
+    unicorn_hunter: () => (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <polygon points="12,2 14.9,8.6 22,9.3 16.6,14 18.2,21 12,17.3 5.8,21 7.4,14 2,9.3 9.1,8.6"
+          fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M9 11l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    variety_pack: () => (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3"  y="3"  width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="13" y="3"  width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="3"  y="13" width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="13" y="13" width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    ),
   };
 
   const Icon = overrides[id] ?? CATEGORY_ICONS[category];

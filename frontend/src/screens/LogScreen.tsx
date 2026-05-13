@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchLog } from '../services/api';
 import { fetchPhoto, fetchPhotoByType, thumbnailFallback } from '../utils/photos';
-import type { Flight, Classification } from '../types/flight';
+import type { Flight, Classification, InterestTier } from '../types/flight';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +74,7 @@ function RowPhoto({ registration, aircraftType }: { registration: string | null;
   const [fb,           setFb          ] = useState<string | null>(null);
   const [source,       setSource      ] = useState<'planespotters' | 'similar' | null>(null);
   const [surrogateReg, setSurrogateReg] = useState<string | null>(null);
+  const [zoomed,       setZoomed      ] = useState(false);
 
   if (!registration && !aircraftType) {
     return <div className="log-photo-unavailable">No registration — photo unavailable</div>;
@@ -126,16 +127,72 @@ function RowPhoto({ registration, aircraftType }: { registration: string | null;
   const sourceLabel = source === 'similar'
     ? `SIMILAR · ${aircraftType ?? ''}${surrogateReg ? ` · ${surrogateReg}` : ''}`
     : 'PLANESPOTTERS';
+  const caption = registration ?? aircraftType ?? 'Aircraft';
 
   return (
-    <div className="log-photo-wrap">
-      <img className="log-photo-img" src={src} alt={registration ?? aircraftType ?? 'Aircraft'} onError={handleError} />
-      <div className="log-photo-source">{sourceLabel}</div>
-      {source === 'similar' && (
-        <div className="log-photo-similar-note">
-          Different airframe, same model{surrogateReg ? ` (${surrogateReg})` : ''}.
-        </div>
+    <>
+      <div className="log-photo-wrap">
+        <button
+          type="button"
+          className="log-photo-zoom-btn"
+          onClick={() => setZoomed(true)}
+          title="View larger"
+          aria-label="View photo larger"
+        >
+          <img className="log-photo-img" src={src} alt={caption} onError={handleError} />
+          <span className="log-photo-zoom-hint" aria-hidden="true">⤢</span>
+        </button>
+        <div className="log-photo-source">{sourceLabel}</div>
+        {source === 'similar' && (
+          <div className="log-photo-similar-note">
+            Different airframe, same model{surrogateReg ? ` (${surrogateReg})` : ''}.
+          </div>
+        )}
+      </div>
+      {zoomed && (
+        <PhotoLightbox
+          src={src}
+          alt={caption}
+          sourceLabel={sourceLabel}
+          similarNote={source === 'similar' ? `Different airframe, same model${surrogateReg ? ` (${surrogateReg})` : ''}.` : null}
+          onClose={() => setZoomed(false)}
+        />
       )}
+    </>
+  );
+}
+
+function PhotoLightbox({ src, alt, sourceLabel, similarNote, onClose }: {
+  src: string;
+  alt: string;
+  sourceLabel: string;
+  similarNote: string | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div className="log-lightbox" role="dialog" aria-modal="true" aria-label={alt} onClick={onClose}>
+      <button className="log-lightbox-close" onClick={onClose} aria-label="Close">✕</button>
+      <div className="log-lightbox-inner" onClick={(e) => e.stopPropagation()}>
+        <img className="log-lightbox-img" src={src} alt={alt} />
+        <div className="log-lightbox-meta">
+          <span className="log-lightbox-caption">{alt}</span>
+          <span className="log-lightbox-source">{sourceLabel}</span>
+        </div>
+        {similarNote && <div className="log-photo-similar-note">{similarNote}</div>}
+      </div>
     </div>
   );
 }
@@ -152,13 +209,61 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   );
 }
 
+// ── Rarity / interest helpers ────────────────────────────────────────────────
+
+const TIER_LABEL: Record<InterestTier, string> = {
+  rare:        'Rare',
+  interesting: 'Interesting',
+  noteworthy:  'Noteworthy',
+  routine:     'Routine',
+};
+
+type SeenTier = 'new' | 'familiar' | 'regular' | 'frequent' | 'signature';
+
+function seenTier(count: number): SeenTier {
+  if (count >= 50) return 'signature';
+  if (count >= 25) return 'frequent';
+  if (count >= 10) return 'regular';
+  if (count >= 5)  return 'familiar';
+  return 'new';
+}
+
+const SEEN_TIER_LABEL: Record<SeenTier, string> = {
+  signature: 'Signature',
+  frequent:  'Frequent',
+  regular:   'Regular',
+  familiar:  'Familiar',
+  new:       '',
+};
+
+function SeenBadge({ count }: { count: number }) {
+  const tier = seenTier(count);
+  const label = SEEN_TIER_LABEL[tier];
+  return (
+    <span className={`log-seen-badge seen-tier-${tier}`} title={label ? `${label} — seen ${count}×` : `Seen ${count}×`}>
+      {tier === 'signature' && <span className="log-seen-flame" aria-hidden="true">★</span>}
+      <span className="log-seen-count">×{count}</span>
+    </span>
+  );
+}
+
+function RarityChip({ tier, score }: { tier: InterestTier; score: number }) {
+  if (tier === 'routine' || tier === 'noteworthy') return null;
+  return (
+    <span className={`log-rarity-chip tier-${tier}`} title={`Interest score ${score}/100`}>
+      {TIER_LABEL[tier]}
+    </span>
+  );
+}
+
 // ── Expanded detail — tab contents ────────────────────────────────────────────
 
-type DetailTab = 'details' | 'flight' | 'ingestion';
+type DetailTab = 'details' | 'flight' | 'rarity' | 'ingestion';
 
 const DETAIL_TABS: { key: DetailTab; label: string }[] = [
   { key: 'details',   label: 'Details'   },
   { key: 'flight',    label: 'Flight'    },
+  { key: 'rarity',    label: 'Rarity'    },
   { key: 'ingestion', label: 'Ingestion' },
 ];
 
@@ -205,6 +310,40 @@ function FlightTab({ f }: { f: Flight }) {
   );
 }
 
+function RarityTab({ f }: { f: Flight }) {
+  const score = f.interestScore;
+  const tier = f.interestTier;
+  const pct = Math.max(0, Math.min(100, score));
+  return (
+    <div className="log-tab-content log-tab-rarity">
+      <div className="log-detail-col">
+        <div className={`log-rarity-summary tier-${tier}`}>
+          <div className="log-rarity-score-row">
+            <span className="log-rarity-score">{score}</span>
+            <span className="log-rarity-score-out">/100</span>
+            <span className={`log-rarity-tier-pill tier-${tier}`}>{TIER_LABEL[tier]}</span>
+          </div>
+          <div className="log-rarity-bar">
+            <div className={`log-rarity-bar-fill tier-${tier}`} style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        {f.interestReasons.length > 0 ? (
+          <div className="log-rarity-reasons">
+            <div className="log-detail-section-label">Why</div>
+            <ul className="log-rarity-reason-list">
+              {f.interestReasons.map((r, i) => (
+                <li key={i} className="log-rarity-reason">{r}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="log-rarity-reasons-empty">No interest signals — routine traffic.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function IngestionTab({ f }: { f: Flight }) {
   return (
     <div className="log-tab-content">
@@ -236,7 +375,8 @@ function LogRow({ flight: f }: { flight: Flight }) {
         <span className="log-type">{typeLabel}</span>
         <span className="log-route">{formatRoute(f)}</span>
         <span className="log-time">{timeAgo(f.lastSeen)}</span>
-        <span className="log-seen">×{f.timesSeen}</span>
+        <span className="log-rarity-col"><RarityChip tier={f.interestTier} score={f.interestScore} /></span>
+        <span className="log-seen"><SeenBadge count={f.timesSeen} /></span>
         <span className="log-chevron-col"><Chevron open={open} /></span>
       </button>
 
@@ -256,6 +396,7 @@ function LogRow({ flight: f }: { flight: Flight }) {
           <div className="log-detail-body">
             {tab === 'details'   && <DetailsTab   f={f} typeLabel={typeLabel} />}
             {tab === 'flight'    && <FlightTab    f={f} />}
+            {tab === 'rarity'    && <RarityTab    f={f} />}
             {tab === 'ingestion' && <IngestionTab f={f} />}
           </div>
         </div>
@@ -274,6 +415,7 @@ function ListHeader() {
       <span className="log-col-label log-col-aircraft">Aircraft</span>
       <span className="log-col-label log-col-route">Route</span>
       <span className="log-col-label">Last seen</span>
+      <span className="log-col-label log-col-rarity">Rarity</span>
       <span className="log-col-label log-col-right log-col-seen">Seen</span>
       <span className="log-chevron-col" />
     </div>

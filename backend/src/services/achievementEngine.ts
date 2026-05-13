@@ -221,6 +221,62 @@ export const ACHIEVEMENTS: AchievementDef[] = [
       return (r?.count ?? 0) >= 1;
     },
   },
+  {
+    id: 'rare_tier_contact',
+    label: 'Rare Bird',
+    description: 'Detect an aircraft scored at the "rare" tier.',
+    category: 'rare',
+    check: (userId) => {
+      const r = get<{ count: number }>(
+        `SELECT COUNT(*) as count FROM flights
+         WHERE user_id = ? AND interest_tier = 'rare'`,
+        [userId],
+      );
+      return (r?.count ?? 0) >= 1;
+    },
+  },
+  {
+    id: 'score_hunter',
+    label: 'Score Hunter',
+    description: 'Detect a flight with an interest score of 90 or higher.',
+    category: 'rare',
+    check: (userId) => {
+      const r = get<{ count: number }>(
+        `SELECT COUNT(*) as count FROM flights
+         WHERE user_id = ? AND interest_score >= 90`,
+        [userId],
+      );
+      return (r?.count ?? 0) >= 1;
+    },
+  },
+  {
+    id: 'unicorn_hunter',
+    label: 'Unicorn Hunter',
+    description: 'Detect 10 flights at the "rare" tier.',
+    category: 'rare',
+    check: (userId) => {
+      const r = get<{ count: number }>(
+        `SELECT COUNT(*) as count FROM flights
+         WHERE user_id = ? AND interest_tier = 'rare'`,
+        [userId],
+      );
+      return (r?.count ?? 0) >= 10;
+    },
+  },
+  {
+    id: 'variety_pack',
+    label: 'Variety Pack',
+    description: 'Track 25 distinct aircraft types.',
+    category: 'collection',
+    check: (userId) => {
+      const r = get<{ count: number }>(
+        `SELECT COUNT(DISTINCT aircraft_type) as count FROM flights
+         WHERE user_id = ? AND aircraft_type IS NOT NULL`,
+        [userId],
+      );
+      return (r?.count ?? 0) >= 25;
+    },
+  },
 
   // ── Persistence ─────────────────────────────────────────────────────────────
   {
