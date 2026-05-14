@@ -1,28 +1,41 @@
 import { useState, type FormEvent } from 'react';
-import { apiLogin } from '../services/api';
+import { apiResetPassword } from '../services/api';
 import type { AuthUser } from '../hooks/useAuth';
 
 interface Props {
+  token: string;
   onLogin: (token: string, user: AuthUser) => void;
-  onShowRegister: () => void;
-  onShowForgotPassword: () => void;
+  onBackToLogin: () => void;
 }
 
-export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassword }: Props) {
-  const [email,    setEmail   ] = useState('');
+export default function ResetPasswordScreen({ token, onLogin, onBackToLogin }: Props) {
   const [password, setPassword] = useState('');
+  const [confirm,  setConfirm ] = useState('');
   const [error,    setError   ] = useState('');
   const [loading,  setLoading ] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setLoading(true);
     try {
-      const { token, user } = await apiLogin(email, password);
-      onLogin(token, user);
+      const { token: authToken, user } = await apiResetPassword(token, password);
+      onLogin(authToken, user);
+      // Clear the token out of the URL so a refresh doesn't try to redeem it
+      // again (the backend has already marked it used and would 410).
+      window.history.replaceState({}, '', window.location.pathname);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Password reset failed');
     } finally {
       setLoading(false);
     }
@@ -37,51 +50,46 @@ export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassw
           </svg>
           <span className="auth-wordmark">OVERHEAD</span>
         </div>
-        <p className="auth-subtitle">Aircraft intelligence — sign in to continue</p>
+        <p className="auth-subtitle">Choose a new password</p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label">
-            Email
-            <input
-              className="auth-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </label>
-          <label className="auth-label">
-            Password
+            New password
             <input
               className="auth-input"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
+              autoComplete="new-password"
               required
+              minLength={8}
+            />
+          </label>
+          <label className="auth-label">
+            Confirm password
+            <input
+              className="auth-input"
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+              minLength={8}
             />
           </label>
 
           {error && <p className="auth-error">{error}</p>}
 
           <button className="auth-btn" type="submit" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? 'Updating…' : 'Set new password'}
           </button>
 
-          <div className="auth-forgot-row">
-            <button type="button" className="auth-link" onClick={onShowForgotPassword}>
-              Forgot password?
+          <p className="auth-switch">
+            <button type="button" className="auth-link" onClick={onBackToLogin}>
+              Back to sign in
             </button>
-          </div>
+          </p>
         </form>
-
-        <p className="auth-switch">
-          Don't have an account?{' '}
-          <button className="auth-link" onClick={onShowRegister}>
-            Request access
-          </button>
-        </p>
       </div>
     </div>
   );

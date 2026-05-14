@@ -15,16 +15,31 @@ import ProfileScreen from './screens/ProfileScreen';
 import AdminScreen from './screens/AdminScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
+import VerifyEmailScreen from './screens/VerifyEmailScreen';
+import EmailVerificationBanner from './components/EmailVerificationBanner';
 import { useSettings } from './hooks/useSettings';
 import { useFlightData } from './hooks/useFlightData';
 import { useAuth } from './hooks/useAuth';
 import { fetchProfile, updateProfile } from './services/api';
 
 export type View = 'flight' | 'log' | 'stats' | 'settings' | 'profile' | 'admin';
-type AuthView = 'login' | 'register';
+type AuthView = 'login' | 'register' | 'forgot';
+
+// Tokens are passed via root-relative query params so we don't depend on
+// nginx having an SPA fallback for arbitrary paths.
+function readUrlToken(param: string): string | null {
+  const value = new URLSearchParams(window.location.search).get(param);
+  return value && value.length > 0 ? value : null;
+}
 
 function App() {
   const { user, isAuthenticated, login, logout, refreshUser } = useAuth();
+  // Snapshot URL params once on mount so React Strict Mode's double-effect
+  // doesn't try to redeem the same token twice.
+  const [resetToken,  setResetToken ] = useState<string | null>(() => readUrlToken('reset_token'));
+  const [verifyToken, setVerifyToken] = useState<string | null>(() => readUrlToken('verify_token'));
   const [authView, setAuthView] = useState<AuthView>('login');
   const [view, setView] = useState<View>('flight');
   const [flightTab, setFlightTab] = useState<TabKey>('home');
@@ -46,7 +61,7 @@ function App() {
 
     fetchProfile()
       .then((profile) => {
-        refreshUser({ isAdmin: profile.isAdmin });
+        refreshUser({ isAdmin: profile.isAdmin, emailVerified: profile.emailVerified });
         const serverHasLocation = profile.latitude !== null && profile.longitude !== null;
 
         if (serverHasLocation) {
@@ -113,7 +128,38 @@ function App() {
     record:          false,
   });
 
+  // Email-verification link — works whether or not the user is logged in.
+  // After they hit Continue we clear the token and fall through to normal
+  // auth/app rendering below.
+  if (verifyToken) {
+    return (
+      <VerifyEmailScreen
+        token={verifyToken}
+        onContinue={() => {
+          if (isAuthenticated) refreshUser({ emailVerified: true });
+          setVerifyToken(null);
+        }}
+      />
+    );
+  }
+
   if (!isAuthenticated) {
+    if (resetToken) {
+      return (
+        <ResetPasswordScreen
+          token={resetToken}
+          onLogin={(t, u) => {
+            setResetToken(null);
+            login(t, u);
+          }}
+          onBackToLogin={() => {
+            setResetToken(null);
+            window.history.replaceState({}, '', window.location.pathname);
+            setAuthView('login');
+          }}
+        />
+      );
+    }
     if (authView === 'register') {
       return (
         <RegisterScreen
@@ -122,10 +168,18 @@ function App() {
         />
       );
     }
+    if (authView === 'forgot') {
+      return (
+        <ForgotPasswordScreen
+          onBackToLogin={() => setAuthView('login')}
+        />
+      );
+    }
     return (
       <LoginScreen
         onLogin={login}
         onShowRegister={() => setAuthView('register')}
+        onShowForgotPassword={() => setAuthView('forgot')}
       />
     );
   }
@@ -205,6 +259,12 @@ function App() {
     );
   }
 
+  // Verification banner shows when we have a confirmed answer from the
+  // profile endpoint (emailVerified === false). While the field is undefined
+  // — pre-fetch, or for legacy login responses — we suppress the banner to
+  // avoid flashing it on every load.
+  const showVerifyBanner = isAuthenticated && user?.emailVerified === false && !!user?.email;
+
   return (
     <div className="app-shell">
       <TopBar
@@ -218,6 +278,7 @@ function App() {
         isAdmin={user?.isAdmin ?? false}
         onLogout={logout}
       />
+      {showVerifyBanner && <EmailVerificationBanner email={user!.email} />}
       <main className="app-main">
         {renderMain()}
       </main>

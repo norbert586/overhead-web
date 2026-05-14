@@ -7,6 +7,7 @@ import { runMigrations } from './database/migrations';
 import { startScanner } from './services/scanner';
 import { swaggerSpec } from './swagger';
 import { logger, httpLogger } from './logger';
+import { isEmailConfigured } from './services/email';
 import flightsRouter from './routes/flights';
 import statsRouter from './routes/stats';
 import authRouter from './routes/auth';
@@ -41,6 +42,12 @@ async function start() {
   });
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+  if (!isEmailConfigured()) {
+    logger.warn(
+      'Email not configured — welcome, password-reset, and verification emails will be logged but not delivered. Set RESEND_API_KEY or SMTP_HOST in .env.',
+    );
+  }
 
   app.listen(PORT, '0.0.0.0', () => {
     logger.info({ port: PORT, docs: `/api/docs` }, `Overhead backend running on http://0.0.0.0:${PORT}`);
