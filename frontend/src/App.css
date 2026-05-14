@@ -391,6 +391,64 @@ body {
   text-underline-offset: 2px;
 }
 
+.auth-help {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.auth-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -8px;
+}
+
+/* ── Email verification banner ──────────────────────────────── */
+.verify-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: rgba(91, 155, 213, 0.10);
+  border-bottom: 1px solid rgba(91, 155, 213, 0.25);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.verify-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.verify-banner-btn {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.verify-banner-btn:hover:not(:disabled) {
+  background: rgba(91, 155, 213, 0.15);
+}
+.verify-banner-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.verify-banner-error {
+  color: #d46b6b;
+  font-size: 10px;
+}
+
 /* ── Bottom bar ─────────────────────────────────────────────── */
 .bottom-bar {
   height: 28px;

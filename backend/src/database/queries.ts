@@ -20,6 +20,7 @@ interface UserRow extends Record<string, unknown> {
   radius_nm: number | null;
   poll_interval_sec: number | null;
   is_admin: number | null;
+  email_verified_at: string | null;
 }
 
 export function createUser(email: string, passwordHash: string, inviteCode: string): UserRow {
@@ -40,6 +41,92 @@ export function findUserById(id: number): UserRow | null {
 
 export function setUserPasswordHash(userId: number, passwordHash: string): void {
   run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
+}
+
+// ── Password reset + email verification tokens ──────────────────────────────
+// We always store the SHA-256 hash of the plaintext token, never the token
+// itself. The plaintext only travels via email; if the DB leaks, the leaked
+// hashes can't be replayed against the reset/verify endpoints.
+
+interface TokenRow extends Record<string, unknown> {
+  id: number;
+  user_id: number;
+  token_hash: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+}
+
+export function createPasswordResetToken(
+  userId: number,
+  tokenHash: string,
+  expiresAt: string,
+): void {
+  run(
+    `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+     VALUES (?, ?, ?)`,
+    [userId, tokenHash, expiresAt],
+  );
+}
+
+export function findActivePasswordResetToken(tokenHash: string): TokenRow | null {
+  return get<TokenRow>(
+    `SELECT * FROM password_reset_tokens
+      WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`,
+    [tokenHash, new Date().toISOString()],
+  ) ?? null;
+}
+
+export function markPasswordResetTokenUsed(id: number): void {
+  run(
+    'UPDATE password_reset_tokens SET used_at = ? WHERE id = ?',
+    [new Date().toISOString(), id],
+  );
+}
+
+// Invalidate any outstanding reset tokens for the user. Called after a
+// successful reset so a leaked second link from the same batch can't also
+// be redeemed.
+export function invalidateUserPasswordResetTokens(userId: number): void {
+  run(
+    `UPDATE password_reset_tokens SET used_at = ?
+      WHERE user_id = ? AND used_at IS NULL`,
+    [new Date().toISOString(), userId],
+  );
+}
+
+export function createEmailVerificationToken(
+  userId: number,
+  tokenHash: string,
+  expiresAt: string,
+): void {
+  run(
+    `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+     VALUES (?, ?, ?)`,
+    [userId, tokenHash, expiresAt],
+  );
+}
+
+export function findActiveEmailVerificationToken(tokenHash: string): TokenRow | null {
+  return get<TokenRow>(
+    `SELECT * FROM email_verification_tokens
+      WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?`,
+    [tokenHash, new Date().toISOString()],
+  ) ?? null;
+}
+
+export function markEmailVerificationTokenUsed(id: number): void {
+  run(
+    'UPDATE email_verification_tokens SET used_at = ? WHERE id = ?',
+    [new Date().toISOString(), id],
+  );
+}
+
+export function markEmailVerified(userId: number): void {
+  run(
+    'UPDATE users SET email_verified_at = ? WHERE id = ?',
+    [new Date().toISOString(), userId],
+  );
 }
 
 export interface UserSettings {

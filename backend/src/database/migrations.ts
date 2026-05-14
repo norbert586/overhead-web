@@ -156,6 +156,38 @@ export function runMigrations(): void {
   try { exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0`); } catch { /* exists */ }
   syncAdminAllowlist();
 
+  // Email verification timestamp. NULL means unverified. Legacy users created
+  // before this column existed remain unverified until they confirm.
+  try { exec(`ALTER TABLE users ADD COLUMN email_verified_at TEXT`); } catch { /* exists */ }
+
+  // Tokens for password reset and email verification. We store a SHA-256 hash
+  // of the token (never the plaintext) so a DB read can't be replayed to
+  // hijack a reset link. Tokens are single-use (used_at) and time-limited
+  // (expires_at).
+  exec(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      token_hash  TEXT NOT NULL UNIQUE,
+      expires_at  TEXT NOT NULL,
+      used_at     TEXT,
+      created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user
+      ON password_reset_tokens(user_id);
+
+    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      token_hash  TEXT NOT NULL UNIQUE,
+      expires_at  TEXT NOT NULL,
+      used_at     TEXT,
+      created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user
+      ON email_verification_tokens(user_id);
+  `);
+
   // Achievement + rank tables
   exec(`
     CREATE TABLE IF NOT EXISTS user_achievements (

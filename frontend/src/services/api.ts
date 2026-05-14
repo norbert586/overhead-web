@@ -111,6 +111,53 @@ export async function apiRegister(
   return res.json();
 }
 
+export async function apiForgotPassword(email: string): Promise<void> {
+  // Backend always returns 200 — we just need to know the request landed.
+  await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function apiResetPassword(
+  token: string,
+  password: string,
+): Promise<AuthResponse> {
+  const res = await fetch(`${BASE_URL}/api/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Password reset failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function apiVerifyEmail(token: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/auth/verify-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Verification failed (${res.status})`);
+  }
+}
+
+export async function apiResendVerification(): Promise<void> {
+  const res = await apiFetch(`${BASE_URL}/api/auth/resend-verification`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Failed to resend verification email (${res.status})`);
+  }
+}
+
 // ── User profile ──────────────────────────────────────────────────────────────
 
 export interface UserProfile {
@@ -118,6 +165,7 @@ export interface UserProfile {
   email: string;
   createdAt: string;
   isAdmin: boolean;
+  emailVerified: boolean;
   latitude: number | null;
   longitude: number | null;
   radiusNm: number;

@@ -122,9 +122,34 @@ Environment variables required on the server (`backend/.env`):
 ```
 JWT_SECRET=<long random string>
 INVITE_CODE=<code you share with users>
+APP_URL=https://overheadflight.com
+
+# Email — required for welcome, password-reset, and verification emails
+RESEND_API_KEY=<resend api key>
+EMAIL_FROM=Overhead <noreply@overheadflight.com>
 ```
 
+Without `RESEND_API_KEY` (or `SMTP_HOST` as a fallback), outbound emails are
+logged but never delivered — the server prints a warning at startup. See
+`backend/.env.example` for the full list.
+
 To add a new user: share the `INVITE_CODE`. Registration is otherwise closed.
+
+---
+
+## Account setup flows
+
+| Flow | Endpoint | Email sent |
+|---|---|---|
+| Register | `POST /api/auth/register` | Welcome + email verification link |
+| Forgot password | `POST /api/auth/forgot-password` | One-hour reset link (always returns 200 to prevent email enumeration) |
+| Reset password | `POST /api/auth/reset-password` | none — single-use token consumed |
+| Verify email | `POST /api/auth/verify-email` | none — sets `email_verified_at` |
+| Re-send verification | `POST /api/auth/resend-verification` | Verification link |
+
+Reset and verification tokens are 32-byte URLs stored as SHA-256 hashes
+(plaintext only lives in the email). Reset tokens expire in 1 hour;
+verification tokens in 7 days. Both are single-use.
 
 ---
 
