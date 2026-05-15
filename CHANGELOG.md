@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-05-15
+
+- Add guest mode for unauthenticated live overhead view ([#53](https://github.com/norbert586/overhead-web/pull/53))
+
 ## 2026-05-14
 
 - Add user password reset, email verification, and Resend email delivery ([#52](https://github.com/norbert586/overhead-web/pull/52))
