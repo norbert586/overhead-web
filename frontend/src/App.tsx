@@ -25,7 +25,10 @@ import { useAuth } from './hooks/useAuth';
 import { fetchProfile, updateProfile } from './services/api';
 
 export type View = 'flight' | 'log' | 'stats' | 'settings' | 'profile' | 'admin';
-type AuthView = 'login' | 'register' | 'forgot';
+// 'guest' is the default for unauthenticated visitors — they see a live
+// overhead view without needing to register. The other values are the
+// existing auth flows, reached from the guest top bar.
+type AuthView = 'guest' | 'login' | 'register' | 'forgot';
 
 // Tokens are passed via root-relative query params so we don't depend on
 // nginx having an SPA fallback for arbitrary paths.
@@ -40,7 +43,7 @@ function App() {
   // doesn't try to redeem the same token twice.
   const [resetToken,  setResetToken ] = useState<string | null>(() => readUrlToken('reset_token'));
   const [verifyToken, setVerifyToken] = useState<string | null>(() => readUrlToken('verify_token'));
-  const [authView, setAuthView] = useState<AuthView>('login');
+  const [authView, setAuthView] = useState<AuthView>('guest');
   const [view, setView] = useState<View>('flight');
   const [flightTab, setFlightTab] = useState<TabKey>('home');
   const { settings, saveSettings, syncFromServer, hasSettings } = useSettings();
@@ -165,6 +168,7 @@ function App() {
         <RegisterScreen
           onLogin={login}
           onShowLogin={() => setAuthView('login')}
+          onBackToGuest={() => setAuthView('guest')}
         />
       );
     }
@@ -175,11 +179,20 @@ function App() {
         />
       );
     }
+    if (authView === 'login') {
+      return (
+        <LoginScreen
+          onLogin={login}
+          onShowRegister={() => setAuthView('register')}
+          onShowForgotPassword={() => setAuthView('forgot')}
+          onBackToGuest={() => setAuthView('guest')}
+        />
+      );
+    }
     return (
-      <LoginScreen
-        onLogin={login}
+      <GuestShell
+        onShowLogin={() => setAuthView('login')}
         onShowRegister={() => setAuthView('register')}
-        onShowForgotPassword={() => setAuthView('forgot')}
       />
     );
   }
@@ -283,6 +296,80 @@ function App() {
         {renderMain()}
       </main>
       <BottomBar lastPollTime={lastPollTime} />
+    </div>
+  );
+}
+
+// Unauthenticated landing — shows a live overhead view without requiring
+// signup. The backend serves /api/flights?record=false for guests; all other
+// routes (log, stats, profile) stay locked behind auth.
+function GuestShell({
+  onShowLogin,
+  onShowRegister,
+}: {
+  onShowLogin: () => void;
+  onShowRegister: () => void;
+}) {
+  const geo = useGeolocation({ enabled: true });
+  const guestFlight = useFlightData({
+    latitude:        geo.latitude,
+    longitude:       geo.longitude,
+    radiusNm:        10,
+    pollIntervalSec: 12,
+    enabled:         geo.status === 'ready',
+    record:          false,
+  });
+
+  function renderPane() {
+    const flights = guestFlight.data?.flights ?? [];
+    if (flights.length > 0) {
+      return (
+        <OverheadFlightScreen
+          flights={flights}
+          matchedRadiusNm={guestFlight.data?.matchedRadiusNm}
+        />
+      );
+    }
+    if (geo.status === 'denied' || geo.status === 'unsupported' || geo.status === 'error') {
+      return <EmptyState variant="geo-denied" onRetry={geo.retry} />;
+    }
+    if (geo.status === 'idle' || geo.status === 'loading') {
+      return <EmptyState variant="geo-loading" />;
+    }
+    return <EmptyState variant="no-aircraft-overhead" />;
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="top-bar guest-top-bar">
+        <div className="top-bar-left">
+          <div className="app-logo">
+            <svg viewBox="0 0 24 24" className="app-logo-icon" aria-hidden="true">
+              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
+            </svg>
+            <span className="app-name">Overhead</span>
+          </div>
+          <div className="scan-status">
+            <div className="scan-dot" />
+            <span className="scan-text">Guest · live view</span>
+          </div>
+        </div>
+        <div className="top-bar-right guest-top-bar-actions">
+          <button className="auth-link guest-signin-link" onClick={onShowLogin}>
+            Sign in
+          </button>
+          <button className="auth-btn guest-register-btn" onClick={onShowRegister}>
+            Register
+          </button>
+        </div>
+      </header>
+      <main className="app-main">
+        {renderPane()}
+        <p className="guest-upsell">
+          Sign up to save your flight history, stats, and achievements.
+        </p>
+      </main>
+      <BottomBar lastPollTime={guestFlight.lastPollTime} />
     </div>
   );
 }

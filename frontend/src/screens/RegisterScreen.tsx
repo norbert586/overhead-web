@@ -5,9 +5,10 @@ import type { AuthUser } from '../hooks/useAuth';
 interface Props {
   onLogin: (token: string, user: AuthUser) => void;
   onShowLogin: () => void;
+  onBackToGuest?: () => void;
 }
 
-export default function RegisterScreen({ onLogin, onShowLogin }: Props) {
+export default function RegisterScreen({ onLogin, onShowLogin, onBackToGuest }: Props) {
   const [email,      setEmail     ] = useState('');
   const [password,   setPassword  ] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -88,6 +89,14 @@ export default function RegisterScreen({ onLogin, onShowLogin }: Props) {
             Sign in
           </button>
         </p>
+
+        {onBackToGuest && (
+          <p className="auth-switch">
+            <button className="auth-link" onClick={onBackToGuest}>
+              ← Back to guest view
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );
