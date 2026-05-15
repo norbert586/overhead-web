@@ -404,6 +404,38 @@ body {
   margin-top: -8px;
 }
 
+/* ── Guest shell (unauthenticated overhead view) ────────────── */
+.guest-top-bar-actions {
+  gap: 12px;
+}
+
+.guest-signin-link {
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.guest-signin-link:hover {
+  text-decoration: underline;
+}
+
+.guest-register-btn {
+  font-size: 11px;
+  padding: 6px 12px;
+  margin-top: 0;
+  letter-spacing: 1px;
+}
+
+.guest-upsell {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  letter-spacing: 0.5px;
+  margin: 12px 0 16px;
+  padding: 0 16px;
+}
+
 /* ── Email verification banner ──────────────────────────────── */
 .verify-banner {
   display: flex;

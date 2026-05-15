@@ -6,9 +6,10 @@ interface Props {
   onLogin: (token: string, user: AuthUser) => void;
   onShowRegister: () => void;
   onShowForgotPassword: () => void;
+  onBackToGuest?: () => void;
 }
 
-export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassword }: Props) {
+export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassword, onBackToGuest }: Props) {
   const [email,    setEmail   ] = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError   ] = useState('');
@@ -82,6 +83,14 @@ export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassw
             Request access
           </button>
         </p>
+
+        {onBackToGuest && (
+          <p className="auth-switch">
+            <button className="auth-link" onClick={onBackToGuest}>
+              ← Back to guest view
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { classify } from '../services/classifier';
 import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight, findPhotoByType } from '../database/queries';
 import { scoreFlight } from '../services/interestScore';
 import { isNightAt } from '../services/solar';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, optionalAuth, guestRateLimit } from '../middleware/auth';
 import { logger } from '../logger';
 import type { FlightsResponse } from '../types/flight';
 
@@ -13,7 +13,15 @@ const log = logger.child({ module: 'flights' });
 
 const router = Router();
 
-router.use(requireAuth);
+// GET / is the only guest-capable endpoint, and only in ephemeral mode
+// (record=false). Everything else on this router still requires auth, so we
+// gate per-route below rather than at the router level.
+const EMPTY_STATS = {
+  totalDetected: 0,
+  uniqueAircraft: 0,
+  classification: { commercial: 0, private: 0, cargo: 0, government: 0 },
+  topAircraft: [] as { type: string; count: number }[],
+};
 
 /**
  * @openapi
@@ -55,11 +63,19 @@ router.use(requireAuth);
  *       400: { description: Missing lat/lon }
  *       502: { description: Upstream fetch failed }
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response) => {
   const lat    = parseFloat(req.query.lat    as string);
   const lon    = parseFloat(req.query.lon    as string);
   const radius = parseFloat(req.query.radius as string) || 25;
   const record = req.query.record !== 'false';
+  const isGuest = req.userId === undefined;
+
+  // Guests get the live ephemeral view only — recording sightings is a
+  // signed-in feature because the log/stats endpoints are user-scoped.
+  if (isGuest && record) {
+    res.status(401).json({ error: 'Sign in to record sightings' });
+    return;
+  }
 
   if (isNaN(lat) || isNaN(lon)) {
     res.status(400).json({ error: 'lat and lon are required' });
@@ -87,9 +103,10 @@ router.get('/', async (req: Request, res: Response) => {
 
     if (!allAc.length) {
       log.debug('poll: no aircraft in range, returning lastKnown');
-      const dbStats = getSessionStats(req.userId);
+      const dbStats = isGuest ? EMPTY_STATS : getSessionStats(req.userId);
       // Overhead mode is ephemeral — never resurface a stale lastKnown.
-      const lastKnown = record ? getLastKnownFlight(req.userId) : null;
+      // Guests have no per-user history at all.
+      const lastKnown = record && !isGuest ? getLastKnownFlight(req.userId) : null;
       const response: FlightsResponse = {
         flights: lastKnown ? [lastKnown] : [],
         stats: { ...dbStats, activeCount: 0 },
@@ -220,7 +237,7 @@ router.get('/', async (req: Request, res: Response) => {
       return da - db;
     });
 
-    const dbStats = getSessionStats(req.userId);
+    const dbStats = isGuest ? EMPTY_STATS : getSessionStats(req.userId);
     const response: FlightsResponse = {
       // Home: only the closest. Overhead: up to 3 closest.
       flights: record ? [sorted[0]] : sorted.slice(0, 3),
@@ -255,7 +272,7 @@ router.get('/', async (req: Request, res: Response) => {
  *       400: { description: Missing type }
  *       404: { description: No photo for type }
  */
-router.get('/photo-by-type/:type', (req: Request, res: Response) => {
+router.get('/photo-by-type/:type', requireAuth, (req: Request, res: Response) => {
   const type    = (req.params.type ?? '').trim().toUpperCase();
   const exclude = ((req.query.exclude as string | undefined) ?? '').trim().toUpperCase() || null;
   if (!type) {
@@ -285,7 +302,7 @@ router.get('/photo-by-type/:type', (req: Request, res: Response) => {
  *       200: { description: History }
  *       404: { description: Not found }
  */
-router.get('/:hex/history', (req: Request, res: Response) => {
+router.get('/:hex/history', requireAuth, (req: Request, res: Response) => {
   const history = getFlightHistory(req.params.hex, req.userId);
   if (!history) {
     res.status(404).json({ error: 'Not found' });
@@ -316,7 +333,7 @@ router.get('/:hex/history', (req: Request, res: Response) => {
  *     responses:
  *       200: { description: Sighting log }
  */
-router.get('/log', (req: Request, res: Response) => {
+router.get('/log', requireAuth, (req: Request, res: Response) => {
   const limit    = Math.min(parseInt(req.query.limit  as string) || 50, 200);
   const offset   = parseInt(req.query.offset as string) || 0;
   const fromDate = (req.query.from as string | undefined) || undefined;
