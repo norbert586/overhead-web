@@ -18,8 +18,80 @@ export interface AchievementDef {
   label: string;
   description: string;
   category: AchievementCategory;
-  /** Returns true if userId has satisfied this achievement's criteria */
-  check: (userId: number) => boolean;
+  /** Returns true if the user's stats snapshot satisfies this achievement */
+  check: (ctx: AchievementContext) => boolean;
+}
+
+/**
+ * Snapshot of everything the achievement checks need, built once per
+ * evaluation from three queries. Checking ~130 achievements against this is
+ * pure in-memory work — previously each check ran its own COUNT query.
+ */
+export interface AchievementContext {
+  totalSightings: number;
+  uniqueAircraft: number;
+  distinctDays: number;
+  maxTimesSeen: number;
+  maxInterestScore: number;
+  rareTierCount: number;
+  lowAltitudeCount: number;   // altitude_ft <= 1000
+  highAltitudeCount: number;  // altitude_ft > 40000
+  nightCount: number;         // 00:00–04:00 UTC
+  militaryCount: number;
+  governmentCount: number;
+  aircraftTypes: Set<string>;
+  countries: Set<string>;
+}
+
+function buildContext(userId: number): AchievementContext {
+  const summary = get<{
+    total: number; unique_hex: number; days: number;
+    max_times_seen: number; max_interest: number; rare_count: number;
+    low_alt: number; high_alt: number; night_count: number;
+    military_count: number; government_count: number;
+  }>(
+    `SELECT
+       COUNT(*) AS total,
+       COUNT(DISTINCT hex) AS unique_hex,
+       COUNT(DISTINCT DATE(last_seen)) AS days,
+       COALESCE(MAX(times_seen), 0) AS max_times_seen,
+       COALESCE(MAX(interest_score), 0) AS max_interest,
+       COALESCE(SUM(CASE WHEN interest_tier = 'rare' THEN 1 ELSE 0 END), 0) AS rare_count,
+       COALESCE(SUM(CASE WHEN altitude_ft IS NOT NULL AND altitude_ft <= 1000 THEN 1 ELSE 0 END), 0) AS low_alt,
+       COALESCE(SUM(CASE WHEN altitude_ft > 40000 THEN 1 ELSE 0 END), 0) AS high_alt,
+       COALESCE(SUM(CASE WHEN CAST(substr(last_seen, 12, 2) AS INTEGER) < 4 THEN 1 ELSE 0 END), 0) AS night_count,
+       COALESCE(SUM(CASE WHEN classification = 'military' THEN 1 ELSE 0 END), 0) AS military_count,
+       COALESCE(SUM(CASE WHEN classification = 'government' THEN 1 ELSE 0 END), 0) AS government_count
+     FROM flights WHERE user_id = ?`,
+    [userId],
+  );
+
+  const typeRows = all<{ aircraft_type: string }>(
+    `SELECT DISTINCT aircraft_type FROM flights
+     WHERE user_id = ? AND aircraft_type IS NOT NULL`,
+    [userId],
+  );
+  const countryRows = all<{ country: string }>(
+    `SELECT DISTINCT country FROM flights
+     WHERE user_id = ? AND country IS NOT NULL`,
+    [userId],
+  );
+
+  return {
+    totalSightings:    summary?.total            ?? 0,
+    uniqueAircraft:    summary?.unique_hex       ?? 0,
+    distinctDays:      summary?.days             ?? 0,
+    maxTimesSeen:      summary?.max_times_seen   ?? 0,
+    maxInterestScore:  summary?.max_interest     ?? 0,
+    rareTierCount:     summary?.rare_count       ?? 0,
+    lowAltitudeCount:  summary?.low_alt          ?? 0,
+    highAltitudeCount: summary?.high_alt         ?? 0,
+    nightCount:        summary?.night_count      ?? 0,
+    militaryCount:     summary?.military_count   ?? 0,
+    governmentCount:   summary?.government_count ?? 0,
+    aircraftTypes:     new Set(typeRows.map((r) => r.aircraft_type)),
+    countries:         new Set(countryRows.map((r) => r.country)),
+  };
 }
 
 // Widebody ICAO type codes (large commercial aircraft)
@@ -44,70 +116,35 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     label: 'First Contact',
     description: 'Log your first aircraft sighting.',
     category: 'detection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        'SELECT COUNT(*) as count FROM flights WHERE user_id = ?',
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.totalSightings >= 1,
   },
   {
     id: 'low_pass',
     label: 'Low Pass',
     description: 'Detect an aircraft at or below 1,000 ft.',
     category: 'detection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND altitude_ft IS NOT NULL AND altitude_ft <= 1000`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.lowAltitudeCount >= 1,
   },
   {
     id: 'high_cruiser',
     label: 'High Cruiser',
     description: 'Detect an aircraft cruising above 40,000 ft.',
     category: 'detection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND altitude_ft > 40000`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.highAltitudeCount >= 1,
   },
   {
     id: 'night_watch',
     label: 'Night Watch',
     description: 'Detect an aircraft between 00:00–04:00 UTC.',
     category: 'detection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ?
-           AND CAST(substr(last_seen, 12, 2) AS INTEGER) < 4`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.nightCount >= 1,
   },
   {
     id: 'heavy_iron',
     label: 'Heavy Iron',
     description: 'Detect a widebody aircraft (B747, B777, A380, etc.).',
     category: 'detection',
-    check: (userId) => {
-      const rows = all<{ aircraft_type: string }>(
-        `SELECT DISTINCT aircraft_type FROM flights
-         WHERE user_id = ? AND aircraft_type IS NOT NULL`,
-        [userId],
-      );
-      return rows.some((r) => isWidebody(r.aircraft_type));
-    },
+    check: (ctx) => [...ctx.aircraftTypes].some(isWidebody),
   },
 
   // ── Collection ──────────────────────────────────────────────────────────────
@@ -116,66 +153,35 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     label: 'Century Mark',
     description: 'Log 100 total sightings.',
     category: 'collection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        'SELECT COUNT(*) as count FROM flights WHERE user_id = ?',
-        [userId],
-      );
-      return (r?.count ?? 0) >= 100;
-    },
+    check: (ctx) => ctx.totalSightings >= 100,
   },
   {
     id: 'five_hundred_sightings',
     label: 'Signal Strength',
     description: 'Log 500 total sightings.',
     category: 'collection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        'SELECT COUNT(*) as count FROM flights WHERE user_id = ?',
-        [userId],
-      );
-      return (r?.count ?? 0) >= 500;
-    },
+    check: (ctx) => ctx.totalSightings >= 500,
   },
   {
     id: 'fifty_unique',
     label: 'Distinct Signatures',
     description: 'Track 50 unique aircraft.',
     category: 'collection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        'SELECT COUNT(DISTINCT hex) as count FROM flights WHERE user_id = ?',
-        [userId],
-      );
-      return (r?.count ?? 0) >= 50;
-    },
+    check: (ctx) => ctx.uniqueAircraft >= 50,
   },
   {
     id: 'two_fifty_unique',
     label: 'Broad Spectrum',
     description: 'Track 250 unique aircraft.',
     category: 'collection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        'SELECT COUNT(DISTINCT hex) as count FROM flights WHERE user_id = ?',
-        [userId],
-      );
-      return (r?.count ?? 0) >= 250;
-    },
+    check: (ctx) => ctx.uniqueAircraft >= 250,
   },
   {
     id: 'ten_countries',
     label: 'Global Coverage',
     description: 'Detect aircraft registered in 10 different countries.',
     category: 'collection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(DISTINCT country) as count FROM flights
-         WHERE user_id = ? AND country IS NOT NULL`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 10;
-    },
+    check: (ctx) => ctx.countries.size >= 10,
   },
 
   // ── Rare ────────────────────────────────────────────────────────────────────
@@ -184,98 +190,49 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     label: 'Military Contact',
     description: 'Detect a military aircraft.',
     category: 'rare',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND classification = 'military'`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.militaryCount >= 1,
   },
   {
     id: 'government_vector',
     label: 'Government Vector',
     description: 'Detect a government aircraft.',
     category: 'rare',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND classification = 'government'`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.governmentCount >= 1,
   },
   {
     id: 'repeat_contact',
     label: 'Repeat Contact',
     description: 'Log the same aircraft 10 or more times.',
     category: 'rare',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND times_seen >= 10`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.maxTimesSeen >= 10,
   },
   {
     id: 'rare_tier_contact',
     label: 'Rare Bird',
     description: 'Detect an aircraft scored at the "rare" tier.',
     category: 'rare',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND interest_tier = 'rare'`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.rareTierCount >= 1,
   },
   {
     id: 'score_hunter',
     label: 'Score Hunter',
     description: 'Detect a flight with an interest score of 90 or higher.',
     category: 'rare',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND interest_score >= 90`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx) => ctx.maxInterestScore >= 90,
   },
   {
     id: 'unicorn_hunter',
     label: 'Unicorn Hunter',
     description: 'Detect 10 flights at the "rare" tier.',
     category: 'rare',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights
-         WHERE user_id = ? AND interest_tier = 'rare'`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 10;
-    },
+    check: (ctx) => ctx.rareTierCount >= 10,
   },
   {
     id: 'variety_pack',
     label: 'Variety Pack',
     description: 'Track 25 distinct aircraft types.',
     category: 'collection',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(DISTINCT aircraft_type) as count FROM flights
-         WHERE user_id = ? AND aircraft_type IS NOT NULL`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 25;
-    },
+    check: (ctx) => ctx.aircraftTypes.size >= 25,
   },
 
   // ── Persistence ─────────────────────────────────────────────────────────────
@@ -284,28 +241,14 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     label: 'Persistent',
     description: 'Record sightings on 7 distinct calendar days.',
     category: 'persistence',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(DISTINCT DATE(last_seen)) as count
-         FROM flights WHERE user_id = ?`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 7;
-    },
+    check: (ctx) => ctx.distinctDays >= 7,
   },
   {
     id: 'thirty_day_operator',
     label: 'Long Haul',
     description: 'Record sightings across 30 distinct calendar days.',
     category: 'persistence',
-    check: (userId) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(DISTINCT DATE(last_seen)) as count
-         FROM flights WHERE user_id = ?`,
-        [userId],
-      );
-      return (r?.count ?? 0) >= 30;
-    },
+    check: (ctx) => ctx.distinctDays >= 30,
   },
 
   // ── Country contacts ─────────────────────────────────────────────────────────
@@ -434,13 +377,7 @@ function makeCountryAchievements(): AchievementDef[] {
     label,
     description,
     category: 'country' as AchievementCategory,
-    check: (userId: number) => {
-      const r = get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM flights WHERE user_id = ? AND country = ?`,
-        [userId, country],
-      );
-      return (r?.count ?? 0) >= 1;
-    },
+    check: (ctx: AchievementContext) => ctx.countries.has(country),
   }));
 }
 
@@ -477,22 +414,36 @@ export interface UnlockedAchievement {
   unlockedAt: string;
 }
 
+// The scanner calls evaluateAchievements after every batch (~12s). Stats only
+// drift by one sighting per cycle, so re-evaluating every cycle is wasted
+// work — cap it per user. Unlocks can lag by up to this interval.
+const EVAL_INTERVAL_MS = 5 * 60 * 1000;
+const lastEvalAt = new Map<number, number>();
+
 /**
  * Evaluate all achievements for a user. Only checks achievements not yet
- * unlocked. Returns the list of newly unlocked achievements this call.
+ * unlocked, and at most once per EVAL_INTERVAL_MS per user. Returns the
+ * list of newly unlocked achievements this call.
  *
  * Designed to be called asynchronously after sighting ingestion — any
  * errors are caught so they never crash the scanner loop.
  */
 export function evaluateAchievements(userId: number): string[] {
+  const now = Date.now();
+  if (now - (lastEvalAt.get(userId) ?? 0) < EVAL_INTERVAL_MS) return [];
+  lastEvalAt.set(userId, now);
+
   try {
     const alreadyUnlocked = getUnlockedIds(userId);
+    const locked = ACHIEVEMENTS.filter((def) => !alreadyUnlocked.has(def.id));
+    if (locked.length === 0) return [];
+
+    const ctx = buildContext(userId);
     const newlyUnlocked: string[] = [];
 
-    for (const def of ACHIEVEMENTS) {
-      if (alreadyUnlocked.has(def.id)) continue;
+    for (const def of locked) {
       try {
-        if (def.check(userId)) {
+        if (def.check(ctx)) {
           insertAchievement(userId, def.id);
           newlyUnlocked.push(def.id);
         }

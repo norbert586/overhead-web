@@ -88,6 +88,19 @@ export function runMigrations(): void {
     exec(`CREATE INDEX IF NOT EXISTS idx_flights_user_id ON flights(user_id)`);
   } catch { /* already exists */ }
 
+  // Composite indexes for the hot per-user paths: log/stats reads
+  // (user_id + last_seen), the upsert lookup (user_id + hex), and the
+  // per-event rarity probes (type / operator / route / interest score).
+  try {
+    exec(`
+      CREATE INDEX IF NOT EXISTS idx_flights_user_last_seen ON flights(user_id, last_seen);
+      CREATE INDEX IF NOT EXISTS idx_flights_user_hex       ON flights(user_id, hex);
+      CREATE INDEX IF NOT EXISTS idx_flights_user_type      ON flights(user_id, aircraft_type);
+      CREATE INDEX IF NOT EXISTS idx_flights_user_operator  ON flights(user_id, operator);
+      CREATE INDEX IF NOT EXISTS idx_flights_user_route     ON flights(user_id, origin_iata, destination_iata);
+    `);
+  } catch { /* already exist */ }
+
   // Assign all legacy rows (pre-auth) to user 1
   run(`UPDATE flights SET user_id = 1 WHERE user_id IS NULL`, []);
 
@@ -117,6 +130,8 @@ export function runMigrations(): void {
 
   // Drives the new notable query and any "Interest >= X" filter.
   try { exec(`CREATE INDEX IF NOT EXISTS idx_flights_interest_score ON flights(interest_score)`); }
+  catch { /* already exists */ }
+  try { exec(`CREATE INDEX IF NOT EXISTS idx_flights_user_interest ON flights(user_id, interest_score)`); }
   catch { /* already exists */ }
 
   // ── Phase 3: per-scan position track for pattern detection ────────────────
