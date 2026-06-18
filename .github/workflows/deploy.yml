@@ -16,8 +16,24 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
             set -e
+            # better-sqlite3 is a native module. When no prebuilt binary matches
+            # the server's Node/libc, npm compiles it from source, which needs
+            # make/g++/python3. Without them `npm install` fails — so make sure
+            # the toolchain is present (idempotent; a no-op once installed).
+            if ! command -v make >/dev/null 2>&1; then
+              apt-get update && apt-get install -y build-essential python3
+            fi
             cd /var/www/overhead-web
             git pull origin main
-            cd backend && npm install && npm run build && pm2 restart overhead-backend
-            cd ../frontend && npm install && npm run build
+            # One command per line on purpose. In a `a && b && c` chain, `set -e`
+            # does NOT abort when a non-final command fails, so a broken backend
+            # `npm install` would silently skip the build + restart and still
+            # report success. Separate statements let `set -e` stop the deploy.
+            cd backend
+            npm install
+            npm run build
+            pm2 restart overhead-backend
+            cd ../frontend
+            npm install
+            npm run build
             echo "Deploy complete"

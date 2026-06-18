@@ -116,6 +116,13 @@ async function scanAll(): Promise<void> {
 
 export function startScanner(): void {
   log.info({ intervalSec: SCAN_INTERVAL_MS / 1000 }, 'background scan loop started');
-  void scanAll();
-  setInterval(() => void scanAll(), SCAN_INTERVAL_MS);
+  // scanAll() can reject if a synchronous DB call (e.g. getAllUsersWithLocation)
+  // throws. A `void`-ed rejection becomes an unhandledRejection, which by
+  // default takes the whole process down — and with it everyone using the app.
+  // Always attach a catch so a bad scan cycle is logged, never fatal.
+  const runScan = () => {
+    scanAll().catch((err) => log.error({ err }, 'scan cycle failed'));
+  };
+  runScan();
+  setInterval(runScan, SCAN_INTERVAL_MS);
 }
