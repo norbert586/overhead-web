@@ -6,6 +6,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 ## 2026-06-18
 
 - Fix production 502s: repair broken deploy + add backend crash guards ([#55](https://github.com/norbert586/overhead-web/pull/55))
+- Fix deploy timeout: increase command_timeout to 20m for native compile ([#56](https://github.com/norbert586/overhead-web/pull/56))
 
 ## 2026-06-10
 
