@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-07-01
+
+- Redesign flight logging: catch-model recording replaces background scanner ([#57](https://github.com/norbert586/overhead-web/pull/57))
+
 ## 2026-06-18
 
 - Fix production 502s: repair broken deploy + add backend crash guards ([#55](https://github.com/norbert586/overhead-web/pull/55))
