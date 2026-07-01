@@ -103,12 +103,12 @@ function App() {
 
   // ── The catch feed ─────────────────────────────────────────────────────────
   // Live device location is the catch point. If GPS is unavailable (denied,
-  // unsupported, errored) we fall back to the saved home location. Polling —
-  // and therefore catching — only runs while the page is actually visible:
-  // leave the page and you stop catching.
+  // unsupported, errored) we fall back to the saved home location. Catching
+  // runs anywhere in the app — checking your log or stats still counts as
+  // being here — but only while the page is actually visible: leave the page
+  // and you stop catching.
   const pageVisible = usePageVisibility();
-  const onFlightView = isAuthenticated && view === 'flight';
-  const geo = useGeolocation({ enabled: onFlightView });
+  const geo = useGeolocation({ enabled: isAuthenticated });
 
   const geoUnavailable =
     geo.status === 'denied' || geo.status === 'unsupported' || geo.status === 'error';
@@ -123,7 +123,7 @@ function App() {
     longitude:       catchLon,
     radiusNm:        settings.radiusNm,
     pollIntervalSec: CATCH_POLL_SEC,
-    enabled:         onFlightView && pageVisible && catchLat !== null && catchLon !== null,
+    enabled:         isAuthenticated && pageVisible && catchLat !== null && catchLon !== null,
   });
 
   // Session catch tally — distinct aircraft recorded since this page load.
@@ -292,7 +292,7 @@ function App() {
         view={view}
         setView={setView}
         radiusNm={settings.radiusNm}
-        listening={onFlightView && pageVisible && catchLat !== null}
+        listening={isAuthenticated && pageVisible && catchLat !== null}
         latitude={catchLat}
         longitude={catchLon}
         userEmail={user?.email}

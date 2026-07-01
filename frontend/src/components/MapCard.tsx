@@ -33,7 +33,7 @@ export default function MapCard() {
     });
 
     L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
       { subdomains: 'abcd', maxZoom: 19 },
     ).addTo(map);
 
@@ -44,16 +44,16 @@ export default function MapCard() {
 
     circleRef.current = L.circle([lat, lon], {
       radius:      radiusNm * NM_TO_M,
-      color:       'rgba(126, 184, 224, 0.55)',
-      fillColor:   'rgba(126, 184, 224, 0.06)',
+      color:       'rgba(30, 111, 160, 0.55)',
+      fillColor:   'rgba(30, 111, 160, 0.06)',
       fillOpacity: 1,
       weight:      1,
     }).addTo(map);
 
     markerRef.current = L.circleMarker([lat, lon], {
       radius:      4,
-      color:       '#7eb8e0',
-      fillColor:   '#7eb8e0',
+      color:       '#1E6FA0',
+      fillColor:   '#1E6FA0',
       fillOpacity: 0.9,
       weight:      0,
     }).addTo(map);

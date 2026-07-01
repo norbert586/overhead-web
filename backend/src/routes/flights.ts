@@ -241,11 +241,16 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
         trajectoryReasons:      [],
       });
 
+      // Signed-in users still see their real catch history on ephemeral polls
+      // (throttled or expanded-radius), so NEW badges and seen-counts don't
+      // flicker between recording and non-recording responses.
+      const history = !isGuest ? getFlightHistory(ac.hex, req.userId!) : null;
+
       return {
         ...base,
-        timesSeen: 0,
-        firstSeen: nowIso,
-        lastSeen:  nowIso,
+        timesSeen: history?.times_seen ?? 0,
+        firstSeen: history?.first_seen ?? nowIso,
+        lastSeen:  history?.last_seen  ?? nowIso,
         ...signals,
         interestScore:   score.score,
         interestTier:    score.tier,

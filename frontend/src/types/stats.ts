@@ -2,14 +2,16 @@ import type { Flight } from './flight';
 
 export interface StatsSummaryData {
   summary: {
-    totalEvents:    number;
+    totalCatches:   number;
     uniqueAircraft: number;
     operators:      number;
     countries:      number;
     avgAltitudeFt:  number | null;
+    streakDays:     number;
+    catchDays:      number;
   };
   summary24h: {
-    events:    number;
+    catches:   number;
     aircraft:  number;
     operators: number;
     govCount:  number;
@@ -83,7 +85,6 @@ export interface StatsMostSeenData {
     operator:       string | null;
     country:        string | null;
     maxTimesSeen:   number;
-    eventCount:     number;
     firstSeenEver:  string;
     lastSeenEver:   string;
     classification: string;

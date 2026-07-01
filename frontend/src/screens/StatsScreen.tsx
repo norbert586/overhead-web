@@ -32,19 +32,19 @@ import type { Flight } from '../types/flight';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CLASS_COLORS: Record<string, string> = {
-  commercial: '#5b9bd5',
-  private:    '#9b7ec8',
-  cargo:      '#c4935a',
-  government: '#d46b6b',
-  military:   '#d46b6b',
-  unknown:    '#5a6370',
+  commercial: '#1E6FA0',
+  private:    '#8E4FB4',
+  cargo:      '#B07023',
+  government: '#C4384F',
+  military:   '#C4384F',
+  unknown:    '#8B8778',
 };
 
 const THREAT_LEVELS = [
-  { max: 2,        label: 'CLEAR',    color: '#4a9b6f' },
-  { max: 6,        label: 'LOW',      color: '#c4935a' },
-  { max: 12,       label: 'ELEVATED', color: '#d4864a' },
-  { max: Infinity, label: 'HIGH',     color: '#d46b6b' },
+  { max: 2,        label: 'CLEAR',    color: '#3B7A4E' },
+  { max: 6,        label: 'LOW',      color: '#B07023' },
+  { max: 12,       label: 'ELEVATED', color: '#C25E1E' },
+  { max: Infinity, label: 'HIGH',     color: '#C4384F' },
 ];
 
 function getThreatLevel(govCount: number) {
@@ -365,7 +365,7 @@ function NotableCarousel({ flights }: { flights: Flight[] }) {
   }
 
   if (flights.length === 0) {
-    return <div className="s-empty">No notable activity yet</div>;
+    return <div className="s-empty">No rare catches yet — they'll land here when you snag one</div>;
   }
 
   return (
@@ -421,10 +421,9 @@ function MostSeenRow({ a, rank }: {
             ['Hex', a.hex], ['Registration', a.registration],
             ['Callsign', a.callsign], ['Aircraft', type !== '—' ? type : null],
             ['Operator', a.operator], ['Country', a.country],
-            ['Times seen', fmt(a.maxTimesSeen)],
-            ['Events in DB', fmt(a.eventCount)],
-            ['First seen', timeAgo(a.firstSeenEver)],
-            ['Last seen', timeAgo(a.lastSeenEver)],
+            ['Times caught', fmt(a.maxTimesSeen)],
+            ['First caught', timeAgo(a.firstSeenEver)],
+            ['Last caught', timeAgo(a.lastSeenEver)],
           ].filter(([, v]) => v).map(([l, v]) => (
             <div className="s-exp-detail-row" key={String(l)}>
               <span className="log-detail-label">{l}</span>
@@ -480,7 +479,7 @@ export default function StatsScreen() {
   const maxAlt     = altitude.data     ? Math.max(...altitude.data.altitudeDistribution.map((a) => a.count), 1) : 1;
 
   const AXIS_STYLE = {
-    tick:     { fill: '#55667a', fontSize: 10, fontFamily: "'IBM Plex Mono', monospace" },
+    tick:     { fill: '#8A8B7F', fontSize: 10, fontFamily: "'B612 Mono', monospace" },
     axisLine: false as const,
     tickLine: false as const,
   };
@@ -519,9 +518,9 @@ export default function StatsScreen() {
         <SCard title="Last 24 Hours">
           {summary.loading ? <SCardLoading /> : summary.error ? <SCardError /> : (
             [
-              ['Events',    fmt(summary.data!.summary24h.events)],
-              ['Aircraft',  fmt(summary.data!.summary24h.aircraft)],
-              ['Operators', fmt(summary.data!.summary24h.operators)],
+              ['Aircraft caught', fmt(summary.data!.summary24h.catches)],
+              ['Unique aircraft', fmt(summary.data!.summary24h.aircraft)],
+              ['Operators',       fmt(summary.data!.summary24h.operators)],
             ].map(([l, v]) => (
               <div className="s-stat-row" key={l}>
                 <span className="s-stat-label">{l}</span>
@@ -535,11 +534,14 @@ export default function StatsScreen() {
         <SCard title="All Time">
           {summary.loading ? <SCardLoading /> : summary.error ? <SCardError /> : (
             [
-              ['Total events',    fmt(summary.data!.summary.totalEvents)],
+              ['Total catches',   fmt(summary.data!.summary.totalCatches)],
               ['Unique aircraft', fmt(summary.data!.summary.uniqueAircraft)],
               ['Operators',       fmt(summary.data!.summary.operators)],
               ['Countries',       fmt(summary.data!.summary.countries)],
-              ['Avg altitude',    fmtAlt(summary.data!.summary.avgAltitudeFt)],
+              ['Catch streak',    summary.data!.summary.streakDays > 0
+                ? `${fmt(summary.data!.summary.streakDays)} day${summary.data!.summary.streakDays === 1 ? '' : 's'}`
+                : '—'],
+              ['Days out',        fmt(summary.data!.summary.catchDays)],
             ].map(([l, v]) => (
               <div className="s-stat-row" key={l}>
                 <span className="s-stat-label">{l}</span>
@@ -559,16 +561,16 @@ export default function StatsScreen() {
                     name: c.classification, total: c.totalCount, h24: c.count24h,
                   }))} barGap={4} barSize={28}>
                     <XAxis dataKey="name" {...AXIS_STYLE} />
-                    <YAxis {...AXIS_STYLE} width={36} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                    <YAxis {...AXIS_STYLE} width={36} allowDecimals={false} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(34, 48, 59, 0.03)' }} />
                     <Bar dataKey="total" name="All time" radius={[2, 2, 0, 0]}>
                       {summary.data!.classification.map((c) => (
-                        <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#5a6370'} fillOpacity={0.75} />
+                        <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#8B8778'} fillOpacity={0.75} />
                       ))}
                     </Bar>
                     <Bar dataKey="h24" name="Last 24h" radius={[2, 2, 0, 0]}>
                       {summary.data!.classification.map((c) => (
-                        <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#5a6370'} />
+                        <Cell key={c.classification} fill={CLASS_COLORS[c.classification] ?? '#8B8778'} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -594,15 +596,15 @@ export default function StatsScreen() {
         </SCard>
 
         {/* ── Hourly activity ── */}
-        <SCard title="Hourly Activity (Last 24h)">
+        <SCard title="When You Catch (Last 24h)">
           {activity.loading ? <SCardLoading /> : activity.error ? <SCardError /> : (
             <div className="s-chart-sm">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyFull} barSize={8}>
                   <XAxis dataKey="label" {...AXIS_STYLE} interval={3} />
-                  <YAxis {...AXIS_STYLE} width={28} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                  <Bar dataKey="events" fill="#7eb8e0" fillOpacity={0.7} radius={[2, 2, 0, 0]} />
+                  <YAxis {...AXIS_STYLE} width={28} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(34, 48, 59, 0.03)' }} />
+                  <Bar dataKey="events" fill="#1E6FA0" fillOpacity={0.7} radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -610,15 +612,15 @@ export default function StatsScreen() {
         </SCard>
 
         {/* ── Weekly breakdown ── */}
-        <SCard title="Weekly Activity (Last 7 Days)" className="s-full">
+        <SCard title="Catches by Day (Last 7 Days)" className="s-full">
           {activity.loading ? <SCardLoading /> : activity.error ? <SCardError /> : (
             <div className="s-chart-md">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={weeklyFull} barSize={36}>
                   <XAxis dataKey="label" {...AXIS_STYLE} />
-                  <YAxis {...AXIS_STYLE} width={36} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                  <Bar dataKey="events" fill="#7eb8e0" fillOpacity={0.7} radius={[2, 2, 0, 0]} />
+                  <YAxis {...AXIS_STYLE} width={36} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(34, 48, 59, 0.03)' }} />
+                  <Bar dataKey="events" fill="#1E6FA0" fillOpacity={0.7} radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -641,15 +643,15 @@ export default function StatsScreen() {
           )}
         </SCard>
 
-        {/* ── Recent notable ── */}
-        <SCard title="Recent Notable Activity" className="s-notable">
+        {/* ── Rarest catches ── */}
+        <SCard title="Rarest Catches" className="s-notable">
           {notable.loading ? <SCardLoading /> : notable.error ? <SCardError /> : (
             <NotableCarousel flights={notable.data!.recentNotable} />
           )}
         </SCard>
 
-        {/* ── Most seen aircraft ── */}
-        <SCard title="Most Seen Aircraft" className="s-full">
+        {/* ── Most caught aircraft ── */}
+        <SCard title="Most Caught Aircraft" className="s-full">
           {mostSeen.loading ? <SCardLoading /> : mostSeen.error ? <SCardError /> : (
             <div className="s-exp-list">
               <div className="s-exp-header s-exp-header-seen">
@@ -658,7 +660,7 @@ export default function StatsScreen() {
                 <span className="s-col-label">Registration</span>
                 <span className="s-col-label">Type</span>
                 <span className="s-col-label">Operator</span>
-                <span className="s-col-label s-col-right">Times seen</span>
+                <span className="s-col-label s-col-right">Caught</span>
                 <span />
               </div>
               {mostSeen.data!.mostSeenAircraft.map((a, i) => (

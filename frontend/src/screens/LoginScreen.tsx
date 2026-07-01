@@ -38,7 +38,7 @@ export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassw
           </svg>
           <span className="auth-wordmark">OVERHEAD</span>
         </div>
-        <p className="auth-subtitle">Aircraft intelligence — sign in to continue</p>
+        <p className="auth-subtitle">Catch the flights overhead — sign in to continue</p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label">

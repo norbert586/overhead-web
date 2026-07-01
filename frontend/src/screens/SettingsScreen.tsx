@@ -205,26 +205,26 @@ function RadiusDiagram({ radiusNm }: { radiusNm: number }) {
       style={{ maxWidth: 200, display: 'block' }}
     >
       {/* Reference outer ring at the max hearing radius */}
-      <circle cx={CX} cy={CY} r={MAX_R} fill="none" stroke="rgba(126,184,224,0.08)" strokeWidth="1" strokeDasharray="2 3" />
+      <circle cx={CX} cy={CY} r={MAX_R} fill="none" stroke="rgba(30, 111, 160, 0.08)" strokeWidth="1" strokeDasharray="2 3" />
 
       {/* Active hearing ring */}
-      <circle cx={CX} cy={CY} r={ring} fill="rgba(126,184,224,0.06)" stroke="rgba(126,184,224,0.55)" strokeWidth="1" />
+      <circle cx={CX} cy={CY} r={ring} fill="rgba(30, 111, 160, 0.06)" stroke="rgba(30, 111, 160, 0.55)" strokeWidth="1" />
 
       {/* Center crosshair */}
-      <line x1={CX - 10} y1={CY} x2={CX - 6} y2={CY} stroke="rgba(126,184,224,0.5)" strokeWidth="1" />
-      <line x1={CX + 6}  y1={CY} x2={CX + 10} y2={CY} stroke="rgba(126,184,224,0.5)" strokeWidth="1" />
-      <line x1={CX} y1={CY - 10} x2={CX} y2={CY - 6} stroke="rgba(126,184,224,0.5)" strokeWidth="1" />
-      <line x1={CX} y1={CY + 6}  x2={CX} y2={CY + 10} stroke="rgba(126,184,224,0.5)" strokeWidth="1" />
+      <line x1={CX - 10} y1={CY} x2={CX - 6} y2={CY} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
+      <line x1={CX + 6}  y1={CY} x2={CX + 10} y2={CY} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
+      <line x1={CX} y1={CY - 10} x2={CX} y2={CY - 6} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
+      <line x1={CX} y1={CY + 6}  x2={CX} y2={CY + 10} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
 
       {/* Center dot */}
-      <circle cx={CX} cy={CY} r="2.5" fill="#7eb8e0" />
+      <circle cx={CX} cy={CY} r="2.5" fill="#1E6FA0" />
 
       {/* Aircraft glyphs — coloured if inside the active ring */}
       {planes.map((p, i) => {
         const dx = p.x - CX;
         const dy = p.y - CY;
         const inside = Math.sqrt(dx * dx + dy * dy) <= ring;
-        const color = inside ? '#7eb8e0' : 'rgba(126,184,224,0.16)';
+        const color = inside ? '#1E6FA0' : 'rgba(30, 111, 160, 0.16)';
         return (
           <g key={i} transform={`translate(${p.x},${p.y}) rotate(${p.rot})`}>
             <path d="M 0,-4 L 3,3 L 0,1.5 L -3,3 Z" fill={color} />

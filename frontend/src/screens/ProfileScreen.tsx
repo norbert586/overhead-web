@@ -237,16 +237,16 @@ function ScoreExplainer() {
 // ── Rank tier color ───────────────────────────────────────────────────────────
 
 const TIER_COLORS: Record<string, string> = {
-  OBSERVER:     '#5a6370',
-  ANALYST:      '#5b9bd5',
-  TRACKER:      '#9b7ec8',
-  SPOTTER:      '#c4935a',
-  SENTINEL:     '#d4864a',
-  INTELLIGENCE: '#7eb8e0',
+  OBSERVER:     '#8B8778',
+  ANALYST:      '#1E6FA0',
+  TRACKER:      '#8E4FB4',
+  SPOTTER:      '#B07023',
+  SENTINEL:     '#C25E1E',
+  INTELLIGENCE: '#1E6FA0',
 };
 
 function tierColor(tier: string): string {
-  return TIER_COLORS[tier] ?? '#5a6370';
+  return TIER_COLORS[tier] ?? '#8B8778';
 }
 
 // ── Rank Card ─────────────────────────────────────────────────────────────────
