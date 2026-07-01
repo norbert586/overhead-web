@@ -169,7 +169,6 @@ export interface UserProfile {
   latitude: number | null;
   longitude: number | null;
   radiusNm: number;
-  pollIntervalSec: number;
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -243,7 +242,6 @@ export async function updateProfile(settings: {
   latitude: number | null;
   longitude: number | null;
   radiusNm: number;
-  pollIntervalSec: number;
 }): Promise<UserProfile> {
   const res = await apiFetch(`${BASE_URL}/api/user/profile`, {
     method: 'PUT',

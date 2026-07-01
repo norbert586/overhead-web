@@ -10,15 +10,17 @@ Live at [overheadflight.com](https://overheadflight.com)
 
 ## What it does
 
-Every 12 seconds, Overhead polls the closest aircraft within your configured radius. When a contact appears, it:
+Overhead works like catching: you have to be there. Open the app when you hear a plane, and it grabs your live location and listens. While the page is open and visible, every aircraft that enters your hearing radius (1–15 nm, you choose) gets caught — looked up, classified, and saved to your log:
 
 1. **Looks up the registration** against the aircraft registry to find manufacturer, owner, and country of origin
 2. **Looks up the callsign** to find the operating airline and origin/destination airports
 3. **Classifies the flight** — Commercial, Cargo, Government/Military, Private, or Unknown — using a priority-based rule engine
-4. **Stores everything** to a local SQLite database tied to your account
-5. **Displays it** in a clean dashboard with telemetry, route map, photo, and session stats
+4. **Catches it** — saves the sighting to a local SQLite database tied to your account, with a NEW badge for first-ever airframes
+5. **Displays it** in a clean dashboard with telemetry, photo, and session stats
 
-The result: you glance at your phone and know you're watching UAL2044 — a United 737 — climbing out of Newark, heading to Denver, 14.9nm west and already out of range. You've seen it once before.
+Leave the page and you stop catching — stats are built only from flights you were actually there for. If your device can't share its location (desktop browsers, denied permissions), a saved home location acts as the fallback catch point. There is no background scanning: the server only touches the ADS-B feed while someone actually has the app open.
+
+The result: you hear a rumble, open your phone, and catch UAL2044 — a United 737 — climbing out of Newark, heading to Denver, 3.2 nm west. You've caught it once before.
 
 ---
 

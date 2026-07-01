@@ -4,7 +4,6 @@ import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import { initDb } from './database/db';
 import { runMigrations } from './database/migrations';
-import { startScanner } from './services/scanner';
 import { swaggerSpec } from './swagger';
 import { logger, httpLogger } from './logger';
 import { isEmailConfigured } from './services/email';
@@ -19,7 +18,6 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 async function start() {
   await initDb();
   runMigrations();
-  startScanner();
 
   const app = express();
   app.use(cors());

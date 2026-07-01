@@ -5544,3 +5544,57 @@ body {
   margin: 6px 0;
   line-height: 1.55;
 }
+
+/* ── Catch model ──────────────────────────────────────────────────────────── */
+
+/* Paused scan indicator — solid dim dot, no pulse */
+.scan-dot-paused {
+  background: var(--text-dim);
+  animation: none;
+  box-shadow: none;
+}
+
+/* First-ever catch badge on a nearby row */
+.overhead-new-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--bg-primary, #0a0e14);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  text-transform: uppercase;
+}
+
+/* Repeat-catch counter on a nearby row */
+.overhead-seen-count {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+/* Session tally under the nearby list (recording mode) */
+.overhead-session-note {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.overhead-fallback-note {
+  color: var(--text-dim);
+}
+
+/* Hearing radius slider on the Settings screen */
+.settings-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  margin: 8px 0;
+}

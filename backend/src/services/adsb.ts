@@ -3,7 +3,7 @@ import type { AdsbAircraft } from '../types/flight';
 
 const log = logger.child({ module: 'adsb' });
 
-const BASE        = 'https://api.adsb.lol/v2/closest';
+const BASE        = process.env.ADSB_BASE_URL ?? 'https://api.adsb.lol/v2/closest';
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500; // ms between attempts
 
@@ -60,17 +60,4 @@ export async function fetchAll(
 
   log.error({ err: lastErr }, 'adsb.lol fetch error');
   return [];
-}
-
-/**
- * Returns only the single closest aircraft, or null if none in range.
- * Kept for callers that only need one aircraft.
- */
-export async function fetchClosest(
-  lat: number,
-  lon: number,
-  radiusNm: number,
-): Promise<AdsbAircraft | null> {
-  const aircraft = await fetchAll(lat, lon, radiusNm);
-  return aircraft[0] ?? null;
 }

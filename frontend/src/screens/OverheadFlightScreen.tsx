@@ -17,9 +17,20 @@ import type { Flight } from '../types/flight';
 interface OverheadFlightScreenProps {
   flights: Flight[];
   matchedRadiusNm?: number;
+  /** True when sightings on this screen are being recorded (signed-in catch mode). */
+  recording?: boolean;
+  /** Distinct aircraft caught since the page was opened. */
+  sessionCaught?: number;
+  /** How many of those were first-ever catches. */
+  sessionNew?: number;
+  /** True when catching from the saved home location instead of live GPS. */
+  usingFallback?: boolean;
 }
 
 function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: () => void; isActive: boolean }) {
+  // timesSeen >= 1 means this sighting was recorded; exactly 1 means it's the
+  // first time this airframe has ever appeared in the user's log.
+  const isNewCatch = flight.timesSeen === 1;
   return (
     <button
       type="button"
@@ -28,6 +39,10 @@ function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: (
     >
       <div className="overhead-nearby-head">
         <span className="overhead-nearby-callsign">{flight.callsign ?? '——'}</span>
+        {isNewCatch && <span className="overhead-new-badge">NEW</span>}
+        {flight.timesSeen > 1 && (
+          <span className="overhead-seen-count">seen {flight.timesSeen}×</span>
+        )}
         <ClassificationBadge classification={flight.classification} />
       </div>
       <div className="overhead-nearby-sub">
@@ -48,7 +63,14 @@ function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: (
   );
 }
 
-export default function OverheadFlightScreen({ flights, matchedRadiusNm }: OverheadFlightScreenProps) {
+export default function OverheadFlightScreen({
+  flights,
+  matchedRadiusNm,
+  recording = false,
+  sessionCaught = 0,
+  sessionNew = 0,
+  usingFallback = false,
+}: OverheadFlightScreenProps) {
   const [activeIdx, setActiveIdx] = useState(0);
   const safeIdx = Math.min(activeIdx, flights.length - 1);
   const active = flights[safeIdx];
@@ -104,7 +126,9 @@ export default function OverheadFlightScreen({ flights, matchedRadiusNm }: Overh
             <span className="overhead-nearby-count">{flights.length}</span>
           </div>
           {matchedRadiusNm ? (
-            <div className="overhead-expanded-note">Nearest within {matchedRadiusNm} nm</div>
+            <div className="overhead-expanded-note">
+              Nearest within {matchedRadiusNm} nm — beyond your hearing radius, not caught
+            </div>
           ) : null}
           <div className="overhead-nearby-list">
             {flights.map((f, i) => (
@@ -116,7 +140,16 @@ export default function OverheadFlightScreen({ flights, matchedRadiusNm }: Overh
               />
             ))}
           </div>
-          <div className="overhead-ephemeral-note">Live · not recorded</div>
+          {recording ? (
+            <div className="overhead-session-note">
+              <span>
+                Session · {sessionCaught} caught{sessionNew > 0 ? ` · ${sessionNew} new` : ''}
+              </span>
+              {usingFallback && <span className="overhead-fallback-note">Home location</span>}
+            </div>
+          ) : (
+            <div className="overhead-ephemeral-note">Live · not recorded</div>
+          )}
         </div>
       </div>
     </div>

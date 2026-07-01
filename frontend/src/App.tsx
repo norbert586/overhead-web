@@ -3,11 +3,9 @@ import './App.css';
 import TopBar from './components/TopBar';
 import BottomBar from './components/BottomBar';
 import EmptyState from './components/EmptyState';
-import FlightScreen from './screens/FlightScreen';
 import OverheadFlightScreen from './screens/OverheadFlightScreen';
-import FlightTabs from './components/FlightTabs';
-import type { TabKey } from './components/FlightTabs';
 import { useGeolocation } from './hooks/useGeolocation';
+import { usePageVisibility } from './hooks/usePageVisibility';
 import LogScreen from './screens/LogScreen';
 import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -37,6 +35,10 @@ function readUrlToken(param: string): string | null {
   return value && value.length > 0 ? value : null;
 }
 
+// Fixed poll cadence for the catch feed. Not user-configurable — the server
+// enforces its own write-frequency floor regardless.
+const CATCH_POLL_SEC = 10;
+
 function App() {
   const { user, isAuthenticated, login, logout, refreshUser } = useAuth();
   // Snapshot URL params once on mount so React Strict Mode's double-effect
@@ -45,7 +47,6 @@ function App() {
   const [verifyToken, setVerifyToken] = useState<string | null>(() => readUrlToken('verify_token'));
   const [authView, setAuthView] = useState<AuthView>('guest');
   const [view, setView] = useState<View>('flight');
-  const [flightTab, setFlightTab] = useState<TabKey>('home');
   const { settings, saveSettings, syncFromServer, hasSettings } = useSettings();
   const profileFetched = useRef(false);
 
@@ -53,7 +54,8 @@ function App() {
   // Strategy:
   //   1. Server has location  → use server (canonical across devices)
   //   2. Server has no location but localStorage does → push local to server
-  //   3. Neither has location → send the user to Settings
+  // A fallback location is optional under the catch model (live GPS is the
+  // primary catch point), so new users are never forced to Settings.
   useEffect(() => {
     if (!isAuthenticated) {
       profileFetched.current = false;
@@ -72,33 +74,24 @@ function App() {
             latitude: profile.latitude,
             longitude: profile.longitude,
             radiusNm: profile.radiusNm,
-            pollIntervalSec: profile.pollIntervalSec,
           });
-          // Stay on flight view — they have data
         } else if (settings.latitude !== null && settings.longitude !== null) {
           // Migration path: they had localStorage data before server persistence existed
-          const localSettings = {
+          updateProfile({
             latitude: settings.latitude,
             longitude: settings.longitude,
             radiusNm: settings.radiusNm,
-            pollIntervalSec: settings.pollIntervalSec,
-          };
-          updateProfile(localSettings).catch(() => {});
-          // Keep existing local state, no view change needed
-        } else {
-          // Brand new user or no location anywhere — guide them to Settings
-          setView('settings');
+          }).catch(() => {});
         }
       })
       .catch(() => {
-        // Network failure — fall back to whatever localStorage has
-        if (!hasSettings) setView('settings');
+        // Network failure — localStorage settings remain in effect
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   // Wrapped save: writes to localStorage + pushes to server.
-  // After a first-time location setup, navigates to the flight view.
+  // After a first-time fallback-location setup, navigates back to catching.
   async function handleSaveSettings(s: typeof settings) {
     const isFirstSetup = !hasSettings && s.latitude !== null && s.longitude !== null;
     saveSettings(s);
@@ -108,28 +101,53 @@ function App() {
     }
   }
 
-  const { data, loading, error, lastPollTime } = useFlightData({
-    latitude:        settings.latitude,
-    longitude:       settings.longitude,
+  // ── The catch feed ─────────────────────────────────────────────────────────
+  // Live device location is the catch point. If GPS is unavailable (denied,
+  // unsupported, errored) we fall back to the saved home location. Polling —
+  // and therefore catching — only runs while the page is actually visible:
+  // leave the page and you stop catching.
+  const pageVisible = usePageVisibility();
+  const onFlightView = isAuthenticated && view === 'flight';
+  const geo = useGeolocation({ enabled: onFlightView });
+
+  const geoUnavailable =
+    geo.status === 'denied' || geo.status === 'unsupported' || geo.status === 'error';
+  const hasFallback = settings.latitude !== null && settings.longitude !== null;
+  const usingFallback = geoUnavailable && hasFallback;
+
+  const catchLat = usingFallback ? settings.latitude : geo.latitude;
+  const catchLon = usingFallback ? settings.longitude : geo.longitude;
+
+  const { data, lastPollTime } = useFlightData({
+    latitude:        catchLat,
+    longitude:       catchLon,
     radiusNm:        settings.radiusNm,
-    pollIntervalSec: settings.pollIntervalSec,
-    enabled:         isAuthenticated,
+    pollIntervalSec: CATCH_POLL_SEC,
+    enabled:         onFlightView && pageVisible && catchLat !== null && catchLon !== null,
   });
 
-  // Live device location for the Overhead tab. Only requested when the user is
-  // authenticated, on the flight view, and actually viewing the Overhead tab —
-  // we don't want to ask for location permission until they ask for it.
-  const overheadGeoEnabled = isAuthenticated && view === 'flight' && flightTab === 'overhead';
-  const overheadGeo = useGeolocation({ enabled: overheadGeoEnabled });
+  // Session catch tally — distinct aircraft recorded since this page load.
+  // Recorded flights come back with timesSeen >= 1; display-only contacts
+  // (expanded radius) come back with timesSeen 0 and don't count.
+  const sessionHexes = useRef(new Map<string, boolean>()); // hex → was new to the log
+  const [sessionCaught, setSessionCaught] = useState(0);
+  const [sessionNew, setSessionNew] = useState(0);
 
-  const overhead = useFlightData({
-    latitude:        overheadGeo.latitude,
-    longitude:       overheadGeo.longitude,
-    radiusNm:        10,
-    pollIntervalSec: settings.pollIntervalSec,
-    enabled:         overheadGeoEnabled && overheadGeo.status === 'ready',
-    record:          false,
-  });
+  useEffect(() => {
+    const flights = data?.flights ?? [];
+    let changed = false;
+    for (const f of flights) {
+      if (f.timesSeen >= 1 && !sessionHexes.current.has(f.hex)) {
+        sessionHexes.current.set(f.hex, f.timesSeen === 1);
+        changed = true;
+      }
+    }
+    if (changed) {
+      const entries = [...sessionHexes.current.values()];
+      setSessionCaught(entries.length);
+      setSessionNew(entries.filter(Boolean).length);
+    }
+  }, [data]);
 
   // Email-verification link — works whether or not the user is logged in.
   // After they hit Continue we clear the token and fall through to normal
@@ -227,49 +245,39 @@ function App() {
       return <AdminScreen />;
     }
 
-    // Flight view
-    if (!hasSettings) {
-      return <EmptyState variant="no-settings" onOpenSettings={() => setView('settings')} />;
+    // Catch view — the main screen. Live aircraft with recording.
+    const flights = data?.flights ?? [];
+
+    // Whenever we have any flight data, show it — even if a refetch is in
+    // flight or geolocation briefly flickered back to 'loading'. Empty
+    // states should only appear when we genuinely have nothing to show.
+    if (flights.length > 0) {
+      return (
+        <OverheadFlightScreen
+          flights={flights}
+          matchedRadiusNm={data?.matchedRadiusNm}
+          recording
+          sessionCaught={sessionCaught}
+          sessionNew={sessionNew}
+          usingFallback={usingFallback}
+        />
+      );
     }
 
-    function renderHomePane() {
-      if (loading && !data)            return <EmptyState variant="no-aircraft" />;
-      if (error)                       return <EmptyState variant="no-aircraft" />;
-      const homeFlights = data?.flights ?? [];
-      if (homeFlights.length === 0)    return <EmptyState variant="no-aircraft" />;
-      return <FlightScreen flight={homeFlights[0]} />;
+    // GPS unavailable and no saved fallback — nothing to catch from.
+    if (geoUnavailable && !hasFallback) {
+      return (
+        <EmptyState
+          variant="geo-denied"
+          onRetry={geo.retry}
+          onOpenSettings={() => setView('settings')}
+        />
+      );
     }
-
-    function renderOverheadPane() {
-      const overheadFlights = overhead.data?.flights ?? [];
-
-      // Whenever we have any flight data, show it — even if a refetch is in
-      // flight or geolocation briefly flickered back to 'loading'. Empty
-      // states should only appear when we genuinely have nothing to show.
-      if (overheadFlights.length > 0) {
-        return <OverheadFlightScreen flights={overheadFlights} matchedRadiusNm={overhead.data?.matchedRadiusNm} />;
-      }
-
-      if (overheadGeo.status === 'denied' || overheadGeo.status === 'unsupported') {
-        return <EmptyState variant="geo-denied" onRetry={overheadGeo.retry} />;
-      }
-      if (overheadGeo.status === 'error') {
-        return <EmptyState variant="geo-denied" onRetry={overheadGeo.retry} />;
-      }
-      if (overheadGeo.status === 'idle' || overheadGeo.status === 'loading') {
-        return <EmptyState variant="geo-loading" />;
-      }
-      return <EmptyState variant="no-aircraft-overhead" />;
+    if (!usingFallback && (geo.status === 'idle' || geo.status === 'loading')) {
+      return <EmptyState variant="geo-loading" />;
     }
-
-    return (
-      <FlightTabs
-        active={flightTab}
-        onChange={setFlightTab}
-        homePane={renderHomePane()}
-        overheadPane={renderOverheadPane()}
-      />
-    );
+    return <EmptyState variant="no-aircraft-overhead" />;
   }
 
   // Verification banner shows when we have a confirmed answer from the
@@ -284,9 +292,9 @@ function App() {
         view={view}
         setView={setView}
         radiusNm={settings.radiusNm}
-        pollIntervalSec={settings.pollIntervalSec}
-        latitude={settings.latitude}
-        longitude={settings.longitude}
+        listening={onFlightView && pageVisible && catchLat !== null}
+        latitude={catchLat}
+        longitude={catchLon}
         userEmail={user?.email}
         isAdmin={user?.isAdmin ?? false}
         onLogout={logout}

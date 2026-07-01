@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { findUserById, getUserSettings, updateUserSettings } from '../database/queries';
+import { clampCatchRadius, CATCH_RADIUS_DEFAULT_NM } from '../config';
 import { getUserAchievements, ACHIEVEMENTS } from '../services/achievementEngine';
 import { calculateUserRank, RANK_TIERS } from '../services/rankSystem';
 
@@ -31,8 +32,7 @@ router.get('/profile', requireAuth, (req: Request, res: Response) => {
     emailVerified: !!user.email_verified_at,
     latitude: settings?.latitude ?? null,
     longitude: settings?.longitude ?? null,
-    radiusNm: settings?.radiusNm ?? 25,
-    pollIntervalSec: settings?.pollIntervalSec ?? 12,
+    radiusNm: settings?.radiusNm ?? CATCH_RADIUS_DEFAULT_NM,
   });
 });
 
@@ -40,7 +40,7 @@ router.get('/profile', requireAuth, (req: Request, res: Response) => {
  * @openapi
  * /api/user/profile:
  *   put:
- *     summary: Update the authenticated user's location and polling settings
+ *     summary: Update the authenticated user's fallback location and hearing radius
  *     tags: [User]
  *     requestBody:
  *       content:
@@ -50,29 +50,25 @@ router.get('/profile', requireAuth, (req: Request, res: Response) => {
  *             properties:
  *               latitude: { type: number, nullable: true }
  *               longitude: { type: number, nullable: true }
- *               radiusNm: { type: number, minimum: 1, maximum: 500 }
- *               pollIntervalSec: { type: number, minimum: 5, maximum: 300 }
+ *               radiusNm: { type: number, minimum: 1, maximum: 15 }
  *     responses:
  *       200: { description: Updated profile }
  */
 router.put('/profile', requireAuth, (req: Request, res: Response) => {
-  const { latitude, longitude, radiusNm, pollIntervalSec } = req.body as {
+  const { latitude, longitude, radiusNm } = req.body as {
     latitude?: number | null;
     longitude?: number | null;
     radiusNm?: number;
-    pollIntervalSec?: number;
   };
 
   const lat = typeof latitude === 'number' ? latitude : null;
   const lon = typeof longitude === 'number' ? longitude : null;
-  const radius = typeof radiusNm === 'number' && radiusNm >= 1 && radiusNm <= 500 ? radiusNm : 25;
-  const interval = typeof pollIntervalSec === 'number' && pollIntervalSec >= 5 && pollIntervalSec <= 300 ? pollIntervalSec : 12;
+  const radius = clampCatchRadius(radiusNm);
 
   updateUserSettings(req.userId, {
     latitude: lat,
     longitude: lon,
     radiusNm: radius,
-    pollIntervalSec: interval,
   });
 
   const user = findUserById(req.userId);
@@ -85,7 +81,6 @@ router.put('/profile', requireAuth, (req: Request, res: Response) => {
     latitude: lat,
     longitude: lon,
     radiusNm: radius,
-    pollIntervalSec: interval,
   });
 });
 

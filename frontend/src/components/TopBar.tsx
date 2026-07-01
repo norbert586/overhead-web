@@ -6,7 +6,8 @@ interface TopBarProps {
   view: View;
   setView: (view: View) => void;
   radiusNm?: number;
-  pollIntervalSec?: number;
+  /** True while the catch feed is actively polling (page visible, coords available). */
+  listening?: boolean;
   latitude?: number | null;
   longitude?: number | null;
   userEmail?: string;
@@ -17,8 +18,8 @@ interface TopBarProps {
 export default function TopBar({
   view,
   setView,
-  radiusNm = 25,
-  pollIntervalSec = 12,
+  radiusNm = 5,
+  listening = false,
   latitude,
   longitude,
   userEmail,
@@ -56,9 +57,9 @@ export default function TopBar({
             <span className="app-name">Overhead</span>
           </div>
           <div className="scan-status">
-            <div className="scan-dot" />
+            <div className={`scan-dot${listening ? '' : ' scan-dot-paused'}`} />
             <span className="scan-text">
-              Tracking · {radiusNm} nm · {pollIntervalSec}s
+              {listening ? `Listening · ${radiusNm} nm` : 'Paused'}
             </span>
           </div>
         </div>

@@ -2,10 +2,12 @@ import { Router, Request, Response } from 'express';
 import { fetchAll } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
-import { upsertFlight, getFlightHistory, getLog, getSessionStats, getLastKnownFlight, findPhotoByType } from '../database/queries';
+import { upsertFlight, getFlightHistory, getLog, getSessionStats, findPhotoByType } from '../database/queries';
 import { scoreFlight } from '../services/interestScore';
 import { isNightAt } from '../services/solar';
+import { evaluateAchievements } from '../services/achievementEngine';
 import { requireAuth, optionalAuth, guestRateLimit } from '../middleware/auth';
+import { clampCatchRadius, CATCH_MIN_RECORD_INTERVAL_MS } from '../config';
 import { logger } from '../logger';
 import type { FlightsResponse } from '../types/flight';
 
@@ -23,14 +25,24 @@ const EMPTY_STATS = {
   topAircraft: [] as { type: string; count: number }[],
 };
 
+// Per-user timestamp of the last poll that was allowed to write. Recording is
+// client-driven under the catch model, so the server enforces the floor on
+// write frequency — anything faster is served as live view only. In-memory is
+// fine: a restart just lets the next poll record immediately.
+const lastRecordedAt = new Map<number, number>();
+
 /**
  * @openapi
  * /api/flights:
  *   get:
- *     summary: Poll nearby aircraft and (optionally) record sightings
+ *     summary: Poll nearby aircraft and catch (record) whatever is overhead
  *     description: |
- *       record=false is ephemeral mode (Overhead tab) — skips DB writes and returns up to 3 closest aircraft.
- *       Otherwise records sightings for the authenticated user and returns the closest one.
+ *       The catch endpoint. While a signed-in user has the app open, the client
+ *       polls this with the device's live position; every aircraft inside the
+ *       hearing radius is recorded as a sighting ("caught"). record=false is
+ *       ephemeral mode (guests) — no DB writes. The radius is clamped server-side
+ *       to the hearing-radius cap; when nothing is in range the search expands
+ *       for display only, and those contacts are never recorded.
  *     tags: [Flights]
  *     parameters:
  *       - in: query
@@ -43,7 +55,7 @@ const EMPTY_STATS = {
  *         schema: { type: number }
  *       - in: query
  *         name: radius
- *         schema: { type: number, default: 25, description: Radius in nautical miles }
+ *         schema: { type: number, default: 5, description: Hearing radius in nautical miles (clamped to 1-15) }
  *       - in: query
  *         name: record
  *         schema: { type: string, enum: ['true', 'false'], default: 'true' }
@@ -66,7 +78,7 @@ const EMPTY_STATS = {
 router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response) => {
   const lat    = parseFloat(req.query.lat    as string);
   const lon    = parseFloat(req.query.lon    as string);
-  const radius = parseFloat(req.query.radius as string) || 25;
+  const radius = clampCatchRadius(parseFloat(req.query.radius as string));
   const record = req.query.record !== 'false';
   const isGuest = req.userId === undefined;
 
@@ -82,13 +94,28 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     return;
   }
 
+  // Enforce the write-frequency floor. Over-eager polls still get a live
+  // view, they just don't write.
+  let shouldRecord = record && !isGuest;
+  if (shouldRecord) {
+    const last = lastRecordedAt.get(req.userId!) ?? 0;
+    if (Date.now() - last < CATCH_MIN_RECORD_INTERVAL_MS) {
+      shouldRecord = false;
+    } else {
+      lastRecordedAt.set(req.userId!, Date.now());
+    }
+  }
+
   try {
     let allAc = await fetchAll(lat, lon, radius);
     let matchedRadius = radius;
 
-    // Overhead tab is often empty at small radii — expand the search so the user
-    // sees the nearest contact and its true distance, instead of an empty pane.
-    if (!allAc.length && !record) {
+    // The hearing radius is deliberately small, so it's often empty — expand
+    // the search so the user sees the nearest contact and its true distance
+    // instead of an empty pane. Expanded contacts are display-only: catching
+    // only ever happens inside the actual hearing radius.
+    if (!allAc.length) {
+      shouldRecord = false;
       for (const r of [25, 50]) {
         if (r <= radius) continue;
         const expanded = await fetchAll(lat, lon, r);
@@ -102,13 +129,10 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     }
 
     if (!allAc.length) {
-      log.debug('poll: no aircraft in range, returning lastKnown');
+      log.debug('poll: no aircraft in range');
       const dbStats = isGuest ? EMPTY_STATS : getSessionStats(req.userId);
-      // Overhead mode is ephemeral — never resurface a stale lastKnown.
-      // Guests have no per-user history at all.
-      const lastKnown = record && !isGuest ? getLastKnownFlight(req.userId) : null;
       const response: FlightsResponse = {
-        flights: lastKnown ? [lastKnown] : [],
+        flights: [],
         stats: { ...dbStats, activeCount: 0 },
         timestamp: new Date().toISOString(),
       };
@@ -116,9 +140,9 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
       return;
     }
 
-    log.debug({ count: allAc.length, record }, 'poll: aircraft in range');
+    log.debug({ count: allAc.length, record: shouldRecord }, 'poll: aircraft in range');
 
-    // Enrich all aircraft in parallel; upsert only when record=true.
+    // Enrich all aircraft in parallel; upsert only when this poll records.
     const nowIso = new Date().toISOString();
     const processed = await Promise.all(allAc.map(async (ac) => {
       const callsign     = ac.flight?.trim() || null;
@@ -179,16 +203,15 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
         mlat:        Array.isArray(ac.mlat) && ac.mlat.length > 0,
       };
 
-      if (record) {
+      if (shouldRecord) {
         return upsertFlight(base, signals, {
           lat: typeof ac.lat === 'number' ? ac.lat : null,
           lon: typeof ac.lon === 'number' ? ac.lon : null,
         }, req.userId);
       }
 
-      // Ephemeral mode (Overhead tab) — score from the live event only.
-      // We don't probe per-user history here; the carousel uses the recorded
-      // path for any persistence-driven view.
+      // Ephemeral mode (guests, throttled polls, expanded-radius contacts) —
+      // score from the live event only; nothing is persisted.
       const score = scoreFlight({
         classification,
         hex:         base.hex,
@@ -237,10 +260,13 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
       return da - db;
     });
 
+    // Achievements were previously evaluated by the background scanner; under
+    // the catch model the recording poll is the only place sightings land.
+    if (shouldRecord) evaluateAchievements(req.userId!);
+
     const dbStats = isGuest ? EMPTY_STATS : getSessionStats(req.userId);
     const response: FlightsResponse = {
-      // Home: only the closest. Overhead: up to 3 closest.
-      flights: record ? [sorted[0]] : sorted.slice(0, 3),
+      flights: sorted.slice(0, 3),
       stats: { ...dbStats, activeCount: allAc.length },
       timestamp: new Date().toISOString(),
       ...(matchedRadius !== radius && { matchedRadiusNm: matchedRadius }),
