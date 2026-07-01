@@ -34,7 +34,7 @@ function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: (
   return (
     <button
       type="button"
-      className={`overhead-nearby-row ${isActive ? 'active' : ''}`}
+      className={`overhead-nearby-row strip--${flight.classification} ${isActive ? 'active' : ''}`}
       onClick={onSelect}
     >
       <div className="overhead-nearby-head">

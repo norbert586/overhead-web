@@ -349,10 +349,10 @@ function IngestionTab({ f }: { f: Flight }) {
     <div className="log-tab-content">
       <div className="log-detail-col">
         <DetailRow label="ICAO hex"   value={f.hex} />
-        <DetailRow label="Times seen" value={String(f.timesSeen)} />
+        <DetailRow label="Times caught" value={String(f.timesSeen)} />
         <DetailRow label="Duration"   value={formatDuration(f.firstSeen, f.lastSeen)} />
-        <DetailRow label="First seen" value={formatDateTime(f.firstSeen)} />
-        <DetailRow label="Last seen"  value={formatDateTime(f.lastSeen)} />
+        <DetailRow label="First caught" value={formatDateTime(f.firstSeen)} />
+        <DetailRow label="Last caught" value={formatDateTime(f.lastSeen)} />
       </div>
     </div>
   );
@@ -366,7 +366,7 @@ function LogRow({ flight: f }: { flight: Flight }) {
   const typeLabel = [f.manufacturer, f.aircraftType].filter(Boolean).join(' ') || '—';
 
   return (
-    <div className={`log-row${open ? ' expanded' : ''}`}>
+    <div className={`log-row strip--${f.classification}${open ? ' expanded' : ''}`}>
       <button className="log-row-main" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="log-dot-col">
           <span className={`log-dot ${f.classification}`} />
@@ -414,9 +414,9 @@ function ListHeader() {
       <span className="log-col-label">Callsign</span>
       <span className="log-col-label log-col-aircraft">Aircraft</span>
       <span className="log-col-label log-col-route">Route</span>
-      <span className="log-col-label">Last seen</span>
+      <span className="log-col-label">Last caught</span>
       <span className="log-col-label log-col-rarity">Rarity</span>
-      <span className="log-col-label log-col-right log-col-seen">Seen</span>
+      <span className="log-col-label log-col-right log-col-seen">Caught</span>
       <span className="log-chevron-col" />
     </div>
   );
@@ -575,7 +575,7 @@ function FilterBar({
           ))}
         </div>
         <span className="log-filter-count">
-          {count < total ? `${count} / ${total}` : total.toLocaleString()} events
+          {count < total ? `${count} / ${total}` : total.toLocaleString()} aircraft
         </span>
       </div>
 
