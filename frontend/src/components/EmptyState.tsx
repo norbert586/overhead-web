@@ -84,18 +84,24 @@ function GeoLoading() {
   );
 }
 
-function GeoDenied({ onRetry }: { onRetry?: () => void }) {
+function GeoDenied({ onRetry, onOpenSettings }: { onRetry?: () => void; onOpenSettings?: () => void }) {
   return (
     <div className="empty-full empty-error">
       <PlaneIcon className="empty-icon empty-icon-error" />
-      <div className="empty-title empty-title-error">Location permission denied</div>
+      <div className="empty-title empty-title-error">Location unavailable</div>
       <div className="empty-body empty-body-error">
-        Please allow location permissions in your browser to use the Overhead view.
+        Overhead needs to know where you are to catch flights. Allow location access in your
+        browser, or set a home location in Settings to catch from there instead.
       </div>
       {onRetry && (
         <button type="button" className="empty-error-retry" onClick={onRetry}>
           Try again
         </button>
+      )}
+      {onOpenSettings && (
+        <div className="empty-hint" onClick={onOpenSettings} style={{ cursor: 'pointer' }}>
+          Set a home location →
+        </div>
       )}
     </div>
   );
@@ -106,7 +112,9 @@ function NoAircraftOverhead() {
     <div className="empty-full">
       <PlaneIcon className="empty-icon" />
       <div className="empty-title">Nothing overhead right now</div>
-      <div className="empty-body">No aircraft within range of your current location. Try again in a moment.</div>
+      <div className="empty-body">
+        Listening… anything that flies within your hearing radius will be caught automatically.
+      </div>
     </div>
   );
 }
@@ -114,7 +122,7 @@ function NoAircraftOverhead() {
 export default function EmptyState({ variant, onOpenSettings, onRetry }: EmptyStateProps) {
   if (variant === 'no-settings')          return <NoSettings onOpenSettings={onOpenSettings} />;
   if (variant === 'geo-loading')          return <GeoLoading />;
-  if (variant === 'geo-denied')           return <GeoDenied onRetry={onRetry} />;
+  if (variant === 'geo-denied')           return <GeoDenied onRetry={onRetry} onOpenSettings={onOpenSettings} />;
   if (variant === 'no-aircraft-overhead') return <NoAircraftOverhead />;
   return <NoAircraft />;
 }

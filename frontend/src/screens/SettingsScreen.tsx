@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Settings } from '../hooks/useSettings';
+import { RADIUS_MIN_NM, RADIUS_MAX_NM, RADIUS_DEFAULT_NM, clampRadius } from '../hooks/useSettings';
 
 interface SettingsScreenProps {
   settings: Settings;
@@ -10,8 +11,7 @@ interface SettingsScreenProps {
 export default function SettingsScreen({ settings, onSave, isFirstSetup = false }: SettingsScreenProps) {
   const [lat, setLat] = useState(settings.latitude?.toString() ?? '');
   const [lon, setLon] = useState(settings.longitude?.toString() ?? '');
-  const [radius, setRadius] = useState(settings.radiusNm.toString());
-  const [interval, setInterval] = useState(settings.pollIntervalSec.toString());
+  const [radius, setRadius] = useState(settings.radiusNm);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -19,8 +19,7 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
   useEffect(() => {
     setLat(settings.latitude?.toString() ?? '');
     setLon(settings.longitude?.toString() ?? '');
-    setRadius(settings.radiusNm.toString());
-    setInterval(settings.pollIntervalSec.toString());
+    setRadius(settings.radiusNm);
   }, [settings]);
 
   function handleGeolocate() {
@@ -40,141 +39,123 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
 
   function handleSave() {
     const parsed: Settings = {
-      latitude:        lat     ? parseFloat(lat)     : null,
-      longitude:       lon     ? parseFloat(lon)     : null,
-      radiusNm:        radius  ? parseFloat(radius)  : 25,
-      pollIntervalSec: interval ? parseFloat(interval) : 12,
+      latitude:  lat ? parseFloat(lat) : null,
+      longitude: lon ? parseFloat(lon) : null,
+      radiusNm:  clampRadius(radius),
     };
     onSave(parsed);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
 
-  const parsedRadius = parseFloat(radius);
-  const radiusForDiagram = Number.isFinite(parsedRadius) && parsedRadius > 0 ? parsedRadius : 25;
-
   return (
     <div className="settings-screen">
       <div className="settings-form">
         <div>
-          <div className="settings-heading">{isFirstSetup ? 'Set Your Location' : 'Settings'}</div>
+          <div className="settings-heading">{isFirstSetup ? 'Set Up Catching' : 'Settings'}</div>
           <div className="settings-subheading">
             {isFirstSetup
-              ? 'Enter your home coordinates to start tracking aircraft overhead. Your location is saved to your account — use any device, same data.'
-              : 'Configure your monitoring location and scan parameters.'}
+              ? 'Overhead catches flights from wherever you are — these settings tune how, and give you a backup spot when GPS isn\'t available.'
+              : 'Tune your hearing radius and set a home location as a GPS fallback.'}
           </div>
         </div>
 
         {/* How it works */}
         <div className="settings-mode-cards">
           <div className="settings-mode-card">
-            <div className="settings-mode-title">Home Tab</div>
+            <div className="settings-mode-title">How catching works</div>
             <div className="settings-mode-body">
-              Continuously scans around your fixed location below and records every contact to your log.
-              Uses the radius and poll interval you set here.
+              While you have Overhead open, anything that flies within your hearing radius of your
+              live location gets caught and saved to your log. Leave the page and you stop
+              catching — you have to be there.
             </div>
           </div>
           <div className="settings-mode-card">
-            <div className="settings-mode-title">Overhead Tab</div>
+            <div className="settings-mode-title">Home location</div>
             <div className="settings-mode-body">
-              Uses your device's live GPS to show the closest aircraft right now. Ephemeral — nothing
-              is recorded. Ignores the values on this screen.
+              A fallback catch point for when your device can't share its location — desktop
+              browsers, denied permissions. If live GPS is available it always wins.
             </div>
           </div>
         </div>
 
-        {/* Location */}
+        {/* Hearing radius */}
         <div className="settings-section">
-          <div className="settings-section-label">Location · Home Tab</div>
+          <div className="settings-section-label">Hearing radius</div>
           <div className="settings-location-grid">
             <div className="settings-location-inputs">
-              <div className="settings-field-row">
-                <div className="settings-field">
-                  <label className="settings-label">Latitude</label>
-                  <input
-                    className="settings-input"
-                    type="number"
-                    placeholder="e.g. 42.7077"
-                    value={lat}
-                    onChange={(e) => setLat(e.target.value)}
-                    step="any"
-                  />
+              <div className="settings-field">
+                <label className="settings-label">
+                  Radius · {radius} nm
+                </label>
+                <input
+                  className="settings-slider"
+                  type="range"
+                  min={RADIUS_MIN_NM}
+                  max={RADIUS_MAX_NM}
+                  step={1}
+                  value={radius}
+                  onChange={(e) => setRadius(parseInt(e.target.value, 10) || RADIUS_DEFAULT_NM)}
+                />
+                <div className="settings-help">
+                  How far away counts as "overhead". Think of it as how far you can hear — {RADIUS_DEFAULT_NM} nm
+                  is a good default. Bigger catches more, but contacts near the edge won't be
+                  visible or audible from where you stand.
                 </div>
-                <div className="settings-field">
-                  <label className="settings-label">Longitude</label>
-                  <input
-                    className="settings-input"
-                    type="number"
-                    placeholder="e.g. -83.0315"
-                    value={lon}
-                    onChange={(e) => setLon(e.target.value)}
-                    step="any"
-                  />
-                </div>
-              </div>
-              <button className="settings-btn-geo" onClick={handleGeolocate}>
-                ⊕ Use my location
-              </button>
-              {geoError && (
-                <div className="settings-geo-error">{geoError}</div>
-              )}
-              <div className="settings-help">
-                Your fixed monitoring point for the Home tab. Decimal degrees, six digits is plenty
-                (~10 cm precision).
               </div>
             </div>
             <div className="settings-radius-diagram">
-              <RadiusDiagram radiusNm={radiusForDiagram} />
+              <RadiusDiagram radiusNm={radius} />
               <div className="settings-radius-caption">
-                Scan radius · {Math.round(radiusForDiagram)} nm
+                Hearing radius · {Math.round(radius)} nm
               </div>
             </div>
           </div>
         </div>
 
-        {/* Scan parameters */}
+        {/* Home / fallback location */}
         <div className="settings-section">
-          <div className="settings-section-label">Scan</div>
+          <div className="settings-section-label">Home location · GPS fallback</div>
           <div className="settings-field-row">
             <div className="settings-field">
-              <label className="settings-label">Radius (nm)</label>
+              <label className="settings-label">Latitude</label>
               <input
                 className="settings-input"
                 type="number"
-                placeholder="25"
-                value={radius}
-                onChange={(e) => setRadius(e.target.value)}
-                min="1"
-                max="250"
+                placeholder="e.g. 42.7077"
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+                step="any"
               />
-              <div className="settings-help">
-                How far around your point to scan. Typical 15–40 nm. Larger sees more, but contacts
-                near the edge may not be visually overhead.
-              </div>
             </div>
             <div className="settings-field">
-              <label className="settings-label">Poll interval (sec)</label>
+              <label className="settings-label">Longitude</label>
               <input
                 className="settings-input"
                 type="number"
-                placeholder="12"
-                value={interval}
-                onChange={(e) => setInterval(e.target.value)}
-                min="5"
-                max="60"
+                placeholder="e.g. -83.0315"
+                value={lon}
+                onChange={(e) => setLon(e.target.value)}
+                step="any"
               />
-              <div className="settings-help">
-                How often to fetch live data. Typical 10–20 sec. Lower is fresher; higher is gentler
-                on the upstream ADS-B feed.
-              </div>
             </div>
+          </div>
+          <button className="settings-btn-geo" onClick={handleGeolocate}>
+            ⊕ Use my location
+          </button>
+          {geoError && (
+            <div className="settings-geo-error">{geoError}</div>
+          )}
+          <div className="settings-help">
+            Optional. Used only when live GPS is unavailable. Decimal degrees, six digits is
+            plenty (~10 cm precision).
           </div>
         </div>
 
         {/* Actions */}
         <div className="settings-actions">
           <button className="settings-btn-save" onClick={handleSave}>
-            {isFirstSetup ? 'Start Tracking' : 'Save'}
+            {isFirstSetup ? 'Start Catching' : 'Save'}
           </button>
           <span className={`settings-saved${saved ? ' visible' : ''}`}>
             {isFirstSetup ? 'Launching…' : 'Saved'}
@@ -186,9 +167,10 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
           <div className="settings-tips-label">Notes</div>
           <ul className="settings-tips-list">
             <li>Settings sync server-side — sign in from any device and pick up where you left off.</li>
+            <li>Catching pauses whenever the page is hidden. Switch back to resume.</li>
             <li>Radius is great-circle distance, not flying time.</li>
-            <li>The Overhead tab ignores these values; it uses live GPS with a 10 → 25 → 50 nm fallback when the nearer rings are empty.</li>
-            <li>Live aircraft data comes from adsb.lol's public feed. Be polite — keep the poll interval at 10 sec or higher.</li>
+            <li>When nothing is in hearing range, the app shows the nearest contact further out — display only, it isn't caught.</li>
+            <li>Live aircraft data comes from adsb.lol's public feed.</li>
           </ul>
         </div>
       </div>
@@ -201,8 +183,8 @@ function RadiusDiagram({ radiusNm }: { radiusNm: number }) {
   const CX = VIEW / 2;
   const CY = VIEW / 2;
   const MAX_R = 78;
-  const clamped = Math.max(1, Math.min(250, radiusNm));
-  const ring = 8 + Math.sqrt(clamped / 250) * (MAX_R - 8);
+  const clamped = Math.max(RADIUS_MIN_NM, Math.min(RADIUS_MAX_NM, radiusNm));
+  const ring = 8 + Math.sqrt(clamped / RADIUS_MAX_NM) * (MAX_R - 8);
 
   const planes: Array<{ x: number; y: number; rot: number }> = [
     { x: 78,  y: 70,  rot: 35 },
@@ -219,13 +201,13 @@ function RadiusDiagram({ radiusNm }: { radiusNm: number }) {
       width="100%"
       height="auto"
       role="img"
-      aria-label={`Scan radius diagram showing ${Math.round(clamped)} nautical miles around your location`}
+      aria-label={`Hearing radius diagram showing ${Math.round(clamped)} nautical miles around your location`}
       style={{ maxWidth: 200, display: 'block' }}
     >
-      {/* Reference outer ring at the 250 nm cap */}
+      {/* Reference outer ring at the max hearing radius */}
       <circle cx={CX} cy={CY} r={MAX_R} fill="none" stroke="rgba(126,184,224,0.08)" strokeWidth="1" strokeDasharray="2 3" />
 
-      {/* Active scan ring */}
+      {/* Active hearing ring */}
       <circle cx={CX} cy={CY} r={ring} fill="rgba(126,184,224,0.06)" stroke="rgba(126,184,224,0.55)" strokeWidth="1" />
 
       {/* Center crosshair */}

@@ -4,6 +4,7 @@ import type { Flight, InterestTier } from '../types/flight';
 import { scoreFlight, tierFor } from '../services/interestScore';
 import { analyseTrajectory, type TrackPoint } from '../services/trajectoryAnalysis';
 import { isNightAt } from '../services/solar';
+import { clampCatchRadius } from '../config';
 
 const log = logger.child({ module: 'db' });
 
@@ -18,7 +19,6 @@ interface UserRow extends Record<string, unknown> {
   latitude: number | null;
   longitude: number | null;
   radius_nm: number | null;
-  poll_interval_sec: number | null;
   is_admin: number | null;
   email_verified_at: string | null;
 }
@@ -133,7 +133,6 @@ export interface UserSettings {
   latitude: number | null;
   longitude: number | null;
   radiusNm: number;
-  pollIntervalSec: number;
 }
 
 export function getUserSettings(userId: number): UserSettings | null {
@@ -142,35 +141,17 @@ export function getUserSettings(userId: number): UserSettings | null {
   return {
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
-    radiusNm: row.radius_nm ?? 25,
-    pollIntervalSec: row.poll_interval_sec ?? 12,
+    // Legacy rows may hold pre-catch-model values (default was 25 nm) —
+    // clamp on read so every caller sees a valid hearing radius.
+    radiusNm: clampCatchRadius(row.radius_nm),
   };
 }
 
 export function updateUserSettings(userId: number, s: UserSettings): void {
   run(
-    `UPDATE users SET latitude = ?, longitude = ?, radius_nm = ?, poll_interval_sec = ? WHERE id = ?`,
-    [s.latitude, s.longitude, s.radiusNm, s.pollIntervalSec, userId],
+    `UPDATE users SET latitude = ?, longitude = ?, radius_nm = ? WHERE id = ?`,
+    [s.latitude, s.longitude, clampCatchRadius(s.radiusNm), userId],
   );
-}
-
-export interface UserLocation {
-  id: number;
-  latitude: number;
-  longitude: number;
-  radiusNm: number;
-}
-
-export function getAllUsersWithLocation(): UserLocation[] {
-  return all<{ id: number; latitude: number; longitude: number; radius_nm: number }>(
-    'SELECT id, latitude, longitude, radius_nm FROM users WHERE latitude IS NOT NULL AND longitude IS NOT NULL',
-    [],
-  ).map((row) => ({
-    id:        row.id,
-    latitude:  row.latitude,
-    longitude: row.longitude,
-    radiusNm:  row.radius_nm ?? 25,
-  }));
 }
 
 interface FlightRow extends Record<string, unknown> {
@@ -596,14 +577,6 @@ export function upsertFlight(
   );
 
   return rowToFlight(saved);
-}
-
-export function getLastKnownFlight(userId: number): Flight | null {
-  const row = get<FlightRow>(
-    'SELECT * FROM flights WHERE user_id = ? ORDER BY last_seen DESC LIMIT 1',
-    [userId],
-  );
-  return row ? rowToFlight(row) : null;
 }
 
 export function getFlightHistory(hex: string, userId: number) {

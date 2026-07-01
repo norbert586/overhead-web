@@ -1,7 +1,5 @@
-import { exec, run, all, runNoPersist, flush } from './db';
+import { exec, run, get } from './db';
 import { logger } from '../logger';
-import { scoreFlight } from '../services/interestScore';
-import type { Classification } from '../types/flight';
 
 const log = logger.child({ module: 'migrations' });
 
@@ -157,11 +155,14 @@ export function runMigrations(): void {
   // Trajectory analysis surfaces as another reason; the column on flights
   // is the same JSON list so no DDL needed there.
 
-  // Add per-user location/scan settings
+  // Per-user fallback location + hearing radius. lat/lon is the fallback
+  // catch point for devices without usable GPS; radius_nm is the hearing
+  // radius (clamped to the catch-model range on read/write). Old DBs may also
+  // carry a poll_interval_sec column from the retired background scanner —
+  // it's simply ignored.
   try { exec(`ALTER TABLE users ADD COLUMN latitude REAL`); } catch { /* exists */ }
   try { exec(`ALTER TABLE users ADD COLUMN longitude REAL`); } catch { /* exists */ }
-  try { exec(`ALTER TABLE users ADD COLUMN radius_nm INTEGER DEFAULT 25`); } catch { /* exists */ }
-  try { exec(`ALTER TABLE users ADD COLUMN poll_interval_sec INTEGER DEFAULT 12`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE users ADD COLUMN radius_nm INTEGER DEFAULT 5`); } catch { /* exists */ }
 
   // Admin flag — driven by the ADMIN_EMAILS env var (comma-separated).
   // Authoritative on every startup: emails in the list are admins, every
@@ -224,89 +225,40 @@ export function runMigrations(): void {
     );
   `);
 
-  // One-time pass: re-score flights still at the default score=0 so the
-  // Notable carousel populates without waiting for fresh sightings. Idempotent:
-  // re-running only touches rows whose score is still the schema default.
-  backfillInterestScores();
+  // One-time fresh start for the catch model: the flight history up to this
+  // point was auto-recorded by the retired background scanner, not personally
+  // witnessed, so it doesn't count under the new rules. Wipe sightings and
+  // everything derived from them. Enrichment caches are reference data (not
+  // user history) and are deliberately kept — they save external API calls.
+  applyCatchModelReset();
 
   log.info('migrations complete');
 }
 
-interface BackfillRow extends Record<string, unknown> {
-  id: number;
-  hex: string;
-  callsign: string | null;
-  aircraft_type: string | null;
-  origin_iata: string | null;
-  destination_iata: string | null;
-  altitude_ft: number | null;
-  speed_kts: number | null;
-  distance_nm: number | null;
-  classification: string;
-  squawk: string | null;
-  emergency: string | null;
-  baro_rate_fpm: number | null;
-  category: string | null;
-  mlat: number | null;
-}
+function applyCatchModelReset(): void {
+  exec(`
+    CREATE TABLE IF NOT EXISTS schema_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
 
-function backfillInterestScores(): void {
-  // Only target rows that still have the default — never overwrite a real
-  // score that may have come from a peak event (monotonic guarantee).
-  const rows = all<BackfillRow>(
-    `SELECT id, hex, callsign, aircraft_type, origin_iata, destination_iata,
-            altitude_ft, speed_kts, distance_nm, classification,
-            squawk, emergency, baro_rate_fpm, category, mlat
-       FROM flights
-      WHERE interest_score IS NULL OR interest_score = 0`,
+  const done = get<{ value: string }>(
+    `SELECT value FROM schema_meta WHERE key = 'catch_model_reset'`,
     [],
   );
-  if (rows.length === 0) return;
+  if (done) return;
 
-  let touched = 0;
-  for (const r of rows) {
-    // Personal-rarity inputs aren't reconstructable from a single row's data
-    // without an O(N²) sweep, so we feed neutral values. Next live event for
-    // each airframe will refresh those signals naturally.
-    const s = scoreFlight({
-      classification:  r.classification as Classification,
-      hex:             r.hex,
-      callsign:        r.callsign,
-      typeCode:        r.aircraft_type,
-      originIata:      r.origin_iata,
-      destinationIata: r.destination_iata,
-      altitudeFt:      r.altitude_ft,
-      speedKts:        r.speed_kts,
-      baroRateFpm:     r.baro_rate_fpm,
-      distanceNm:      r.distance_nm,
-      category:        r.category,
-      squawk:          r.squawk,
-      emergency:       r.emergency,
-      mlat:            !!r.mlat,
-      // Backfill rows don't carry lat/lon+timestamp pairs; night detection is
-      // skipped (the next live event for each airframe restores the signal).
-      isNight: false,
-      personalTypeSightings:  null,
-      personalRouteSightings: null,
-      isFirstHexForUser:      false,
-      isFirstTypeForUser:     false,
-      isFirstOperatorForUser: false,
-      isFirstRouteForUser:    false,
-      // Backfill predates the flight_track table; no trajectory data available.
-      trajectoryScore:        0,
-      trajectoryReasons:      [],
-    });
-    if (s.score === 0) continue; // leave untouched, don't write zeros
-    runNoPersist(
-      `UPDATE flights
-          SET interest_score = ?, interest_tier = ?, interest_reasons = ?
-        WHERE id = ?`,
-      [s.score, s.tier, JSON.stringify(s.reasons), r.id],
-    );
-    touched++;
-  }
-  if (touched > 0) flush();
-  log.info({ scanned: rows.length, touched }, 'interest-score backfill complete');
+  const before = get<{ count: number }>('SELECT COUNT(*) as count FROM flights', []);
+  run('DELETE FROM flight_track', []);
+  run('DELETE FROM flights', []);
+  run('DELETE FROM user_achievements', []);
+  run('DELETE FROM user_rank_cache', []);
+  run(
+    `INSERT INTO schema_meta (key, value) VALUES ('catch_model_reset', ?)`,
+    [new Date().toISOString()],
+  );
+  log.info({ flightsDeleted: before?.count ?? 0 }, 'catch-model fresh start: legacy scanner data wiped');
 }
 
 function syncAdminAllowlist(): void {
