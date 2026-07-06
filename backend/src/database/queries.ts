@@ -187,6 +187,8 @@ interface FlightRow extends Record<string, unknown> {
   interest_score: number | null;
   interest_tier: string | null;
   interest_reasons: string | null; // JSON string
+  caught_lat: number | null;
+  caught_lon: number | null;
 }
 
 function parseReasons(json: string | null): string[] {
@@ -233,6 +235,8 @@ function rowToFlight(row: FlightRow): Flight {
     interestScore:   row.interest_score ?? 0,
     interestTier:    (row.interest_tier as InterestTier) ?? 'routine',
     interestReasons: parseReasons(row.interest_reasons),
+    caughtLat:       row.caught_lat ?? null,
+    caughtLon:       row.caught_lon ?? null,
   };
 }
 
@@ -387,10 +391,12 @@ export function upsertFlight(
   flight: Omit<Flight,
     | 'timesSeen' | 'firstSeen' | 'lastSeen'
     | 'squawk' | 'emergency' | 'baroRateFpm' | 'category' | 'mlat'
-    | 'interestScore' | 'interestTier' | 'interestReasons'>,
+    | 'interestScore' | 'interestTier' | 'interestReasons'
+    | 'caughtLat' | 'caughtLon'>,
   signals: RawEventSignals,
   position: EventPosition,
   userId: number,
+  observer: { lat: number; lon: number } | null = null,
 ): Flight {
   const now = new Date().toISOString();
 
@@ -495,7 +501,9 @@ export function upsertFlight(
         mlat             = ?,
         interest_score   = ?,
         interest_tier    = ?,
-        interest_reasons = ?
+        interest_reasons = ?,
+        caught_lat       = COALESCE(?, caught_lat),
+        caught_lon       = COALESCE(?, caught_lon)
       WHERE id = ?`,
       [
         isNewVisit ? 1 : 0,
@@ -509,6 +517,7 @@ export function upsertFlight(
         signals.squawk, signals.emergency, signals.baroRateFpm,
         signals.category, signals.mlat ? 1 : 0,
         peakScore, peakTier, reasonsJson,
+        observer?.lat ?? null, observer?.lon ?? null,
         existing.id as number,
       ],
     );
@@ -527,8 +536,9 @@ export function upsertFlight(
         altitude_ft, speed_kts, bearing_deg, distance_nm,
         classification, times_seen, first_seen, last_seen,
         squawk, emergency, baro_rate_fpm, category, mlat,
-        interest_score, interest_tier, interest_reasons
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        interest_score, interest_tier, interest_reasons,
+        caught_lat, caught_lon
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         userId, flight.hex, flight.registration, flight.callsign, flight.aircraftType,
         flight.manufacturer, flight.owner, flight.operator, flight.country, flight.countryIso,
@@ -540,6 +550,7 @@ export function upsertFlight(
         signals.squawk, signals.emergency, signals.baroRateFpm,
         signals.category, signals.mlat ? 1 : 0,
         score.score, score.tier, JSON.stringify(score.reasons),
+        observer?.lat ?? null, observer?.lon ?? null,
       ],
     );
   }
@@ -564,6 +575,8 @@ export function upsertFlight(
       interestScore:   score.score,
       interestTier:    score.tier,
       interestReasons: score.reasons,
+      caughtLat:       observer?.lat ?? null,
+      caughtLon:       observer?.lon ?? null,
     } as Flight;
   }
 
@@ -656,7 +669,9 @@ export function getAircraftCache(registration: string): AircraftCacheRow | null 
   );
   if (!row) return null;
   const age = Date.now() - new Date(row.cached_at as string).getTime();
-  const isNegative = !row.manufacturer && !row.owner && !row.country && !row.photo_url;
+  // "Negative" means no identity data. A row that only carries a client-found
+  // photo still needs the registry lookup retried on the short TTL.
+  const isNegative = !row.manufacturer && !row.owner && !row.country;
   if (age > (isNegative ? NEGATIVE_CACHE_TTL_MS : AIRCRAFT_CACHE_TTL_MS)) return null; // stale
   return row;
 }
@@ -682,7 +697,7 @@ export function setAircraftCache(
        owner         = excluded.owner,
        country       = excluded.country,
        country_iso   = excluded.country_iso,
-       photo_url     = excluded.photo_url,
+       photo_url     = COALESCE(excluded.photo_url, aircraft_cache.photo_url),
        cached_at     = excluded.cached_at`,
     [
       registration, data.aircraftType, data.manufacturer, data.owner,
@@ -733,6 +748,50 @@ export function findPhotoByType(
   if (flightRow) return { photoUrl: flightRow.photo_url, registration: flightRow.registration };
 
   return null;
+}
+
+// Other registrations of the same ICAO type that we know about — used by the
+// client's photo waterfall to try Planespotters with surrogate airframes when
+// the actual one has no photo anywhere.
+export function findRegistrationsByType(
+  aircraftType: string,
+  excludeRegistration: string | null,
+  limit = 5,
+): string[] {
+  const exclude = excludeRegistration ?? '';
+  const rows = all<{ registration: string }>(
+    `SELECT registration FROM (
+       SELECT registration, cached_at AS seen FROM aircraft_cache
+        WHERE aircraft_type = ? AND registration != ''
+       UNION
+       SELECT registration, last_seen AS seen FROM flights
+        WHERE aircraft_type = ? AND registration IS NOT NULL AND registration != ''
+     )
+     WHERE registration != ?
+     GROUP BY registration
+     ORDER BY MAX(seen) DESC
+     LIMIT ?`,
+    [aircraftType, aircraftType, exclude, limit],
+  );
+  return rows.map((r) => r.registration);
+}
+
+// Store a photo URL the client found via Planespotters, so the shared
+// photo-by-type pool grows beyond what adsbdb happens to carry. Never
+// overwrites an existing photo.
+export function recordAircraftPhoto(
+  registration: string,
+  photoUrl: string,
+  aircraftType: string | null,
+): void {
+  run(
+    `INSERT INTO aircraft_cache (registration, aircraft_type, photo_url, cached_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(registration) DO UPDATE SET
+       aircraft_type = COALESCE(aircraft_cache.aircraft_type, excluded.aircraft_type),
+       photo_url     = COALESCE(aircraft_cache.photo_url, excluded.photo_url)`,
+    [registration, aircraftType, photoUrl, new Date().toISOString()],
+  );
 }
 
 // ── Callsign cache ───────────────────────────────────────────────────────────
@@ -1023,6 +1082,61 @@ export function getStatsNotable(userId: number) {
     ORDER BY interest_score DESC, last_seen DESC LIMIT 20`, [userId]);
 
   return { recentNotable: notableRows.map(rowToFlight) };
+}
+
+// ── Hangar (collection) ──────────────────────────────────────────────────────
+// Everything the user has ever caught, grouped three ways. The frontend lays
+// caught types over a curated roster to render the collection grid.
+
+export function getHangar(userId: number) {
+  const types = all<{
+    aircraft_type: string; manufacturer: string | null;
+    airframes: number; catches: number | null;
+    first_caught: string; best_score: number | null;
+  }>(`SELECT aircraft_type, MAX(manufacturer) as manufacturer,
+      COUNT(DISTINCT hex) as airframes, SUM(times_seen) as catches,
+      MIN(first_seen) as first_caught, MAX(interest_score) as best_score
+    FROM flights WHERE user_id = ? AND aircraft_type IS NOT NULL
+    GROUP BY aircraft_type ORDER BY catches DESC`, [userId]);
+
+  const operators = all<{
+    operator: string; airframes: number; catches: number | null; first_caught: string;
+  }>(`SELECT operator, COUNT(DISTINCT hex) as airframes,
+      SUM(times_seen) as catches, MIN(first_seen) as first_caught
+    FROM flights WHERE user_id = ? AND operator IS NOT NULL
+    GROUP BY operator ORDER BY catches DESC`, [userId]);
+
+  const countries = all<{
+    country: string; country_iso: string | null;
+    airframes: number; catches: number | null; first_caught: string;
+  }>(`SELECT country, MAX(country_iso) as country_iso, COUNT(DISTINCT hex) as airframes,
+      SUM(times_seen) as catches, MIN(first_seen) as first_caught
+    FROM flights WHERE user_id = ? AND country IS NOT NULL
+    GROUP BY country ORDER BY catches DESC`, [userId]);
+
+  return {
+    types: types.map((r) => ({
+      aircraftType: r.aircraft_type,
+      manufacturer: r.manufacturer,
+      airframes:    r.airframes,
+      catches:      r.catches ?? 0,
+      firstCaught:  r.first_caught,
+      bestScore:    r.best_score ?? 0,
+    })),
+    operators: operators.map((r) => ({
+      operator:    r.operator,
+      airframes:   r.airframes,
+      catches:     r.catches ?? 0,
+      firstCaught: r.first_caught,
+    })),
+    countries: countries.map((r) => ({
+      country:     r.country,
+      countryIso:  r.country_iso,
+      airframes:   r.airframes,
+      catches:     r.catches ?? 0,
+      firstCaught: r.first_caught,
+    })),
+  };
 }
 
 export function getStatsMostSeen(userId: number) {

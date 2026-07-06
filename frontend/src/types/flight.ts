@@ -37,6 +37,8 @@ export interface Flight {
   interestScore: number;
   interestTier: InterestTier;
   interestReasons: string[];
+  caughtLat: number | null;
+  caughtLon: number | null;
 }
 
 export interface SessionStats {

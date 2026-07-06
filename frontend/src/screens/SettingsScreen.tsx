@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Settings } from '../hooks/useSettings';
 import { RADIUS_MIN_NM, RADIUS_MAX_NM, RADIUS_DEFAULT_NM, clampRadius } from '../hooks/useSettings';
+import { isSoundEnabled, setSoundEnabled, playCatchSound } from '../utils/catchSound';
 
 interface SettingsScreenProps {
   settings: Settings;
@@ -14,6 +15,7 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
   const [radius, setRadius] = useState(settings.radiusNm);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [sound, setSound] = useState(isSoundEnabled);
 
   // Re-seed the form when settings change externally (e.g. the server profile
   // arriving after sign-in) — derived state during render, not an effect.
@@ -152,6 +154,26 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
           <div className="settings-help">
             Optional. Used only when live GPS is unavailable. Decimal degrees, six digits is
             plenty (~10 cm precision).
+          </div>
+        </div>
+
+        {/* Catch sound */}
+        <div className="settings-section">
+          <div className="settings-section-label">Catch sound</div>
+          <label className="settings-toggle-row">
+            <input
+              type="checkbox"
+              checked={sound}
+              onChange={(e) => {
+                setSound(e.target.checked);
+                setSoundEnabled(e.target.checked);
+                if (e.target.checked) playCatchSound(false);
+              }}
+            />
+            <span>Play a radio blip when a flight is caught</span>
+          </label>
+          <div className="settings-help">
+            Rare catches get a brighter tone. Stored on this device.
           </div>
         </div>
 

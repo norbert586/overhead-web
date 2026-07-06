@@ -2,7 +2,10 @@ import { Router, Request, Response } from 'express';
 import { fetchAll } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
-import { upsertFlight, getFlightHistory, getLog, getSessionStats, findPhotoByType } from '../database/queries';
+import {
+  upsertFlight, getFlightHistory, getLog, getSessionStats, findPhotoByType,
+  findRegistrationsByType, recordAircraftPhoto,
+} from '../database/queries';
 import { scoreFlight } from '../services/interestScore';
 import { isNightAt } from '../services/solar';
 import { evaluateAchievements } from '../services/achievementEngine';
@@ -203,7 +206,7 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
         return upsertFlight(base, signals, {
           lat: typeof ac.lat === 'number' ? ac.lat : null,
           lon: typeof ac.lon === 'number' ? ac.lon : null,
-        }, req.userId);
+        }, req.userId, { lat, lon });
       }
 
       // Ephemeral mode (guests, throttled polls, expanded-radius contacts) —
@@ -251,6 +254,8 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
         interestScore:   score.score,
         interestTier:    score.tier,
         interestReasons: score.reasons,
+        caughtLat:       null,
+        caughtLon:       null,
       };
     }));
 
@@ -312,6 +317,86 @@ router.get('/photo-by-type/:type', requireAuth, (req: Request, res: Response) =>
     return;
   }
   res.json(hit);
+});
+
+/**
+ * @openapi
+ * /api/flights/type-registrations/{type}:
+ *   get:
+ *     summary: Known registrations of an ICAO type (surrogate-photo candidates)
+ *     tags: [Flights]
+ *     parameters:
+ *       - in: path
+ *         name: type
+ *         required: true
+ *         schema: { type: string }
+ *       - in: query
+ *         name: exclude
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Registration list }
+ */
+router.get('/type-registrations/:type', requireAuth, (req: Request, res: Response) => {
+  const type    = (req.params.type ?? '').trim().toUpperCase();
+  const exclude = ((req.query.exclude as string | undefined) ?? '').trim().toUpperCase() || null;
+  if (!type) {
+    res.status(400).json({ error: 'type is required' });
+    return;
+  }
+  res.json({ registrations: findRegistrationsByType(type, exclude) });
+});
+
+// Only accept photo URLs from hosts the waterfall actually fetches from, so
+// this can't be used to plant arbitrary links in the shared cache.
+const PHOTO_HOST_ALLOWLIST = ['plnspttrs.net', 'planespotters.net'];
+
+function isAllowedPhotoUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return false;
+    return PHOTO_HOST_ALLOWLIST.some(
+      (host) => url.hostname === host || url.hostname.endsWith(`.${host}`),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @openapi
+ * /api/flights/photo-cache:
+ *   post:
+ *     summary: Record a Planespotters photo the client found, growing the shared pool
+ *     tags: [Flights]
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               registration: { type: string }
+ *               photoUrl: { type: string }
+ *     responses:
+ *       204: { description: Stored }
+ *       400: { description: Invalid registration or URL }
+ */
+router.post('/photo-cache', requireAuth, (req: Request, res: Response) => {
+  const { registration, photoUrl, aircraftType } = req.body as {
+    registration?: string; photoUrl?: string; aircraftType?: string;
+  };
+  const reg = (registration ?? '').trim().toUpperCase();
+  if (!reg || reg.length > 12 || !/^[A-Z0-9-]+$/.test(reg)) {
+    res.status(400).json({ error: 'Invalid registration' });
+    return;
+  }
+  if (typeof photoUrl !== 'string' || photoUrl.length > 500 || !isAllowedPhotoUrl(photoUrl)) {
+    res.status(400).json({ error: 'Invalid photo URL' });
+    return;
+  }
+  const type = (aircraftType ?? '').trim().toUpperCase();
+  const validType = type && type.length <= 8 && /^[A-Z0-9]+$/.test(type) ? type : null;
+  recordAircraftPhoto(reg, photoUrl, validType);
+  res.status(204).end();
 });
 
 /**

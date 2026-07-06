@@ -49,9 +49,20 @@ const AdminIcon = () => (
   </svg>
 );
 
+function HangarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="menu-icon" aria-hidden="true">
+      <path d="M3 21V10l9-6 9 6v11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M7 21v-7h10v7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <line x1="7" y1="17.5" x2="17" y2="17.5" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  );
+}
+
 const ITEMS: { view: View; label: string; Icon: () => ReactElement }[] = [
   { view: 'flight',   label: 'Flight',   Icon: FlightIcon },
   { view: 'log',      label: 'Log',      Icon: LogIcon },
+  { view: 'hangar',   label: 'Hangar',   Icon: HangarIcon },
   { view: 'stats',    label: 'Stats',    Icon: StatsIcon },
   { view: 'profile',  label: 'Profile',  Icon: ProfileIcon },
   { view: 'settings', label: 'Settings', Icon: SettingsIcon },

@@ -155,6 +155,11 @@ export function runMigrations(): void {
   // Trajectory analysis surfaces as another reason; the column on flights
   // is the same JSON list so no DDL needed there.
 
+  // Where the user was standing when each aircraft was (last) caught. Powers
+  // future catch-spot features; recorded from the poll coordinates.
+  try { exec(`ALTER TABLE flights ADD COLUMN caught_lat REAL`); } catch { /* exists */ }
+  try { exec(`ALTER TABLE flights ADD COLUMN caught_lon REAL`); } catch { /* exists */ }
+
   // Per-user fallback location + hearing radius. lat/lon is the fallback
   // catch point for devices without usable GPS; radius_nm is the hearing
   // radius (clamped to the catch-model range on read/write). Old DBs may also

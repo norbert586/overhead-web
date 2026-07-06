@@ -5781,3 +5781,359 @@ body {
   color: var(--text-ghost);
   padding: 14px 0;
 }
+
+/* ── The Hangar — collection screen ───────────────────────────────────────── */
+.hangar-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hangar-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 28px 10px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.hangar-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-right: 12px;
+}
+
+.hangar-subtitle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+
+.hangar-completion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hangar-completion-count {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+}
+
+.hangar-completion-track {
+  width: 140px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(34, 48, 59, 0.10);
+  overflow: hidden;
+}
+
+.hangar-completion-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent-grad);
+  transition: width 600ms ease;
+}
+
+.hangar-completion-pct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.hangar-tabs {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  padding: 10px 28px 0;
+}
+
+.hangar-tab {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 6px 12px 8px;
+  cursor: pointer;
+}
+
+.hangar-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.hangar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 28px 40px;
+}
+
+.hangar-section {
+  margin-bottom: 26px;
+}
+
+.hangar-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hangar-section-label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.hangar-section-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+
+.hangar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+/* A collection card is a small strip: caught cards read full-ink, ghosts
+   stay as chart shadows waiting to be filled in. */
+.hangar-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  background: var(--bg-elevated);
+  box-shadow: var(--card-shadow);
+  text-align: center;
+  min-height: 118px;
+}
+
+.hangar-card-glyph {
+  width: 40px;
+  height: 40px;
+  fill: currentColor;
+  color: var(--accent);
+}
+
+.hangar-card.ghost {
+  background: transparent;
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.hangar-card.ghost .hangar-card-glyph {
+  color: var(--text-ghost);
+  opacity: 0.7;
+}
+
+.hangar-card-code {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.hangar-card.ghost .hangar-card-code {
+  color: var(--text-dim);
+}
+
+.hangar-card-name {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.25;
+}
+
+.hangar-card.ghost .hangar-card-name {
+  color: var(--text-ghost);
+}
+
+.hangar-card-meta {
+  margin-top: auto;
+  padding-top: 6px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+.hangar-card-count {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.hangar-card-meta--ghost {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-ghost);
+}
+
+.hangar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 640px;
+}
+
+.hangar-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  background: var(--bg-elevated);
+  box-shadow: var(--card-shadow);
+}
+
+.hangar-airline-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: #fff;
+  padding: 2px;
+}
+
+.hangar-airline-initials {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.hangar-flag {
+  font-size: 22px;
+  width: 28px;
+  text-align: center;
+}
+
+.hangar-list-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hangar-list-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hangar-list-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+.hangar-list-count {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.hangar-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 30px 0;
+}
+
+@media (max-width: 640px) {
+  .hangar-header, .hangar-tabs, .hangar-body { padding-left: 14px; padding-right: 14px; }
+  .hangar-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+}
+
+/* ── Rarity chips on strips ───────────────────────────────────────────────── */
+.overhead-tier-chip {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 0 5px;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+.overhead-tier-chip.tier--interesting {
+  color: var(--class-cargo);
+  border: 1px solid rgba(176, 112, 35, 0.5);
+  background: rgba(176, 112, 35, 0.08);
+}
+
+.overhead-tier-chip.tier--rare {
+  color: var(--magenta);
+  border: 1px solid var(--magenta);
+  background: var(--magenta-dim);
+  animation: rare-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes rare-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(176, 54, 124, 0.35); }
+  50%      { box-shadow: 0 0 0 4px rgba(176, 54, 124, 0); }
+}
+
+/* ── Settings toggle row ──────────────────────────────────────────────────── */
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.settings-toggle-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}

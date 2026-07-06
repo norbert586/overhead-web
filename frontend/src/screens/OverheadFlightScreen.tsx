@@ -41,6 +41,11 @@ function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: (
       <div className="overhead-nearby-head">
         <span className="overhead-nearby-callsign">{flight.callsign ?? '——'}</span>
         {isNewCatch && <span className="overhead-new-badge">NEW</span>}
+        {(flight.interestTier === 'rare' || flight.interestTier === 'interesting') && (
+          <span className={`overhead-tier-chip tier--${flight.interestTier}`}>
+            {flight.interestTier === 'rare' ? 'RARE' : 'INTERESTING'}
+          </span>
+        )}
         {flight.timesSeen > 1 && (
           <span className="overhead-seen-count">seen {flight.timesSeen}×</span>
         )}
@@ -111,6 +116,7 @@ export default function OverheadFlightScreen({
           photoUrl={active.photoUrl}
           callsign={active.callsign}
           registration={active.registration}
+          hex={active.hex}
           aircraftType={active.aircraftType}
         />
         <TelemetryGrid

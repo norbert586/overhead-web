@@ -55,6 +55,8 @@ export interface Flight {
   interestScore: number;          // 0..100
   interestTier: InterestTier;
   interestReasons: string[];      // human-readable, top-down
+  caughtLat: number | null;       // observer position at last catch
+  caughtLon: number | null;
 }
 
 export interface SessionStats {
