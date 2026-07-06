@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { Settings } from '../hooks/useSettings';
 import { RADIUS_MIN_NM, RADIUS_MAX_NM, RADIUS_DEFAULT_NM, clampRadius } from '../hooks/useSettings';
 
@@ -15,12 +15,15 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
   const [geoError, setGeoError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // Keep form in sync if settings change externally
-  useEffect(() => {
+  // Re-seed the form when settings change externally (e.g. the server profile
+  // arriving after sign-in) — derived state during render, not an effect.
+  const [seededFrom, setSeededFrom] = useState(settings);
+  if (seededFrom !== settings) {
+    setSeededFrom(settings);
     setLat(settings.latitude?.toString() ?? '');
     setLon(settings.longitude?.toString() ?? '');
     setRadius(settings.radiusNm);
-  }, [settings]);
+  }
 
   function handleGeolocate() {
     setGeoError(null);

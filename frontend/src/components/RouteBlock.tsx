@@ -20,7 +20,7 @@ function Airport({
 }) {
   return (
     <div className="route-airport">
-      <div className="iata">{iata ?? '???'}</div>
+      <div className="iata">{iata ?? '——'}</div>
       {city && <div className="city">{city}</div>}
       {country && <span className="flag">{countryToFlag(country)}</span>}
     </div>
@@ -47,8 +47,11 @@ export default function RouteBlock({
   destinationCity,
   destinationCountry,
 }: RouteBlockProps) {
-  // No route data at all — render nothing
-  if (!originIata && !destinationIata) return null;
+  // No route on file — say so quietly instead of leaving a hole. Many GA and
+  // military flights simply don't file a public route.
+  if (!originIata && !destinationIata) {
+    return <div className="route-block route-block--none">Route not broadcast</div>;
+  }
 
   return (
     <div className="route-block">

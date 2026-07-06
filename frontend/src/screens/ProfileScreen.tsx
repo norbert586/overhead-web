@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactElement } from 'react';
 import { fetchAchievements, fetchRank } from '../services/api';
+import { readCache, writeCache } from '../utils/swrCache';
 import { countryToFlag } from '../utils/formatting';
 import type {
   AchievementsResponse,
@@ -481,24 +482,30 @@ type Tab = 'rank' | 'achievements';
 
 export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
   const [tab, setTab] = useState<Tab>('rank');
-  const [achievements, setAchievements] = useState<AchievementsResponse | null>(null);
-  const [rank, setRank] = useState<RankResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Paint instantly from the last visit's data; refresh in the background.
+  const [achievements, setAchievements] = useState<AchievementsResponse | null>(
+    () => readCache<AchievementsResponse>('profile:achievements'),
+  );
+  const [rank, setRank] = useState<RankResponse | null>(
+    () => readCache<RankResponse>('profile:rank'),
+  );
   const [error, setError] = useState(false);
+  const loading = !error && (!rank || !achievements);
 
   useEffect(() => {
-    setLoading(true);
-    setError(false);
+    let cancelled = false;
     Promise.all([fetchRank(), fetchAchievements()])
       .then(([r, a]) => {
+        if (cancelled) return;
         setRank(r);
         setAchievements(a);
-        setLoading(false);
+        writeCache('profile:rank', r);
+        writeCache('profile:achievements', a);
       })
       .catch(() => {
-        setError(true);
-        setLoading(false);
+        if (!cancelled) setError(true);
       });
+    return () => { cancelled = true; };
   }, []);
 
   // Group achievements by category for the grid. Within each category,
@@ -575,11 +582,11 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
           </div>
         )}
 
-        {error && !loading && (
+        {error && (!rank || !achievements) && (
           <div className="profile-error">Failed to load profile data.</div>
         )}
 
-        {!loading && !error && tab === 'rank' && rank && (
+        {tab === 'rank' && rank && (
           <div className="profile-rank-section">
             <RankCard rank={rank} />
 
@@ -618,7 +625,7 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
           </div>
         )}
 
-        {!loading && !error && tab === 'achievements' && achievements && grouped && (
+        {tab === 'achievements' && achievements && grouped && (
           <div className="profile-achievements-section">
             {CATEGORY_ORDER.map((cat) => {
               const g = grouped[cat];

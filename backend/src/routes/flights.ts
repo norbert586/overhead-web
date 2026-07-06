@@ -95,16 +95,10 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
   }
 
   // Enforce the write-frequency floor. Over-eager polls still get a live
-  // view, they just don't write.
-  let shouldRecord = record && !isGuest;
-  if (shouldRecord) {
-    const last = lastRecordedAt.get(req.userId!) ?? 0;
-    if (Date.now() - last < CATCH_MIN_RECORD_INTERVAL_MS) {
-      shouldRecord = false;
-    } else {
-      lastRecordedAt.set(req.userId!, Date.now());
-    }
-  }
+  // view, they just don't write. The timestamp is only stamped once we know
+  // this poll will actually record, so an empty sky never burns the slot.
+  let shouldRecord = record && !isGuest &&
+    Date.now() - (lastRecordedAt.get(req.userId!) ?? 0) >= CATCH_MIN_RECORD_INTERVAL_MS;
 
   try {
     let allAc = await fetchAll(lat, lon, radius);
@@ -141,6 +135,8 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     }
 
     log.debug({ count: allAc.length, record: shouldRecord }, 'poll: aircraft in range');
+
+    if (shouldRecord) lastRecordedAt.set(req.userId!, Date.now());
 
     // Enrich all aircraft in parallel; upsert only when this poll records.
     const nowIso = new Date().toISOString();

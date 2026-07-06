@@ -1,9 +1,3 @@
-import TimesSeenCard from './TimesSeenCard';
-import WeatherCard from './WeatherCard';
-import MapCard from './MapCard';
-import TelemetryGrid from './TelemetryGrid';
-import AircraftPhoto from './AircraftPhoto';
-
 export type EmptyVariant =
   | 'no-settings'
   | 'no-aircraft'
@@ -42,34 +36,10 @@ function NoSettings({ onOpenSettings }: { onOpenSettings?: () => void }) {
 
 function NoAircraft() {
   return (
-    <div className="flight-screen">
-      {/* Left col — placeholder identity */}
-      <div className="col-left">
-        <div className="callsign-block">
-          <div className="callsign placeholder-text">———</div>
-          <div className="aircraft-type placeholder-text">No aircraft detected</div>
-        </div>
-        <div className="col-divider" />
-        <div className="empty-hint" style={{ textAlign: 'left' }}>Scanning…</div>
-      </div>
-
-      {/* Center col — empty photo + zeroed telemetry */}
-      <div className="col-center">
-        <AircraftPhoto photoUrl={null} callsign={null} registration={null} />
-        <TelemetryGrid
-          altitudeFt={null}
-          speedKts={null}
-          bearingDeg={null}
-          distanceNm={null}
-        />
-      </div>
-
-      {/* Right col */}
-      <div className="col-right">
-        <TimesSeenCard timesSeen={0} />
-        <WeatherCard />
-        <MapCard />
-      </div>
+    <div className="empty-full">
+      <PlaneIcon className="empty-icon" />
+      <div className="empty-title">Nothing to show here</div>
+      <div className="empty-body">This page isn't available for your account.</div>
     </div>
   );
 }
@@ -109,11 +79,21 @@ function GeoDenied({ onRetry, onOpenSettings }: { onRetry?: () => void; onOpenSe
 
 function NoAircraftOverhead() {
   return (
-    <div className="empty-full">
-      <PlaneIcon className="empty-icon" />
-      <div className="empty-title">Nothing overhead right now</div>
+    <div className="empty-full listening-state">
+      {/* The hearing radius, live: faint range rings with sound waves
+          expanding from your position. */}
+      <div className="listening-scope" aria-hidden>
+        <div className="listening-crosshair" />
+        <div className="listening-ring listening-ring--range1" />
+        <div className="listening-ring listening-ring--range2" />
+        <div className="listening-wave listening-wave--1" />
+        <div className="listening-wave listening-wave--2" />
+        <div className="listening-wave listening-wave--3" />
+        <div className="listening-center" />
+      </div>
+      <div className="empty-title">Listening</div>
       <div className="empty-body">
-        Listening… anything that flies within your hearing radius will be caught automatically.
+        Nothing in hearing range right now. Whatever crosses your radius gets caught automatically.
       </div>
     </div>
   );

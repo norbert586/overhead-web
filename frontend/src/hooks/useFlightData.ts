@@ -52,26 +52,21 @@ export function useFlightData(params: UseFlightDataParams): {
     }
   }, []);
 
-  // Drive the polling interval off `enabled` and `pollIntervalSec` only.
-  // GPS jitter changes lat/lon constantly but should not restart the interval.
+  // One effect drives everything: it waits for coordinates, polls immediately
+  // when they arrive, then keeps the interval. GPS jitter changes lat/lon on
+  // every fix but hasCoords only flips null → present, so the interval isn't
+  // restarted (and no duplicate request fired) on ordinary position updates.
   const { enabled = true, pollIntervalSec } = params;
+  const hasCoords = params.latitude !== null && params.longitude !== null;
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !hasCoords) return;
     poll();
     const id = setInterval(poll, pollIntervalSec * 1000);
     return () => {
       clearInterval(id);
       abortRef.current?.abort();
     };
-  }, [poll, enabled, pollIntervalSec]);
-
-  // Trigger an immediate refetch the first time coordinates become available
-  // (null → number), so the user doesn't wait a full interval after a cold
-  // start or after geolocation finally resolves.
-  const hasCoords = params.latitude !== null && params.longitude !== null;
-  useEffect(() => {
-    if (enabled && hasCoords) poll();
-  }, [poll, enabled, hasCoords]);
+  }, [poll, enabled, pollIntervalSec, hasCoords]);
 
   return { data, loading, error, lastPollTime };
 }

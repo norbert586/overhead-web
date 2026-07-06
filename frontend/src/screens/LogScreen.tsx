@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchLog } from '../services/api';
+import { readCache, writeCache } from '../utils/swrCache';
 import { fetchPhoto, fetchPhotoByType, thumbnailFallback } from '../utils/photos';
 import type { Flight, Classification, InterestTier } from '../types/flight';
 
@@ -587,26 +588,51 @@ function FilterBar({
 
 const LIMIT_OPTIONS = [50, 100, 200] as const;
 
+interface LogData {
+  flights: Flight[];
+  total: number;
+}
+
 export default function LogScreen() {
   const [limit,       setLimit      ] = useState<50 | 100 | 200>(50);
-  const [flights,     setFlights    ] = useState<Flight[]>([]);
-  const [total,       setTotal      ] = useState(0);
-  const [loading,     setLoading    ] = useState(true);
-  const [error,       setError      ] = useState<string | null>(null);
   const [search,      setSearch     ] = useState('');
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
   // Only ISO strings committed by Apply/preset — never changes on raw input
   const [appliedFrom, setAppliedFrom] = useState('');
   const [appliedTo,   setAppliedTo  ] = useState('');
 
+  // Stale-while-revalidate: paint the last known page instantly (keyed by the
+  // query), then refresh in the background. The key comparison during render
+  // replaces the old "reset loading in an effect" pattern.
+  const queryKey = `log:${limit}:${appliedFrom}:${appliedTo}`;
+  const [result, setResult] = useState<{ key: string; data: LogData | null; failed: boolean }>(
+    () => ({ key: queryKey, data: readCache<LogData>(queryKey), failed: false }),
+  );
+  if (result.key !== queryKey) {
+    setResult({ key: queryKey, data: readCache<LogData>(queryKey), failed: false });
+  }
+
   useEffect(() => {
-    setLoading(true);
-    setError(null);
+    let cancelled = false;
     fetchLog(limit, 0, appliedFrom || undefined, appliedTo || undefined)
-      .then(({ flights, total }) => { setFlights(flights); setTotal(total); })
-      .catch(() => setError('Failed to load flight log.'))
-      .finally(() => setLoading(false));
-  }, [limit, appliedFrom, appliedTo]);
+      .then((data) => {
+        if (cancelled) return;
+        writeCache(queryKey, data);
+        setResult({ key: queryKey, data, failed: false });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // A failed refresh keeps showing cached data; only report the error
+        // when there's nothing to show at all.
+        setResult((r) => (r.key === queryKey ? { ...r, failed: true } : r));
+      });
+    return () => { cancelled = true; };
+  }, [queryKey, limit, appliedFrom, appliedTo]);
+
+  const flights = useMemo(() => result.data?.flights ?? [], [result.data]);
+  const total   = result.data?.total ?? 0;
+  const loading = !result.data && !result.failed;
+  const error   = result.failed && !result.data ? 'Failed to load flight log.' : null;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -645,7 +671,7 @@ export default function LogScreen() {
         </div>
       </div>
 
-      {!loading && !error && (
+      {!loading && (
         <FilterBar
           search={search}
           onSearch={setSearch}

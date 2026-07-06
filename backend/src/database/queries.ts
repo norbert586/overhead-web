@@ -614,9 +614,29 @@ export function getLog(
   };
 }
 
+// ── Track retention ──────────────────────────────────────────────────────────
+
+// flight_track accrues one row per aircraft per recording poll. Pattern
+// detection only ever reads the last few minutes, so anything older than a
+// week is dead weight — prune it periodically (called at startup and on an
+// interval from index.ts).
+const TRACK_RETENTION_DAYS = 7;
+
+export function pruneFlightTrack(): number {
+  const cutoff = new Date(Date.now() - TRACK_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const before = get<{ count: number }>('SELECT COUNT(*) as count FROM flight_track WHERE ts < ?', [cutoff]);
+  if (!before?.count) return 0;
+  run('DELETE FROM flight_track WHERE ts < ?', [cutoff]);
+  log.info({ pruned: before.count }, 'flight_track pruned');
+  return before.count;
+}
+
 // ── Aircraft cache ───────────────────────────────────────────────────────────
 
 const AIRCRAFT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+// A row with no data is a cached lookup failure. Those expire much sooner so
+// a transient adsbdb outage can't blank an aircraft for a whole week.
+const NEGATIVE_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 interface AircraftCacheRow extends Record<string, unknown> {
   registration: string;
@@ -636,7 +656,8 @@ export function getAircraftCache(registration: string): AircraftCacheRow | null 
   );
   if (!row) return null;
   const age = Date.now() - new Date(row.cached_at as string).getTime();
-  if (age > AIRCRAFT_CACHE_TTL_MS) return null; // stale
+  const isNegative = !row.manufacturer && !row.owner && !row.country && !row.photo_url;
+  if (age > (isNegative ? NEGATIVE_CACHE_TTL_MS : AIRCRAFT_CACHE_TTL_MS)) return null; // stale
   return row;
 }
 
@@ -737,7 +758,8 @@ export function getCallsignCache(callsign: string): CallsignCacheRow | null {
   );
   if (!row) return null;
   const age = Date.now() - new Date(row.cached_at as string).getTime();
-  if (age > CALLSIGN_CACHE_TTL_MS) return null;
+  const isNegative = !row.operator && !row.origin_iata && !row.destination_iata;
+  if (age > (isNegative ? NEGATIVE_CACHE_TTL_MS : CALLSIGN_CACHE_TTL_MS)) return null;
   return row;
 }
 

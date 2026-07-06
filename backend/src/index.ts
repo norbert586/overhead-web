@@ -4,6 +4,7 @@ import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import { initDb } from './database/db';
 import { runMigrations } from './database/migrations';
+import { pruneFlightTrack } from './database/queries';
 import { swaggerSpec } from './swagger';
 import { logger, httpLogger } from './logger';
 import { isEmailConfigured } from './services/email';
@@ -18,6 +19,12 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 async function start() {
   await initDb();
   runMigrations();
+
+  // Keep the position-track table bounded: prune at startup and every 6 hours.
+  try { pruneFlightTrack(); } catch (err) { logger.error({ err }, 'track prune failed'); }
+  setInterval(() => {
+    try { pruneFlightTrack(); } catch (err) { logger.error({ err }, 'track prune failed'); }
+  }, 6 * 60 * 60 * 1000).unref();
 
   const app = express();
   app.use(cors());

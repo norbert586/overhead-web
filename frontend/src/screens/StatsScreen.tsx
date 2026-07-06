@@ -15,6 +15,7 @@ import {
   fetchStatsMostSeen,
 } from '../services/api';
 import { getAirlineIata, getAirlineLogoUrl } from '../utils/airlines';
+import { readCache, writeCache } from '../utils/swrCache';
 import { countryToFlag } from '../utils/formatting';
 import type {
   StatsSummaryData,
@@ -52,18 +53,26 @@ function getThreatLevel(govCount: number) {
 }
 
 // ── Per-section state ─────────────────────────────────────────────────────────
+// Each section paints instantly from its cached copy (stale-while-revalidate)
+// and refreshes in the background. A failed refresh keeps showing cached data.
 
 type S<T> = { data: T | null; loading: boolean; error: boolean };
-const init = <T,>(): S<T> => ({ data: null, loading: true, error: false });
+const init = <T,>(key: string) => (): S<T> => {
+  const cached = readCache<T>(key);
+  return { data: cached, loading: !cached, error: false };
+};
 
 function loadSection<T>(
+  key: string,
   fetcher: () => Promise<T>,
   setter: Dispatch<SetStateAction<S<T>>>,
-) {
-  setter({ data: null, loading: true, error: false });
-  fetcher()
-    .then((data) => setter({ data, loading: false, error: false }))
-    .catch(() => setter({ data: null, loading: false, error: true }));
+): Promise<void> {
+  return fetcher()
+    .then((data) => {
+      writeCache(key, data);
+      setter({ data, loading: false, error: false });
+    })
+    .catch(() => setter((s) => ({ data: s.data, loading: false, error: !s.data })));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -439,31 +448,33 @@ function MostSeenRow({ a, rank }: {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function StatsScreen() {
-  const [summary,       setSummary      ] = useState<S<StatsSummaryData>>(init);
-  const [altitude,      setAltitude     ] = useState<S<StatsAltitudeData>>(init);
-  const [activity,      setActivity     ] = useState<S<StatsActivityData>>(init);
-  const [aircraftTypes, setAircraftTypes] = useState<S<StatsAircraftTypesData>>(init);
-  const [operators,     setOperators    ] = useState<S<StatsOperatorsData>>(init);
-  const [countries,     setCountries    ] = useState<S<StatsCountriesData>>(init);
-  const [routes,        setRoutes       ] = useState<S<StatsRoutesData>>(init);
-  const [notable,       setNotable      ] = useState<S<StatsNotableData>>(init);
-  const [mostSeen,      setMostSeen     ] = useState<S<StatsMostSeenData>>(init);
+  const [summary,       setSummary      ] = useState<S<StatsSummaryData>>(init('stats:summary'));
+  const [altitude,      setAltitude     ] = useState<S<StatsAltitudeData>>(init('stats:altitude'));
+  const [activity,      setActivity     ] = useState<S<StatsActivityData>>(init('stats:activity'));
+  const [aircraftTypes, setAircraftTypes] = useState<S<StatsAircraftTypesData>>(init('stats:aircraft-types'));
+  const [operators,     setOperators    ] = useState<S<StatsOperatorsData>>(init('stats:operators'));
+  const [countries,     setCountries    ] = useState<S<StatsCountriesData>>(init('stats:countries'));
+  const [routes,        setRoutes       ] = useState<S<StatsRoutesData>>(init('stats:routes'));
+  const [notable,       setNotable      ] = useState<S<StatsNotableData>>(init('stats:notable'));
+  const [mostSeen,      setMostSeen     ] = useState<S<StatsMostSeenData>>(init('stats:most-seen'));
   const [updated,       setUpdated      ] = useState<Date | null>(null);
 
-  function load() {
-    loadSection(fetchStatsSummary,       setSummary);
-    loadSection(fetchStatsAltitude,      setAltitude);
-    loadSection(fetchStatsActivity,      setActivity);
-    loadSection(fetchStatsAircraftTypes, setAircraftTypes);
-    loadSection(fetchStatsOperators,     setOperators);
-    loadSection(fetchStatsCountries,     setCountries);
-    loadSection(fetchStatsRoutes,        setRoutes);
-    loadSection(fetchStatsNotable,       setNotable);
-    loadSection(fetchStatsMostSeen,      setMostSeen);
-    setUpdated(new Date());
-  }
+  const load = useCallback(() => {
+    const sections = [
+      loadSection('stats:summary',        fetchStatsSummary,       setSummary),
+      loadSection('stats:altitude',       fetchStatsAltitude,      setAltitude),
+      loadSection('stats:activity',       fetchStatsActivity,      setActivity),
+      loadSection('stats:aircraft-types', fetchStatsAircraftTypes, setAircraftTypes),
+      loadSection('stats:operators',      fetchStatsOperators,     setOperators),
+      loadSection('stats:countries',      fetchStatsCountries,     setCountries),
+      loadSection('stats:routes',         fetchStatsRoutes,        setRoutes),
+      loadSection('stats:notable',        fetchStatsNotable,       setNotable),
+      loadSection('stats:most-seen',      fetchStatsMostSeen,      setMostSeen),
+    ];
+    Promise.allSettled(sections).then(() => setUpdated(new Date()));
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const anyLoading = [summary, altitude, activity, aircraftTypes, operators, countries, routes, notable, mostSeen]
     .some((s) => s.loading);
