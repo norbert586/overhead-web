@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import CallsignBlock from '../components/CallsignBlock';
 import AircraftPhoto from '../components/AircraftPhoto';
+import HeadingArrow from '../components/HeadingArrow';
 import RouteBlock from '../components/RouteBlock';
 import TelemetryGrid from '../components/TelemetryGrid';
 import IntelCard from '../components/IntelCard';
@@ -55,7 +56,8 @@ function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: (
         <span>·</span>
         <span>{formatSpeed(flight.speedKts)} kts</span>
         <span>·</span>
-        <span>
+        <span className="overhead-nearby-heading">
+          {flight.bearingDeg !== null && <HeadingArrow deg={flight.bearingDeg} />}
           {formatBearing(flight.bearingDeg)} {flight.bearingDeg !== null ? bearingToCardinal(flight.bearingDeg) : ''}
         </span>
       </div>

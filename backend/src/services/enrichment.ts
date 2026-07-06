@@ -95,8 +95,9 @@ export async function enrichAircraft(registration: string): Promise<AircraftEnri
     return result;
 
   } catch (err) {
-    // Network failure or timeout — cache a short negative so we don't hammer the API,
-    // but use a shorter TTL by back-dating cached_at by 6 days (expires in ~1 day).
+    // Network failure or timeout — cache the miss so we don't hammer the API.
+    // All-null rows are treated as negative entries by the cache reader and
+    // expire on the short negative TTL, so a transient outage self-heals.
     log.error({ err, registration }, 'aircraft fetch failed');
     setAircraftCache(registration, NEGATIVE);
     return EMPTY_AIRCRAFT;

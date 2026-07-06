@@ -5615,3 +5615,169 @@ body {
   accent-color: var(--accent);
   margin: 8px 0;
 }
+
+/* ── Photo silhouette placeholder ─────────────────────────────────────────── */
+/* When no photo exists at any tier: a chart-symbol silhouette of the
+   aircraft category instead of a text shrug. */
+.photo-silhouette {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.photo-silhouette-glyph {
+  width: 34%;
+  max-width: 170px;
+  color: var(--text-primary);
+  opacity: 0.13;
+  fill: currentColor;
+}
+
+.photo-silhouette-glyph.searching {
+  animation: silhouette-breathe 2.2s ease-in-out infinite;
+}
+
+@keyframes silhouette-breathe {
+  0%, 100% { opacity: 0.08; }
+  50%      { opacity: 0.16; }
+}
+
+.photo-silhouette-type {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+}
+
+.photo-silhouette-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+}
+
+/* ── Heading arrows ───────────────────────────────────────────────────────── */
+.heading-arrow {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  vertical-align: -1px;
+  color: var(--accent);
+  transition: transform 400ms ease;
+}
+
+.t-value .t-heading-arrow {
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  vertical-align: -1px;
+}
+
+.overhead-nearby-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── NEW stamp lands like a rubber stamp ──────────────────────────────────── */
+.overhead-new-badge {
+  animation: stamp-in 340ms cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+}
+
+@keyframes stamp-in {
+  0%   { opacity: 0; transform: rotate(-16deg) scale(2.1); }
+  60%  { opacity: 1; transform: rotate(-2deg) scale(0.94); }
+  100% { opacity: 1; transform: rotate(-4deg) scale(1); }
+}
+
+/* ── Listening scope — the idle state is the hearing radius, alive ────────── */
+.listening-state {
+  gap: 6px;
+}
+
+.listening-scope {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin-bottom: 18px;
+}
+
+.listening-crosshair::before,
+.listening-crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(30, 111, 160, 0.14);
+}
+
+.listening-crosshair::before {
+  left: 50%; top: 8%; bottom: 8%;
+  width: 1px;
+}
+
+.listening-crosshair::after {
+  top: 50%; left: 8%; right: 8%;
+  height: 1px;
+}
+
+.listening-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(30, 111, 160, 0.22);
+}
+
+.listening-ring--range1 { inset: 25%; }
+.listening-ring--range2 { inset: 4%; border-style: dashed; border-color: rgba(30, 111, 160, 0.16); }
+
+/* Sound waves expanding from your position — you catch what you can hear */
+.listening-wave {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  opacity: 0;
+  animation: listening-wave 3.6s cubic-bezier(0.2, 0.5, 0.6, 1) infinite;
+}
+
+.listening-wave--2 { animation-delay: 1.2s; }
+.listening-wave--3 { animation-delay: 2.4s; }
+
+@keyframes listening-wave {
+  0%   { transform: scale(0.06); opacity: 0; }
+  8%   { opacity: 0.55; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.listening-center {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 7px; height: 7px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(30, 111, 160, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listening-wave {
+    animation: none;
+    opacity: 0.25;
+    transform: scale(0.6);
+  }
+  .listening-wave--2, .listening-wave--3 { display: none; }
+}
+
+/* ── Route not broadcast ──────────────────────────────────────────────────── */
+.route-block--none {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-ghost);
+  padding: 14px 0;
+}

@@ -5,6 +5,7 @@ import {
   formatDistance,
   bearingToCardinal,
 } from '../utils/formatting';
+import HeadingArrow from './HeadingArrow';
 
 interface TelemetryGridProps {
   altitudeFt: number | null;
@@ -17,13 +18,17 @@ interface CellProps {
   label: string;
   value: string;
   unit: string;
+  glyph?: React.ReactNode;
 }
 
-function Cell({ label, value, unit }: CellProps) {
+function Cell({ label, value, unit, glyph }: CellProps) {
   return (
     <div className="t-cell">
       <div className="t-label">{label}</div>
-      <div className="t-value">{value}</div>
+      <div className="t-value">
+        {value}
+        {glyph}
+      </div>
       <div className="t-unit">{unit}</div>
     </div>
   );
@@ -43,6 +48,7 @@ export default function TelemetryGrid({
         label="Brg"
         value={formatBearing(bearingDeg)}
         unit={bearingDeg !== null ? bearingToCardinal(bearingDeg) : '—'}
+        glyph={bearingDeg !== null ? <HeadingArrow deg={bearingDeg} className="t-heading-arrow" /> : undefined}
       />
       <Cell label="Dist" value={formatDistance(distanceNm)} unit="nm" />
     </div>

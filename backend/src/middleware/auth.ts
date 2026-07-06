@@ -59,6 +59,17 @@ function clientIp(req: Request): string {
   return req.ip ?? req.socket.remoteAddress ?? 'unknown';
 }
 
+// Expired buckets are never revisited by their own IP, so sweep them lazily
+// once the map grows — keeps memory flat under a churn of one-off guest IPs.
+const SWEEP_THRESHOLD = 1_000;
+
+function sweepExpiredBuckets(now: number): void {
+  if (guestBuckets.size < SWEEP_THRESHOLD) return;
+  for (const [ip, bucket] of guestBuckets) {
+    if (bucket.resetAt <= now) guestBuckets.delete(ip);
+  }
+}
+
 export function guestRateLimit(req: Request, res: Response, next: NextFunction): void {
   if (req.userId !== undefined) {
     next();
@@ -66,6 +77,7 @@ export function guestRateLimit(req: Request, res: Response, next: NextFunction):
   }
   const ip = clientIp(req);
   const now = Date.now();
+  sweepExpiredBuckets(now);
   const bucket = guestBuckets.get(ip);
   if (!bucket || bucket.resetAt <= now) {
     guestBuckets.set(ip, { count: 1, resetAt: now + GUEST_RATE_WINDOW_MS });

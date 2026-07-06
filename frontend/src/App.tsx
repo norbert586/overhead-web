@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import './App.css';
 import TopBar from './components/TopBar';
 import BottomBar from './components/BottomBar';
@@ -6,11 +6,14 @@ import EmptyState from './components/EmptyState';
 import OverheadFlightScreen from './screens/OverheadFlightScreen';
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePageVisibility } from './hooks/usePageVisibility';
-import LogScreen from './screens/LogScreen';
-import StatsScreen from './screens/StatsScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import AdminScreen from './screens/AdminScreen';
+
+// Secondary screens are split out of the main bundle — the catch screen (the
+// thing you open outside, on cell data) shouldn't pay for Recharts.
+const LogScreen     = lazy(() => import('./screens/LogScreen'));
+const StatsScreen   = lazy(() => import('./screens/StatsScreen'));
+const ProfileScreen = lazy(() => import('./screens/ProfileScreen'));
+const AdminScreen   = lazy(() => import('./screens/AdminScreen'));
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
@@ -132,6 +135,15 @@ function App() {
   const sessionHexes = useRef(new Map<string, boolean>()); // hex → was new to the log
   const [sessionCaught, setSessionCaught] = useState(0);
   const [sessionNew, setSessionNew] = useState(0);
+
+  // The tally belongs to one account: signing out (or switching users in the
+  // same tab) starts a fresh session count.
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    sessionHexes.current = new Map();
+    setSessionCaught(0);
+    setSessionNew(0);
+  }, [userId]);
 
   useEffect(() => {
     const flights = data?.flights ?? [];
@@ -301,7 +313,9 @@ function App() {
       />
       {showVerifyBanner && <EmailVerificationBanner email={user!.email} />}
       <main className="app-main">
-        {renderMain()}
+        <Suspense fallback={null}>
+          {renderMain()}
+        </Suspense>
       </main>
       <BottomBar lastPollTime={lastPollTime} />
     </div>
