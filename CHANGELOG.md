@@ -6,6 +6,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 ## 2026-07-06
 
 - Deep pass: zero lint, instant paint, smart caches, and a living idle state ([#59](https://github.com/norbert586/overhead-web/pull/59))
+- Add the Hangar, fix the similar-plane photo fallback, catch sound, PWA ([#60](https://github.com/norbert586/overhead-web/pull/60))
 
 ## 2026-07-01
 
