@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-07-06
+
+- Deep pass: zero lint, instant paint, smart caches, and a living idle state ([#59](https://github.com/norbert586/overhead-web/pull/59))
+
 ## 2026-07-01
 
 - Redesign flight logging: catch-model recording replaces background scanner ([#57](https://github.com/norbert586/overhead-web/pull/57))
