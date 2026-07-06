@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchLog } from '../services/api';
 import { readCache, writeCache } from '../utils/swrCache';
-import { fetchPhoto, fetchPhotoByType, thumbnailFallback } from '../utils/photos';
+import { findPhotoDeep, thumbnailFallback } from '../utils/photos';
 import type { Flight, Classification, InterestTier } from '../types/flight';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ function Chevron({ open }: { open: boolean }) {
 
 // ── Photo loader ─────────────────────────────────────────────────────────────
 
-function RowPhoto({ registration, aircraftType }: { registration: string | null; aircraftType?: string | null }) {
+function RowPhoto({ registration, hex, aircraftType }: { registration: string | null; hex?: string | null; aircraftType?: string | null }) {
   const [state,        setState       ] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [src,          setSrc         ] = useState<string | null>(null);
   const [fb,           setFb          ] = useState<string | null>(null);
@@ -77,37 +77,23 @@ function RowPhoto({ registration, aircraftType }: { registration: string | null;
   const [surrogateReg, setSurrogateReg] = useState<string | null>(null);
   const [zoomed,       setZoomed      ] = useState(false);
 
-  if (!registration && !aircraftType) {
-    return <div className="log-photo-unavailable">No registration — photo unavailable</div>;
+  if (!registration && !hex && !aircraftType) {
+    return <div className="log-photo-unavailable">No identifiers — photo unavailable</div>;
   }
 
   async function load() {
     setState('loading');
-    if (registration) {
-      const url = await fetchPhoto(registration);
-      if (url) {
-        const fallback = thumbnailFallback(url);
-        setSrc(url);
-        if (fallback !== url) setFb(fallback);
-        setSource('planespotters');
-        setSurrogateReg(null);
-        setState('done');
-        return;
-      }
+    const r = await findPhotoDeep(registration, hex ?? null, aircraftType ?? null);
+    if (!r) {
+      setState('error');
+      return;
     }
-    if (aircraftType) {
-      const match = await fetchPhotoByType(aircraftType, registration);
-      if (match) {
-        const fallback = thumbnailFallback(match.url);
-        setSrc(match.url);
-        if (fallback !== match.url) setFb(fallback);
-        setSource('similar');
-        setSurrogateReg(match.registration);
-        setState('done');
-        return;
-      }
-    }
-    setState('error');
+    const fallback = thumbnailFallback(r.url);
+    setSrc(r.url);
+    if (fallback !== r.url) setFb(fallback);
+    setSource(r.source === 'similar' ? 'similar' : 'planespotters');
+    setSurrogateReg(r.surrogateReg);
+    setState('done');
   }
 
   function handleError(e: React.SyntheticEvent<HTMLImageElement>) {
@@ -282,7 +268,7 @@ function DetailsTab({ f, typeLabel }: { f: Flight; typeLabel: string }) {
       </div>
       <div className="log-photo-section">
         <div className="log-detail-section-label" style={{ marginBottom: 10 }}>Photo</div>
-        <RowPhoto registration={f.registration} aircraftType={f.aircraftType} />
+        <RowPhoto registration={f.registration} hex={f.hex} aircraftType={f.aircraftType} />
       </div>
     </div>
   );
@@ -354,6 +340,12 @@ function IngestionTab({ f }: { f: Flight }) {
         <DetailRow label="Duration"   value={formatDuration(f.firstSeen, f.lastSeen)} />
         <DetailRow label="First caught" value={formatDateTime(f.firstSeen)} />
         <DetailRow label="Last caught" value={formatDateTime(f.lastSeen)} />
+        <DetailRow
+          label="Caught from"
+          value={f.caughtLat != null && f.caughtLon != null
+            ? `${f.caughtLat.toFixed(3)}°, ${f.caughtLon.toFixed(3)}°`
+            : null}
+        />
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   getStatsRoutes,
   getStatsNotable,
   getStatsMostSeen,
+  getHangar,
 } from '../database/queries';
 import { requireAuth } from '../middleware/auth';
 import { logger } from '../logger';
@@ -95,5 +96,6 @@ router.get('/countries',      handle('countries',      getStatsCountries));
 router.get('/routes',         handle('routes',         getStatsRoutes));
 router.get('/notable',        handle('notable',        getStatsNotable));
 router.get('/most-seen',      handle('most-seen',      getStatsMostSeen));
+router.get('/hangar',         handle('hangar',         getHangar));
 
 export default router;

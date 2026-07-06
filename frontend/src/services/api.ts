@@ -60,6 +60,35 @@ export const fetchStatsRoutes       = () => statsGet<StatsRoutesData>('routes');
 export const fetchStatsNotable      = () => statsGet<StatsNotableData>('notable');
 export const fetchStatsMostSeen     = () => statsGet<StatsMostSeenData>('most-seen');
 
+
+// ── Hangar ────────────────────────────────────────────────────────────────────
+
+export interface HangarData {
+  types: Array<{
+    aircraftType: string;
+    manufacturer: string | null;
+    airframes: number;
+    catches: number;
+    firstCaught: string;
+    bestScore: number;
+  }>;
+  operators: Array<{
+    operator: string;
+    airframes: number;
+    catches: number;
+    firstCaught: string;
+  }>;
+  countries: Array<{
+    country: string;
+    countryIso: string | null;
+    airframes: number;
+    catches: number;
+    firstCaught: string;
+  }>;
+}
+
+export const fetchHangar = () => statsGet<HangarData>('hangar');
+
 export async function fetchLog(
   limit: number,
   offset = 0,

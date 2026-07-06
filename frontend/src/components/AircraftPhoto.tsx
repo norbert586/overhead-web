@@ -1,109 +1,83 @@
-import { useState, useEffect, useCallback } from 'react';
-import { fetchPhoto, fetchPhotoByType, thumbnailFallback } from '../utils/photos';
+import { useState, useEffect } from 'react';
+import { findPhotoDeep, thumbnailFallback, type ResolvedPhoto } from '../utils/photos';
 import AircraftSilhouette from './AircraftSilhouette';
 
 interface AircraftPhotoProps {
-  photoUrl: string | null;       // Provider 1: adsbdb (from backend)
+  photoUrl: string | null;       // Tier 1: adsbdb (from backend)
   callsign: string | null;
   registration: string | null;
-  aircraftType?: string | null;  // For similar-planes fallback
+  hex?: string | null;           // Enables Planespotters hex lookup
+  aircraftType?: string | null;  // Enables similar-airframe fallback
 }
-
-type Tier = 1 | 2 | 3;  // 1=adsbdb, 2=planespotters/reg, 3=same-model surrogate from our DB
 
 interface PhotoState {
   src: string | null;
-  tier: Tier | null;
+  /** null while tier 1; otherwise where the fallback photo came from. */
+  resolved: ResolvedPhoto | null;
   fbSrc: string | null;
-  /** Tier 3 only: the registration of the *other* airframe we're showing. */
-  surrogateReg: string | null;
   /** True once every tier has been tried and failed. */
   exhausted: boolean;
 }
 
-const EMPTY: PhotoState = { src: null, tier: null, fbSrc: null, surrogateReg: null, exhausted: false };
+const EMPTY: PhotoState = { src: null, resolved: null, fbSrc: null, exhausted: false };
 
-function stateFor(url: string, tier: Tier, surrogate: string | null = null): PhotoState {
+function tier1State(url: string): PhotoState {
   const fb = thumbnailFallback(url);
-  return { src: url, tier, fbSrc: fb !== url ? fb : null, surrogateReg: surrogate, exhausted: false };
+  return { src: url, resolved: null, fbSrc: fb !== url ? fb : null, exhausted: false };
 }
 
-export default function AircraftPhoto({ photoUrl, callsign, registration, aircraftType }: AircraftPhotoProps) {
+function fallbackState(r: ResolvedPhoto): PhotoState {
+  const fb = thumbnailFallback(r.url);
+  return { src: r.url, resolved: r, fbSrc: fb !== r.url ? fb : null, exhausted: false };
+}
+
+export default function AircraftPhoto({ photoUrl, callsign, registration, hex, aircraftType }: AircraftPhotoProps) {
   const [photo, setPhoto] = useState<PhotoState>(EMPTY);
 
-  // Reset when the aircraft changes — done as derived state during render
-  // (the supported "adjust state when props change" pattern) so the old
-  // airframe's photo never flashes on the new one.
-  const propKey = `${photoUrl ?? ''}|${registration ?? ''}|${aircraftType ?? ''}`;
+  // Reset when the airframe changes — derived state during render so the old
+  // aircraft's photo never flashes on the new one.
+  const propKey = `${photoUrl ?? ''}|${registration ?? ''}|${hex ?? ''}|${aircraftType ?? ''}`;
   const [loadedKey, setLoadedKey] = useState(propKey);
   if (loadedKey !== propKey) {
     setLoadedKey(propKey);
-    setPhoto(photoUrl ? stateFor(photoUrl, 1) : EMPTY);
+    setPhoto(photoUrl ? tier1State(photoUrl) : EMPTY);
   }
 
-  // Tier 3 lookup excludes the airframe we're trying to render so the backend
-  // doesn't echo back the (broken) photo we already failed on.
-  const tryTier3 = useCallback(async (): Promise<boolean> => {
-    if (!aircraftType) return false;
-    const match = await fetchPhotoByType(aircraftType, registration ?? null);
-    if (!match) return false;
-    setPhoto(stateFor(match.url, 3, match.registration));
-    return true;
-  }, [aircraftType, registration]);
-
   useEffect(() => {
-    // Tier 1 is applied synchronously by the derived-state reset above.
-    if (photoUrl) return;
+    if (photoUrl) return; // tier 1 already applied synchronously
     let cancelled = false;
-
-    async function run() {
-      // Tier 2: Planespotters by registration
-      if (registration) {
-        const url = await fetchPhoto(registration);
-        if (cancelled) return;
-        if (url) { setPhoto(stateFor(url, 2)); return; }
-      }
-      // Tier 3: same-model surrogate from our own DB
-      if (aircraftType) {
-        const match = await fetchPhotoByType(aircraftType, registration ?? null);
-        if (cancelled) return;
-        if (match) { setPhoto(stateFor(match.url, 3, match.registration)); return; }
-      }
-      if (!cancelled) setPhoto({ ...EMPTY, exhausted: true });
-    }
-
-    run();
+    findPhotoDeep(registration ?? null, hex ?? null, aircraftType ?? null).then((r) => {
+      if (cancelled) return;
+      setPhoto(r ? fallbackState(r) : { ...EMPTY, exhausted: true });
+    });
     return () => { cancelled = true; };
-  }, [photoUrl, registration, aircraftType]);
+  }, [photoUrl, registration, hex, aircraftType]);
 
   async function handleError(e: React.SyntheticEvent<HTMLImageElement>) {
     const img = e.target as HTMLImageElement;
 
-    // First: try the safe thumbnail fallback (Planespotters full_nosym → thumbnail_large)
+    // First: the safe thumbnail fallback (Planespotters full_nosym → thumbnail_large)
     if (photo.fbSrc && img.src !== photo.fbSrc) {
       setPhoto({ ...photo, src: photo.fbSrc, fbSrc: null });
       return;
     }
-
-    // Then cascade to the next tier
-    if (photo.tier === 1 && registration) {
-      const url = await fetchPhoto(registration);
-      if (url) { setPhoto(stateFor(url, 2)); return; }
-    }
-    if (photo.tier === 1 || photo.tier === 2) {
-      if (await tryTier3()) return;
+    // A broken tier-1 URL cascades into the full fallback waterfall
+    if (!photo.resolved) {
+      const r = await findPhotoDeep(registration ?? null, hex ?? null, aircraftType ?? null);
+      if (r) { setPhoto(fallbackState(r)); return; }
     }
     setPhoto({ ...EMPTY, exhausted: true });
   }
 
-  const { src, tier, surrogateReg } = photo;
+  const { src, resolved } = photo;
+  const isSimilar = resolved?.source === 'similar';
 
-  const sourceLabel =
-    tier === 1 ? 'ADSBDB' :
-    tier === 2 ? 'PLANESPOTTERS' :
-    tier === 3
-      ? `SIMILAR · ${aircraftType ?? '?'}${surrogateReg ? ` · ${surrogateReg}` : ''}`
-      : null;
+  const sourceLabel = src
+    ? (resolved === null ? 'ADSBDB'
+      : resolved.source === 'similar'
+        ? `SIMILAR · ${aircraftType ?? '?'}${resolved.surrogateReg ? ` · ${resolved.surrogateReg}` : ''}`
+        : 'PLANESPOTTERS')
+    : null;
 
   return (
     <div className="aircraft-photo-wrap">
@@ -118,10 +92,10 @@ export default function AircraftPhoto({ photoUrl, callsign, registration, aircra
       {callsign     && <div className="photo-callsign">{callsign}</div>}
       {registration && <div className="photo-registration">{registration}</div>}
       {sourceLabel  && <div className="photo-source-tag">{sourceLabel}</div>}
-      {tier === 3 && (
+      {isSimilar && (
         <div className="photo-similar-note">
           Photo is of a different {aircraftType ?? 'aircraft'} of the same model
-          {surrogateReg ? ` (${surrogateReg})` : ''}, not the actual airframe overhead.
+          {resolved?.surrogateReg ? ` (${resolved.surrogateReg})` : ''}, not the actual airframe overhead.
         </div>
       )}
     </div>

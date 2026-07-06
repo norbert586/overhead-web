@@ -11,6 +11,7 @@ import SettingsScreen from './screens/SettingsScreen';
 // Secondary screens are split out of the main bundle — the catch screen (the
 // thing you open outside, on cell data) shouldn't pay for Recharts.
 const LogScreen     = lazy(() => import('./screens/LogScreen'));
+const HangarScreen  = lazy(() => import('./screens/HangarScreen'));
 const StatsScreen   = lazy(() => import('./screens/StatsScreen'));
 const ProfileScreen = lazy(() => import('./screens/ProfileScreen'));
 const AdminScreen   = lazy(() => import('./screens/AdminScreen'));
@@ -22,10 +23,11 @@ import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
 import { useSettings } from './hooks/useSettings';
 import { useFlightData } from './hooks/useFlightData';
+import { playCatchSound } from './utils/catchSound';
 import { useAuth } from './hooks/useAuth';
 import { fetchProfile, updateProfile } from './services/api';
 
-export type View = 'flight' | 'log' | 'stats' | 'settings' | 'profile' | 'admin';
+export type View = 'flight' | 'log' | 'hangar' | 'stats' | 'settings' | 'profile' | 'admin';
 // 'guest' is the default for unauthenticated visitors — they see a live
 // overhead view without needing to register. The other values are the
 // existing auth flows, reached from the guest top bar.
@@ -148,16 +150,19 @@ function App() {
   useEffect(() => {
     const flights = data?.flights ?? [];
     let changed = false;
+    let rareCatch = false;
     for (const f of flights) {
       if (f.timesSeen >= 1 && !sessionHexes.current.has(f.hex)) {
         sessionHexes.current.set(f.hex, f.timesSeen === 1);
         changed = true;
+        if (f.interestTier === 'rare' || f.interestTier === 'interesting') rareCatch = true;
       }
     }
     if (changed) {
       const entries = [...sessionHexes.current.values()];
       setSessionCaught(entries.length);
       setSessionNew(entries.filter(Boolean).length);
+      playCatchSound(rareCatch);
     }
   }, [data]);
 
@@ -240,6 +245,10 @@ function App() {
 
     if (view === 'log') {
       return <LogScreen />;
+    }
+
+    if (view === 'hangar') {
+      return <HangarScreen />;
     }
 
     if (view === 'stats') {
