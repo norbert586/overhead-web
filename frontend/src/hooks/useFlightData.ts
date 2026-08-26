@@ -22,6 +22,7 @@ export function useFlightData(params: UseFlightDataParams): {
   const [error, setError] = useState<string | null>(null);
   const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const consecutiveErrors = useRef(0);
 
   // Keep the latest params in a ref so `poll` stays stable across GPS updates.
   // watchPosition fires often; recreating the interval on every fix would
@@ -37,15 +38,24 @@ export function useFlightData(params: UseFlightDataParams): {
     abortRef.current = new AbortController();
 
     setLoading(true);
-    setError(null);
 
     try {
       const result = await fetchFlights(latitude, longitude, radiusNm, record);
+      // Clear the error only on success — clearing it when the poll starts
+      // would flicker the UI out of its error state on every retry during
+      // an outage.
+      setError(null);
+      consecutiveErrors.current = 0;
       setData(result);
       setLastPollTime(new Date());
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError(err instanceof Error ? err.message : 'Unknown error');
+        // One failed poll can be a blip — keep showing what we had. A second
+        // in a row means the feed is really down, so stop presenting stale
+        // aircraft as live and let the UI show the outage instead.
+        consecutiveErrors.current += 1;
+        if (consecutiveErrors.current >= 2) setData(null);
       }
     } finally {
       setLoading(false);

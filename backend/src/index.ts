@@ -8,6 +8,7 @@ import { pruneFlightTrack } from './database/queries';
 import { swaggerSpec } from './swagger';
 import { logger, httpLogger } from './logger';
 import { isEmailConfigured } from './services/email';
+import { getAdsbStatus } from './services/adsb';
 import flightsRouter from './routes/flights';
 import statsRouter from './routes/stats';
 import authRouter from './routes/auth';
@@ -46,7 +47,9 @@ async function start() {
     flightsRouter(req, res, () => {});
   });
 
-  app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+  // Includes per-provider ADS-B feed health so an upstream outage can be
+  // diagnosed in production with a single curl.
+  app.get('/health', (_req, res) => res.json({ status: 'ok', adsb: getAdsbStatus() }));
 
   // Global error handler — must be registered last, after all routes. Catches
   // anything a handler throws or passes to next(err) and turns it into a clean

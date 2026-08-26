@@ -3,7 +3,8 @@ export type EmptyVariant =
   | 'no-aircraft'
   | 'geo-loading'
   | 'geo-denied'
-  | 'no-aircraft-overhead';
+  | 'no-aircraft-overhead'
+  | 'source-down';
 
 interface EmptyStateProps {
   variant: EmptyVariant;
@@ -99,10 +100,25 @@ function NoAircraftOverhead() {
   );
 }
 
+function SourceDown() {
+  return (
+    <div className="empty-full empty-error">
+      <PlaneIcon className="empty-icon empty-icon-error" />
+      <div className="empty-title empty-title-error">Flight data unavailable</div>
+      <div className="empty-body empty-body-error">
+        We can't reach the live aircraft feeds right now. This is on the data side, not your
+        device — we keep retrying automatically and will pick catching back up the moment a
+        feed answers.
+      </div>
+    </div>
+  );
+}
+
 export default function EmptyState({ variant, onOpenSettings, onRetry }: EmptyStateProps) {
   if (variant === 'no-settings')          return <NoSettings onOpenSettings={onOpenSettings} />;
   if (variant === 'geo-loading')          return <GeoLoading />;
   if (variant === 'geo-denied')           return <GeoDenied onRetry={onRetry} onOpenSettings={onOpenSettings} />;
   if (variant === 'no-aircraft-overhead') return <NoAircraftOverhead />;
+  if (variant === 'source-down')          return <SourceDown />;
   return <NoAircraft />;
 }

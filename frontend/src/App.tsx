@@ -123,7 +123,7 @@ function App() {
   const catchLat = usingFallback ? settings.latitude : geo.latitude;
   const catchLon = usingFallback ? settings.longitude : geo.longitude;
 
-  const { data, lastPollTime } = useFlightData({
+  const { data, error: flightError, lastPollTime } = useFlightData({
     latitude:        catchLat,
     longitude:       catchLon,
     radiusNm:        settings.radiusNm,
@@ -298,6 +298,11 @@ function App() {
     if (!usingFallback && (geo.status === 'idle' || geo.status === 'loading')) {
       return <EmptyState variant="geo-loading" />;
     }
+    // The catch feed is erroring (backend down, or all upstream ADS-B feeds
+    // unreachable) — say so instead of pretending the sky is empty.
+    if (flightError) {
+      return <EmptyState variant="source-down" />;
+    }
     return <EmptyState variant="no-aircraft-overhead" />;
   }
 
@@ -366,6 +371,9 @@ function GuestShell({
     }
     if (geo.status === 'idle' || geo.status === 'loading') {
       return <EmptyState variant="geo-loading" />;
+    }
+    if (guestFlight.error) {
+      return <EmptyState variant="source-down" />;
     }
     return <EmptyState variant="no-aircraft-overhead" />;
   }
