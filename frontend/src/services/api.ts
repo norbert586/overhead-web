@@ -40,7 +40,10 @@ export async function fetchFlights(
 ): Promise<FlightsResponse> {
   const recordParam = record ? '' : '&record=false';
   const res = await apiFetch(`${BASE_URL}/api/flights?lat=${lat}&lon=${lon}&radius=${radius}${recordParam}`);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `API error: ${res.status}`);
+  }
   return res.json();
 }
 

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { fetchAll } from '../services/adsb';
+import { fetchNearby } from '../services/adsb';
 import { enrichAircraft, enrichCallsign } from '../services/enrichment';
 import { classify } from '../services/classifier';
 import {
@@ -104,25 +104,41 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     Date.now() - (lastRecordedAt.get(req.userId!) ?? 0) >= CATCH_MIN_RECORD_INTERVAL_MS;
 
   try {
-    let allAc = await fetchAll(lat, lon, radius);
+    const first = await fetchNearby(lat, lon, radius);
+    let allAc = first.aircraft;
+    let anyOk = first.ok;
     let matchedRadius = radius;
 
     // The hearing radius is deliberately small, so it's often empty — expand
     // the search so the user sees the nearest contact and its true distance
     // instead of an empty pane. Expanded contacts are display-only: catching
-    // only ever happens inside the actual hearing radius.
+    // only ever happens inside the actual hearing radius. When the first
+    // fetch already proved every provider down, skip the expansion — wider
+    // radii would just re-pay the timeouts against dead upstreams.
     if (!allAc.length) {
       shouldRecord = false;
+    }
+    if (!allAc.length && first.ok) {
       for (const r of [25, 50]) {
         if (r <= radius) continue;
-        const expanded = await fetchAll(lat, lon, r);
-        if (expanded.length) {
-          allAc = expanded;
+        const expanded = await fetchNearby(lat, lon, r);
+        anyOk = anyOk || expanded.ok;
+        if (expanded.aircraft.length) {
+          allAc = expanded.aircraft;
           matchedRadius = r;
-          log.debug({ radius, expandedRadius: r, count: expanded.length }, 'poll: expanded radius');
+          log.debug({ radius, expandedRadius: r, count: expanded.aircraft.length }, 'poll: expanded radius');
           break;
         }
       }
+    }
+
+    // Every provider failed on every attempt — that's an upstream outage,
+    // not an empty sky. Say so instead of serving a fake-empty 200 that
+    // leaves the client "searching" forever.
+    if (!allAc.length && !anyOk) {
+      log.error('poll: all flight data sources unreachable');
+      res.status(502).json({ error: 'Live flight data sources are unreachable' });
+      return;
     }
 
     if (!allAc.length) {

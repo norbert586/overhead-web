@@ -40,7 +40,8 @@ The result: you hear a rumble, open your phone, and catch UAL2044 — a United 7
 | DNS/CDN | Cloudflare (proxy, HTTPS, DDoS) |
 
 External data sources:
-- [adsb.lol](https://adsb.lol) — real-time ADS-B aircraft positions
+- [adsb.lol](https://adsb.lol) — real-time ADS-B aircraft positions (primary)
+- [adsb.fi](https://adsb.fi) and [airplanes.live](https://airplanes.live) — automatic fallbacks when the primary feed is unreachable
 - [adsbdb.com](https://adsbdb.com) — aircraft registry and route lookups (cached)
 
 ---
@@ -79,7 +80,7 @@ overhead-web/
 │   │   ├── index.ts              # Express entry point
 │   │   ├── routes/               # auth, flights, stats
 │   │   ├── services/
-│   │   │   ├── adsb.ts           # adsb.lol polling with retry logic
+│   │   │   ├── adsb.ts           # ADS-B feed polling with provider failover
 │   │   │   ├── enrichment.ts     # aircraft registry + route lookups
 │   │   │   └── classifier.ts     # flight type classification engine
 │   │   ├── database/

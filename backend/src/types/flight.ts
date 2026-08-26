@@ -80,9 +80,9 @@ export interface FlightsResponse {
   matchedRadiusNm?: number;
 }
 
-// Raw shape from adsb.lol. Only the fields we read are typed.
-// adsb.lol v2 returns many more fields per aircraft; we capture the ones
-// that drive interest scoring without changing the request.
+// Raw readsb-style shape shared by all the ADS-B providers (adsb.lol,
+// adsb.fi, airplanes.live). Only the fields we read are typed; the v2 APIs
+// return many more per aircraft.
 export interface AdsbAircraft {
   hex: string;
   flight?: string;
