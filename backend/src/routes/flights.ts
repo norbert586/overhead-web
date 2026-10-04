@@ -16,6 +16,7 @@ import { requireAuth, optionalAuth, guestRateLimit } from '../middleware/auth';
 import { clampCatchRadius, CATCH_MIN_RECORD_INTERVAL_MS } from '../config';
 import { logger } from '../logger';
 import type { FlightsResponse } from '../types/flight';
+import type { PollInfo } from '../services/diagnostics';
 
 const log = logger.child({ module: 'flights' });
 
@@ -142,11 +143,20 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     // One upstream fetch answers the hearing radius and the display-only
     // expansion alike (see AREA_RADIUS_NM).
     const area = await fetchArea(lat, lon);
+    // What this poll saw, for the diagnostics poll log (metricsMiddleware
+    // reads it when the response finishes).
+    const poll: PollInfo = {
+      areaSource: area.source,
+      provider: area.provider,
+      aircraftInArea: area.aircraft.length,
+    };
+    res.locals.poll = poll;
 
     // Every provider failed and nothing recent is cached — that's an
     // upstream outage, not an empty sky. Say so instead of serving a
     // fake-empty 200 that leaves the client "listening" forever.
     if (!area.ok) {
+      poll.outcome = 'upstream_unavailable';
       log.error('poll: all flight data sources unreachable');
       res.status(502).json({ error: 'Live flight data sources are unreachable', code: 'upstream_unavailable' });
       return;
@@ -158,6 +168,7 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
 
     let allAc = area.aircraft.filter((ac) => ac.dst! <= radius);
     let matchedRadius = radius;
+    poll.inRange = allAc.length;
 
     // The hearing radius is deliberately small, so it's often empty — widen
     // the view so the user sees the nearest contact and its true distance
@@ -178,8 +189,11 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     }
 
     const freshness = area.stale ? { stale: true, dataAgeSec: Math.round(area.ageMs / 1000) } : {};
+    if (area.stale) poll.dataAgeSec = Math.round(area.ageMs / 1000);
+    if (matchedRadius !== radius) poll.matchedRadiusNm = matchedRadius;
 
     if (!allAc.length) {
+      poll.outcome = area.stale ? 'stale_empty' : 'empty';
       log.debug('poll: no aircraft in range');
       const dbStats = isGuest ? EMPTY_STATS : getSessionStats(req.userId);
       const response: FlightsResponse = {
@@ -195,6 +209,8 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     log.debug({ count: allAc.length, record: shouldRecord }, 'poll: aircraft in range');
 
     if (shouldRecord) lastRecordedAt.set(req.userId!, Date.now());
+    poll.recorded = shouldRecord ? allAc.length : 0;
+    poll.outcome = area.stale ? 'stale' : matchedRadius !== radius ? 'expanded' : 'ok';
 
     // A recording poll catches everything inside the hearing radius, so all
     // of it is enriched and upserted. A display-only poll shows just the

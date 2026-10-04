@@ -22,8 +22,11 @@ npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
 
-# Claude Code local settings
-.claude/
+# Claude Code: personal settings stay local; the shared SessionStart hook
+# (installs deps in cloud sessions) and its settings.json are committed.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # OS / editor
 .DS_Store

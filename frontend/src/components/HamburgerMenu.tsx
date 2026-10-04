@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { View } from '../App';
+import { APP_VERSION } from '../utils/diagnostics';
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -8,6 +9,8 @@ interface HamburgerMenuProps {
   isAdmin?: boolean;
   onSelect: (view: View) => void;
   onLogout?: () => void;
+  /** Open the diagnostics panel (the bottom bar that opens it on desktop is hidden on phones). */
+  onDiagnostics?: () => void;
 }
 
 const FlightIcon = () => (
@@ -72,13 +75,19 @@ const ADMIN_ITEM: { view: View; label: string; Icon: () => ReactElement } = {
   view: 'admin', label: 'Admin', Icon: AdminIcon,
 };
 
+const DiagnosticsIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M3 13h4l2-6 4 12 2-6h6v-2h-7.4L13 13.6 9 1.6 5.6 11H3z" />
+  </svg>
+);
+
 const LogoutIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
   </svg>
 );
 
-export default function HamburgerMenu({ isOpen, view, userEmail, isAdmin = false, onSelect, onLogout }: HamburgerMenuProps) {
+export default function HamburgerMenu({ isOpen, view, userEmail, isAdmin = false, onSelect, onLogout, onDiagnostics }: HamburgerMenuProps) {
   const items = isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS;
   return (
     <div className={`menu-overlay${isOpen ? ' menu-open' : ''}`}>
@@ -96,10 +105,18 @@ export default function HamburgerMenu({ isOpen, view, userEmail, isAdmin = false
         </div>
       ))}
       <div className="menu-divider" />
+      {onDiagnostics && (
+        <div className="menu-item" onClick={onDiagnostics}>
+          <DiagnosticsIcon />
+          Diagnostics
+        </div>
+      )}
       <div className="menu-item menu-item-logout" onClick={onLogout}>
         <LogoutIcon />
         Sign out
       </div>
+      {/* The build in every screenshot of the menu. */}
+      <div className="menu-version">Overhead · {APP_VERSION}</div>
     </div>
   );
 }

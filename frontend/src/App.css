@@ -278,6 +278,15 @@ body {
 .menu-item-logout {
   color: var(--text-dim);
 }
+
+.menu-version {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 6px 16px 8px;
+}
 .menu-item-logout:hover {
   color: #C4384F;
   background: rgba(196, 56, 79, 0.06);
@@ -525,6 +534,18 @@ body {
   justify-content: space-between;
   padding: 0 28px;
   z-index: 50;
+}
+
+/* The bar is a button (tap → diagnostics panel); undo button chrome. */
+button.bottom-bar {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--glass-border);
+  border-radius: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .bottom-bar span {
@@ -5521,7 +5542,8 @@ body {
 }
 
 .admin-modal {
-  background: var(--panel-bg);
+  /* --panel-bg is never defined, which left this dialog transparent. */
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 22px 26px;
@@ -6205,4 +6227,166 @@ body {
   height: 16px;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+/* ── Diagnostics panel (tap the bottom bar) & admin System tab ───────────── */
+.diag-panel {
+  max-width: 560px;
+  width: calc(100% - 32px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  padding: 18px 18px 20px;
+}
+
+.diag-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.diag-header .admin-modal-title {
+  margin: 0;
+}
+
+.diag-section {
+  border-top: 1px solid var(--border-subtle);
+  padding: 8px 0;
+}
+
+.diag-section-title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 4px 0 6px;
+}
+
+.diag-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.diag-row-label {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.diag-row-value {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.diag-tone-ok    { color: #2F6B3A; }
+.diag-tone-warn  { color: #8A5A14; }
+.diag-tone-bad   { color: #8E2F3E; }
+.diag-tone-muted { color: var(--text-secondary); }
+
+.diag-event {
+  display: flex;
+  gap: 10px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  padding: 2px 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.diag-event-time {
+  flex-shrink: 0;
+  width: 56px;
+  color: var(--text-secondary);
+}
+
+.diag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.diag-json {
+  width: 100%;
+  min-height: 160px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.empty-retry-ref {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.diag-admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.diag-admin-block {
+  margin-bottom: 22px;
+}
+
+.diag-admin-block .admin-table td {
+  font-size: 11px;
+  vertical-align: top;
+}
+
+.diag-admin-problems {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.diag-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.diag-kv span {
+  overflow-wrap: anywhere;
+}
+
+.diag-kv span b {
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-right: 4px;
+}
+
+.diag-history {
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+  white-space: nowrap;
 }

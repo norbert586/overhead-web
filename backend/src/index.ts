@@ -10,11 +10,14 @@ import { logger, httpLogger } from './logger';
 import { isEmailConfigured } from './services/email';
 import { getAdsbStatus } from './services/adsb';
 import { getEnrichmentStatus } from './services/enrichment';
+import { metricsMiddleware, recentPollOutcomes } from './services/diagnostics';
+import { VERSION } from './version';
 import flightsRouter from './routes/flights';
 import statsRouter from './routes/stats';
 import authRouter from './routes/auth';
 import userRouter from './routes/user';
 import adminRouter from './routes/admin';
+import diagnosticsRouter from './routes/diagnostics';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
@@ -33,9 +36,12 @@ async function start() {
   }
 
   const app = express();
-  app.use(cors());
+  // X-Request-Id must be readable cross-origin (dev runs the API on its own
+  // port) so error screens and client reports can quote it.
+  app.use(cors({ exposedHeaders: ['X-Request-Id'] }));
   app.use(express.json());
   app.use(httpLogger);
+  app.use(metricsMiddleware);
 
   // Live data must never be served from a browser, proxy, or CDN cache.
   app.use('/api', (_req, res, next) => {
@@ -51,6 +57,7 @@ async function start() {
   app.use('/api/admin', adminRouter);
   app.use('/api/flights', flightsRouter);
   app.use('/api/stats', statsRouter);
+  app.use('/api/diagnostics', diagnosticsRouter);
 
   // /api/log proxies to the log route on the flights router
   app.get('/api/log', (req, res, next) => {
@@ -58,16 +65,37 @@ async function start() {
     flightsRouter(req, res, next);
   });
 
-  // Includes per-provider ADS-B feed health and the adsbdb breaker so an
-  // upstream outage can be diagnosed in production with a single curl.
-  // nginx only forwards /api/* to Express, so /api/health is the public
-  // address; /health stays for on-box checks.
+  // Public, cheap, safe to poll from an uptime monitor. Always HTTP 200 while
+  // the process is up (the deploy health check relies on that). `status` is
+  // 'degraded' only when users are affected, with `problems` saying why in
+  // plain words; `warnings` are worth fixing but not user-visible (a backup
+  // feed down while the primary works). nginx only forwards /api/* to
+  // Express, so /api/health is the public address; /health stays for
+  // on-box checks. Deeper detail: GET /api/diagnostics (admin or key).
   const health = (_req: express.Request, res: express.Response) => {
+    const adsb = getAdsbStatus();
+    const enrichment = getEnrichmentStatus();
+    const polls = recentPollOutcomes(5);
+    const problems: string[] = [];
+    const warnings: string[] = [];
+    const recentMs = 5 * 60_000;
+    const failingNow = adsb.providers.filter((p) =>
+      p.lastErrorAt && Date.now() - Date.parse(p.lastErrorAt) < recentMs &&
+      (!p.lastSuccessAt || Date.parse(p.lastErrorAt) > Date.parse(p.lastSuccessAt)));
+    if (failingNow.length === adsb.providers.length) problems.push('every ADS-B provider is failing');
+    else if (failingNow.length) warnings.push(`failing ADS-B providers: ${failingNow.map((p) => p.name).join(', ')}`);
+    if (polls.upstream_unavailable) problems.push(`${polls.upstream_unavailable} poll(s) got no flight data in the last 5 min`);
+    if (enrichment.breakerOpen) problems.push('adsbdb lookups paused (circuit breaker open)');
+    if (!process.env.JWT_SECRET) warnings.push('JWT_SECRET not set — sessions can be forged');
     res.json({
-      status: 'ok',
+      status: problems.length ? 'degraded' : 'ok',
+      problems,
+      warnings,
+      version: VERSION,
       uptimeSec: Math.round(process.uptime()),
-      adsb: getAdsbStatus(),
-      enrichment: getEnrichmentStatus(),
+      pollsLast5Min: polls,
+      adsb,
+      enrichment,
     });
   };
   app.get('/health', health);

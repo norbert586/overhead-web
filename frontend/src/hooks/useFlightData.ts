@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchFlights, ApiError, type ApiErrorKind } from '../services/api';
+import { recordEvent, reportToServer, setDiagState } from '../utils/diagnostics';
 import type { FlightsResponse } from '../types/flight';
 
 interface UseFlightDataParams {
@@ -16,6 +17,8 @@ export interface FlightFeed {
   loading: boolean;
   error: string | null;
   errorKind: ApiErrorKind | null;
+  /** X-Request-Id of the last failed poll, for "ref …" on error screens. */
+  errorRequestId: string | null;
   /** `data` is older than the latest poll — the feed is failing, or the server served a stale snapshot. */
   stale: boolean;
   lastPollTime: Date | null;
@@ -49,6 +52,7 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ApiErrorKind | null>(null);
+  const [errorRequestId, setErrorRequestId] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
   const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
   const [nextRetryAt, setNextRetryAt] = useState<number | null>(null);
@@ -91,15 +95,24 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
       setStale(true);
     }
     setLoading(true);
+    const startedAt = performance.now();
 
     try {
       const result = await fetchFlights(latitude, longitude, radiusNm, record, ctrl.signal);
+      const ms = Math.round(performance.now() - startedAt);
+      if (failures.current > 0) recordEvent('poll-recovered', { afterFailures: failures.current, ms });
+      setDiagState('lastPoll', {
+        at: new Date().toISOString(), ok: true, ms, record,
+        flights: result.flights.length, active: result.stats?.activeCount ?? null,
+        matchedRadiusNm: result.matchedRadiusNm ?? null, serverStale: !!result.stale,
+      });
       failures.current = 0;
       // A server-side stale snapshot is only as fresh as its data, so the
       // 45 s budget for keeping it on screen counts from then, not now.
       lastSuccessAt.current = Date.now() - (result.dataAgeSec ?? 0) * 1000;
       setError(null);
       setErrorKind(null);
+      setErrorRequestId(null);
       setNextRetryAt(null);
       setStale(!!result.stale);
       setData(result);
@@ -110,9 +123,18 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
       if (abortRef.current !== ctrl || (ctrl.signal.aborted && !timedOut)) return;
 
       const kind: ApiErrorKind = timedOut ? 'timeout' : err instanceof ApiError ? err.kind : 'server';
+      const message = timedOut ? 'Request timed out' : err instanceof Error ? err.message : 'Unknown error';
+      const requestId = err instanceof ApiError ? err.requestId : null;
+      const status = err instanceof ApiError ? err.status : null;
+      const ms = Math.round(performance.now() - startedAt);
       failures.current += 1;
-      setError(timedOut ? 'Request timed out' : err instanceof Error ? err.message : 'Unknown error');
+      setError(message);
       setErrorKind(kind);
+      setErrorRequestId(requestId);
+      const failure = { kind, status, message, requestId, ms, consecutive: failures.current };
+      setDiagState('lastPoll', { at: new Date().toISOString(), ok: false, record, ...failure });
+      recordEvent('poll-failed', failure);
+      reportToServer(`poll-${kind}`, message, { requestId, detail: failure });
 
       // Keep showing the last good data (marked delayed) through a blip;
       // drop it once it's too old to describe the sky right now.
@@ -160,5 +182,5 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
     };
   }, [poll, enabled, hasCoords]);
 
-  return { data, loading, error, errorKind, stale, lastPollTime, nextRetryAt, retryNow };
+  return { data, loading, error, errorKind, errorRequestId, stale, lastPollTime, nextRetryAt, retryNow };
 }

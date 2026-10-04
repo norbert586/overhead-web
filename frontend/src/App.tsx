@@ -27,6 +27,7 @@ import { useFlightData, type FlightFeed } from './hooks/useFlightData';
 import { playCatchSound } from './utils/catchSound';
 import { useAuth, getTokenAgeMs } from './hooks/useAuth';
 import { fetchProfile, updateProfile, apiRefreshSession, AUTH_EXPIRED_EVENT } from './services/api';
+import { recordEvent, reportToServer } from './utils/diagnostics';
 
 export type View = 'flight' | 'log' | 'hangar' | 'stats' | 'settings' | 'profile' | 'admin';
 // 'guest' is the default for unauthenticated visitors — they see a live
@@ -125,6 +126,8 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated) return;
     function onExpired() {
+      recordEvent('auth-expired');
+      reportToServer('auth-expired', 'A request was rejected with 401; signing out');
       logout();
       setAuthNotice('Your session expired — sign in again to keep catching.');
       setAuthView('login');
@@ -351,6 +354,7 @@ function App() {
           errorKind={feed.errorKind}
           nextRetryAt={feed.nextRetryAt}
           onRetry={feed.retryNow}
+          requestId={feed.errorRequestId}
         />
       );
     }
@@ -440,6 +444,7 @@ function GuestShell({
           errorKind={guestFlight.errorKind}
           nextRetryAt={guestFlight.nextRetryAt}
           onRetry={guestFlight.retryNow}
+          requestId={guestFlight.errorRequestId}
         />
       );
     }

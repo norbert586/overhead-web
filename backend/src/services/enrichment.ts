@@ -5,7 +5,8 @@ import {
 import { logger } from '../logger';
 
 const log = logger.child({ module: 'enrichment' });
-const ADSBDB = 'https://api.adsbdb.com/v0';
+// ADSBDB_BASE_URL points lookups at a mock (scripts/mock-adsb.mjs) for local runs.
+const ADSBDB = process.env.ADSBDB_BASE_URL ?? 'https://api.adsbdb.com/v0';
 const USER_AGENT = 'Overhead/1.0 (+https://overheadflight.com)';
 const FETCH_TIMEOUT_MS = 8_000;
 
@@ -65,10 +66,28 @@ let breakerOpenUntil = 0;
 export function getEnrichmentStatus() {
   return {
     breakerOpen: breakerOpenUntil > Date.now(),
+    breakerOpenUntil: breakerOpenUntil > Date.now() ? new Date(breakerOpenUntil).toISOString() : null,
     consecutiveTransientFailures: consecutiveTransient,
     activeLookups,
     queuedLookups: lookupQueue.length,
+    transientMissesRemembered: transientMisses.size,
   };
+}
+
+/** Diagnostics: can we reach adsbdb right now? Bypasses caches and the breaker. */
+export async function probeAdsbdb(): Promise<{ ok: boolean; ms: number; status: number | null; error: string | null }> {
+  const started = Date.now();
+  try {
+    const res = await fetch(`${ADSBDB}/callsign/UAL1`, {
+      headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    // 404 is a healthy answer ("unknown callsign") — anything that isn't 2xx/404 is not.
+    const ok = res.ok || res.status === 404;
+    return { ok, ms: Date.now() - started, status: res.status, error: ok ? null : (await res.text()).slice(0, 200) };
+  } catch (err) {
+    return { ok: false, ms: Date.now() - started, status: null, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 async function withLookupSlot<T>(fn: () => Promise<T>): Promise<T> {

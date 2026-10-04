@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { isChunkLoadError, reloadForNewVersion } from '../utils/reload';
+import { recordEvent, reportToServer } from '../utils/diagnostics';
 
 interface Props {
   children: ReactNode;
@@ -26,6 +27,9 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Screen crashed', error, info.componentStack);
+    const component = info.componentStack?.trim().split('\n')[0]?.trim() ?? null;
+    recordEvent('render-crash', { message: error.message, component });
+    reportToServer('render-crash', error.message, { detail: { component } });
     if (isChunkLoadError(error)) reloadForNewVersion();
   }
 

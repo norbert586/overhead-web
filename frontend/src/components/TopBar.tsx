@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import HamburgerMenu from './HamburgerMenu';
 import type { View } from '../App';
+import { openDiagnostics } from '../utils/diagnostics';
 
 interface TopBarProps {
   view: View;
@@ -100,6 +101,10 @@ export default function TopBar({
         onLogout={() => {
           setMenuOpen(false);
           onLogout?.();
+        }}
+        onDiagnostics={() => {
+          setMenuOpen(false);
+          openDiagnostics();
         }}
       />
     </div>

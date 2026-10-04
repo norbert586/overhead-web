@@ -37,13 +37,22 @@ export class ApiError extends Error {
   readonly kind: ApiErrorKind;
   readonly status: number | null;
   readonly retryAfterSec: number | null;
+  /** Server's X-Request-Id — matches the server log line for this request. */
+  readonly requestId: string | null;
 
-  constructor(kind: ApiErrorKind, message: string, status: number | null = null, retryAfterSec: number | null = null) {
+  constructor(
+    kind: ApiErrorKind,
+    message: string,
+    status: number | null = null,
+    retryAfterSec: number | null = null,
+    requestId: string | null = null,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.kind = kind;
     this.status = status;
     this.retryAfterSec = retryAfterSec;
+    this.requestId = requestId;
   }
 }
 
@@ -71,15 +80,16 @@ async function toApiError(res: Response): Promise<ApiError> {
   const retryAfter = Number(res.headers.get('Retry-After'));
   const retryAfterSec = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null;
   const msg = body.error ?? `API error: ${res.status}`;
-  if (res.status === 401) return new ApiError('auth', msg, 401);
-  if (res.status === 429) return new ApiError('rate-limited', msg, 429, retryAfterSec);
+  const requestId = res.headers.get('X-Request-Id');
+  if (res.status === 401) return new ApiError('auth', msg, 401, null, requestId);
+  if (res.status === 429) return new ApiError('rate-limited', msg, 429, retryAfterSec, requestId);
   // Only our API's own JSON 502 means "the feeds are down". A bare 502/503/
   // 504 is nginx or Cloudflare saying the backend itself is unreachable
   // (deploy restart, crash) — a different message and a different fix.
   if (res.status === 502 && body.code === 'upstream_unavailable') {
-    return new ApiError('upstream', msg, 502, retryAfterSec);
+    return new ApiError('upstream', msg, 502, retryAfterSec, requestId);
   }
-  return new ApiError('server', msg, res.status, retryAfterSec);
+  return new ApiError('server', msg, res.status, retryAfterSec, requestId);
 }
 
 export async function fetchFlights(
@@ -367,5 +377,88 @@ export async function fetchAchievements(): Promise<AchievementsResponse> {
 export async function fetchRank(): Promise<RankResponse> {
   const res = await apiFetch(`${BASE_URL}/api/user/rank`);
   if (!res.ok) throw new Error(`Rank fetch failed (${res.status})`);
+  return res.json();
+}
+
+// ── Diagnostics (admin) ───────────────────────────────────────────────────────
+
+type Counts = Record<string, number>;
+
+export interface DiagnosticsSnapshot {
+  generatedAt: string;
+  version: { commit: string; committedAt: string | null; startedAt: string; node: string };
+  process: {
+    uptimeSec: number;
+    memoryMb: { rss: number; heapUsed: number; heapTotal: number };
+    env: Record<string, string | boolean | null>;
+  };
+  database: { sizeBytes: number | null; walBytes: number | null; rows: Record<string, number | null> };
+  adsb: {
+    providers: Array<{
+      name: string;
+      lastSuccessAt: string | null;
+      lastLatencyMs: number | null;
+      lastErrorAt: string | null;
+      lastError: string | null;
+      coolingDown: boolean;
+      okCount: number;
+      failCount: number;
+      history?: Array<{ at: string; ok: boolean; ms: number; count?: number; error?: string }>;
+    }>;
+    cachedAreas: number;
+    inflightAreas: number;
+  };
+  enrichment: Record<string, unknown>;
+  metrics: {
+    last5min: { requests: Counts; errorCodes: Counts; pollOutcomes: Counts };
+    last60min: { requests: Counts; errorCodes: Counts; pollOutcomes: Counts };
+    pollLatencyMs: { samples: number; p50: number | null; p95: number | null; max: number | null };
+  };
+  recent: {
+    logs: Array<{ at: string; lastAt: string; count: number; level: string; module: string | null; msg: string; detail: Record<string, unknown> }>;
+    polls: Array<{
+      at: string; reqId: string; user: string; status: number; code: string | null; ms: number;
+      outcome: string; areaSource?: string; provider?: string | null; aircraftInArea?: number;
+      inRange?: number; recorded?: number;
+    }>;
+    clientReports: Array<{
+      at: string; user: string; kind: string; message: string;
+      appVersion: string | null; requestId: string | null; detail: unknown; userAgent: string | null;
+    }>;
+  };
+}
+
+export interface ProbeSnapshot {
+  probedAt: string;
+  ms: number;
+  cached?: boolean;
+  allProvidersDown: boolean;
+  providers: Array<{ name: string; ok: boolean; ms: number; status: number | null; aircraft: number | null; error: string | null }>;
+  adsbdb: { ok: boolean; ms: number; status: number | null; error: string | null };
+  database: { ok: boolean };
+}
+
+export interface HealthSnapshot {
+  status: 'ok' | 'degraded';
+  problems: string[];
+  warnings: string[];
+  version: { commit: string; startedAt: string };
+}
+
+export async function fetchDiagnostics(): Promise<DiagnosticsSnapshot> {
+  const res = await apiFetch(`${BASE_URL}/api/diagnostics`);
+  if (!res.ok) throw new Error(`Diagnostics failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchDiagnosticsProbe(): Promise<ProbeSnapshot> {
+  const res = await apiFetch(`${BASE_URL}/api/diagnostics/probe`);
+  if (!res.ok) throw new Error(`Probe failed (${res.status})`);
+  return res.json();
+}
+
+export async function fetchHealth(): Promise<HealthSnapshot> {
+  const res = await fetch(`${BASE_URL}/api/health`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Health failed (${res.status})`);
   return res.json();
 }

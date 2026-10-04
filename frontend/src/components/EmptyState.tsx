@@ -1,5 +1,6 @@
 import type { ApiErrorKind } from '../services/api';
 import { useNow } from '../hooks/useNow';
+import { openDiagnostics } from '../utils/diagnostics';
 
 export type EmptyVariant =
   | 'no-settings'
@@ -17,6 +18,8 @@ interface EmptyStateProps {
   errorKind?: ApiErrorKind | null;
   /** For 'feed-error': epoch ms of the next automatic retry. */
   nextRetryAt?: number | null;
+  /** For 'feed-error': server request id of the failed poll. */
+  requestId?: string | null;
 }
 
 function PlaneIcon({ className }: { className?: string }) {
@@ -141,10 +144,12 @@ function FeedError({
   kind,
   nextRetryAt,
   onRetry,
+  requestId,
 }: {
   kind: ApiErrorKind;
   nextRetryAt?: number | null;
   onRetry?: () => void;
+  requestId?: string | null;
 }) {
   const copy = FEED_ERROR_COPY[kind];
   const now = useNow(!!nextRetryAt);
@@ -166,15 +171,20 @@ function FeedError({
           )}
         </div>
       )}
+      {/* The ref matches the server log line; Details opens the diagnostics
+          panel with a copyable report. */}
+      <button type="button" className="empty-retry-ref" onClick={openDiagnostics}>
+        {requestId ? `Details · ref ${requestId}` : 'Details'}
+      </button>
     </div>
   );
 }
 
-export default function EmptyState({ variant, onOpenSettings, onRetry, errorKind, nextRetryAt }: EmptyStateProps) {
+export default function EmptyState({ variant, onOpenSettings, onRetry, errorKind, nextRetryAt, requestId }: EmptyStateProps) {
   if (variant === 'no-settings')          return <NoSettings onOpenSettings={onOpenSettings} />;
   if (variant === 'geo-loading')          return <GeoLoading />;
   if (variant === 'geo-denied')           return <GeoDenied onRetry={onRetry} onOpenSettings={onOpenSettings} />;
   if (variant === 'no-aircraft-overhead') return <NoAircraftOverhead />;
-  if (variant === 'feed-error')           return <FeedError kind={errorKind ?? 'server'} nextRetryAt={nextRetryAt} onRetry={onRetry} />;
+  if (variant === 'feed-error')           return <FeedError kind={errorKind ?? 'server'} nextRetryAt={nextRetryAt} onRetry={onRetry} requestId={requestId} />;
   return <NoAircraft />;
 }

@@ -6,7 +6,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "mock-feed": "node scripts/mock-adsb.mjs",
+    "dev:mock": "ADSB_BASE_URL=http://localhost:4555/v2/point ADSBDB_BASE_URL=http://localhost:4555/v0 tsx watch src/index.ts",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

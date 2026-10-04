@@ -71,20 +71,41 @@ const PROVIDERS: Provider[] = [
   },
 ];
 
+interface ProviderEvent {
+  at: string;
+  ok: boolean;
+  ms: number;
+  count?: number;
+  error?: string;
+}
+
 interface ProviderState {
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
   lastError: string | null;
   lastLatencyMs: number | null;
   cooldownUntil: number; // epoch ms; 0 = not cooling down
+  okCount: number;
+  failCount: number;
+  history: ProviderEvent[]; // most recent last; shows flapping that "last error" hides
 }
+
+const PROVIDER_HISTORY = 20;
 
 const providerState = new Map<string, ProviderState>(
   PROVIDERS.map((p) => [
     p.name,
-    { lastSuccessAt: null, lastErrorAt: null, lastError: null, lastLatencyMs: null, cooldownUntil: 0 },
+    {
+      lastSuccessAt: null, lastErrorAt: null, lastError: null, lastLatencyMs: null,
+      cooldownUntil: 0, okCount: 0, failCount: 0, history: [],
+    },
   ]),
 );
+
+function pushHistory(state: ProviderState, event: ProviderEvent): void {
+  state.history.push(event);
+  if (state.history.length > PROVIDER_HISTORY) state.history.shift();
+}
 
 interface Snapshot {
   aircraft: AdsbAircraft[];
@@ -98,8 +119,9 @@ const inflight = new Map<string, Promise<Snapshot>>();
 /**
  * Snapshot of upstream feed health, surfaced on /api/health so a production
  * outage can be diagnosed with one curl instead of grepping server logs.
+ * `withHistory` adds each provider's recent attempts (diagnostics only).
  */
-export function getAdsbStatus() {
+export function getAdsbStatus(withHistory = false) {
   const now = Date.now();
   return {
     providers: PROVIDERS.map((p) => {
@@ -111,9 +133,13 @@ export function getAdsbStatus() {
         lastErrorAt: s.lastErrorAt,
         lastError: s.lastError,
         coolingDown: s.cooldownUntil > now,
+        okCount: s.okCount,
+        failCount: s.failCount,
+        ...(withHistory && { history: s.history }),
       };
     }),
     cachedAreas: snapshots.size,
+    inflightAreas: inflight.size,
   };
 }
 
@@ -205,6 +231,8 @@ function fetchFromProviders(lat: number, lon: number, radiusNm: number): Promise
           state.lastSuccessAt = new Date().toISOString();
           state.lastLatencyMs = Date.now() - startedAt;
           state.cooldownUntil = 0;
+          state.okCount += 1;
+          pushHistory(state, { at: state.lastSuccessAt, ok: true, ms: state.lastLatencyMs, count: aircraft.length });
           if (settled) return;
           finish();
           for (const c of controllers) if (c !== ctrl) c.abort();
@@ -218,6 +246,8 @@ function fetchFromProviders(lat: number, lon: number, radiusNm: number): Promise
           state.lastErrorAt = new Date().toISOString();
           state.lastError = describeError(ctrl.signal.aborted ? ctrl.signal.reason : err);
           state.cooldownUntil = Date.now() + PROVIDER_COOLDOWN_MS;
+          state.failCount += 1;
+          pushHistory(state, { at: state.lastErrorAt, ok: false, ms: Date.now() - startedAt, error: state.lastError });
           log.warn({ provider: p.name, error: state.lastError }, 'adsb provider failed');
           failed += 1;
           if (failed >= order.length) {
@@ -255,6 +285,8 @@ export interface AreaResult {
   stale: boolean;
   /** Age of the underlying snapshot. */
   ageMs: number;
+  /** Where the data came from — for diagnostics. */
+  source: 'cache' | 'shared' | 'fetched' | 'stale' | 'none';
 }
 
 /**
@@ -262,7 +294,8 @@ export interface AreaResult {
  * was fetched around the cell centre) and sort closest first. Copies — the
  * snapshot is shared across callers and must not be mutated.
  */
-function viewFrom(snap: Snapshot, lat: number, lon: number, stale: boolean): AreaResult {
+function viewFrom(snap: Snapshot, lat: number, lon: number, source: AreaResult['source']): AreaResult {
+  const stale = source === 'stale';
   const aircraft: AdsbAircraft[] = [];
   for (const ac of snap.aircraft) {
     const dst =
@@ -273,7 +306,7 @@ function viewFrom(snap: Snapshot, lat: number, lon: number, stale: boolean): Are
     aircraft.push({ ...ac, dst });
   }
   aircraft.sort((a, b) => a.dst! - b.dst!);
-  return { ok: true, aircraft, provider: snap.provider, stale, ageMs: Date.now() - snap.fetchedAt };
+  return { ok: true, aircraft, provider: snap.provider, stale, ageMs: Date.now() - snap.fetchedAt, source };
 }
 
 /**
@@ -285,10 +318,11 @@ export async function fetchArea(lat: number, lon: number): Promise<AreaResult> {
   const key = cellKey(lat, lon);
   const cached = snapshots.get(key);
   if (cached && Date.now() - cached.fetchedAt < SNAPSHOT_FRESH_MS) {
-    return viewFrom(cached, lat, lon, false);
+    return viewFrom(cached, lat, lon, 'cache');
   }
 
   let pending = inflight.get(key);
+  const joined = !!pending;
   if (!pending) {
     const [ky, kx] = key.split(':').map(Number);
     const centerLat = +(ky * CELL_DEG).toFixed(4);
@@ -304,14 +338,56 @@ export async function fetchArea(lat: number, lon: number): Promise<AreaResult> {
   }
 
   try {
-    return viewFrom(await pending, lat, lon, false);
+    return viewFrom(await pending, lat, lon, joined ? 'shared' : 'fetched');
   } catch {
     const last = snapshots.get(key);
     if (last && Date.now() - last.fetchedAt < SNAPSHOT_STALE_MAX_MS) {
       log.warn({ ageMs: Date.now() - last.fetchedAt }, 'all adsb providers failed — serving stale snapshot');
-      return viewFrom(last, lat, lon, true);
+      return viewFrom(last, lat, lon, 'stale');
     }
     log.error({ status: getAdsbStatus() }, 'all adsb providers failed');
-    return { ok: false, aircraft: [], provider: null, stale: false, ageMs: 0 };
+    return { ok: false, aircraft: [], provider: null, stale: false, ageMs: 0, source: 'none' };
   }
+}
+
+// ── Live probe (diagnostics) ────────────────────────────────────────────────
+
+export interface ProbeResult {
+  name: string;
+  ok: boolean;
+  ms: number;
+  status: number | null;
+  aircraft: number | null;
+  error: string | null;
+}
+
+/**
+ * Ask every provider directly, right now, bypassing cooldowns and caches —
+ * "can this server reach the feeds?" answered even when no one has polled
+ * since the last restart. Doesn't touch provider state, so a probe can't
+ * put a healthy provider into cooldown.
+ */
+export async function probeProviders(lat = 40.69, lon = -74.17): Promise<ProbeResult[]> {
+  return Promise.all(PROVIDERS.map(async (p): Promise<ProbeResult> => {
+    const started = Date.now();
+    try {
+      const res = await fetch(p.buildUrl(lat, lon, 10), {
+        headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS * 2),
+      });
+      const text = await res.text();
+      let aircraft: number | null = null;
+      try {
+        const json = JSON.parse(text) as { ac?: unknown };
+        if (Array.isArray(json.ac)) aircraft = json.ac.length;
+      } catch { /* not JSON — reported below */ }
+      const ok = res.ok && aircraft !== null;
+      return {
+        name: p.name, ok, ms: Date.now() - started, status: res.status, aircraft,
+        error: ok ? null : `HTTP ${res.status}: ${text.slice(0, 200)}`,
+      };
+    } catch (err) {
+      return { name: p.name, ok: false, ms: Date.now() - started, status: null, aircraft: null, error: describeError(err) };
+    }
+  }));
 }
