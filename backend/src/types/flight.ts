@@ -78,6 +78,9 @@ export interface FlightsResponse {
   timestamp: string;
   // Set only when the route expanded the search radius to find aircraft.
   matchedRadiusNm?: number;
+  // Set only when every feed just failed and a recent snapshot was served.
+  stale?: boolean;
+  dataAgeSec?: number;
 }
 
 // Raw readsb-style shape shared by all the ADS-B providers (adsb.lol,

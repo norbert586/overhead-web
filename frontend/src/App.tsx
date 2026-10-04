@@ -21,11 +21,13 @@ import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useSettings } from './hooks/useSettings';
-import { useFlightData } from './hooks/useFlightData';
+import { useFlightData, type FlightFeed } from './hooks/useFlightData';
 import { playCatchSound } from './utils/catchSound';
-import { useAuth } from './hooks/useAuth';
-import { fetchProfile, updateProfile } from './services/api';
+import { useAuth, getTokenAgeMs } from './hooks/useAuth';
+import { fetchProfile, updateProfile, apiRefreshSession, AUTH_EXPIRED_EVENT } from './services/api';
+import { recordEvent, reportToServer } from './utils/diagnostics';
 
 export type View = 'flight' | 'log' | 'hangar' | 'stats' | 'settings' | 'profile' | 'admin';
 // 'guest' is the default for unauthenticated visitors — they see a live
@@ -44,13 +46,31 @@ function readUrlToken(param: string): string | null {
 // enforces its own write-frequency floor regardless.
 const CATCH_POLL_SEC = 10;
 
+// Tokens last 30 days. Swap for a fresh one on open once a day old, so anyone
+// who uses the app at least monthly is never signed out by the hard expiry.
+const TOKEN_REFRESH_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/** Top-bar summary of feed health: live, showing delayed data, or nothing to show. */
+function feedStatusOf(feed: FlightFeed): 'live' | 'delayed' | 'down' {
+  if (feed.errorKind && !feed.data) return 'down';
+  if (feed.errorKind || feed.stale) return 'delayed';
+  return 'live';
+}
+
+/** Epoch ms the on-screen positions date from, while the feed is delayed. */
+function staleSinceOf(feed: FlightFeed): number | null {
+  if (!feed.stale || !feed.lastPollTime) return null;
+  return feed.lastPollTime.getTime() - (feed.data?.dataAgeSec ?? 0) * 1000;
+}
+
 function App() {
-  const { user, isAuthenticated, login, logout, refreshUser } = useAuth();
+  const { user, isAuthenticated, login, logout, refreshUser, replaceToken } = useAuth();
   // Snapshot URL params once on mount so React Strict Mode's double-effect
   // doesn't try to redeem the same token twice.
   const [resetToken,  setResetToken ] = useState<string | null>(() => readUrlToken('reset_token'));
   const [verifyToken, setVerifyToken] = useState<string | null>(() => readUrlToken('verify_token'));
   const [authView, setAuthView] = useState<AuthView>('guest');
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [view, setView] = useState<View>('flight');
   const { settings, saveSettings, syncFromServer, hasSettings } = useSettings();
   const profileFetched = useRef(false);
@@ -68,6 +88,11 @@ function App() {
     }
     if (profileFetched.current) return;
     profileFetched.current = true;
+
+    const tokenAge = getTokenAgeMs();
+    if (tokenAge !== null && tokenAge > TOKEN_REFRESH_AFTER_MS) {
+      apiRefreshSession().then((r) => { if (r) replaceToken(r.token); });
+    }
 
     fetchProfile()
       .then((profile) => {
@@ -94,6 +119,22 @@ function App() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  // Any authenticated call answering 401 means the stored session is dead
+  // (expired, or signed with a rotated secret). Sign out and say why, rather
+  // than leaving every screen failing behind a "data unavailable" message.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    function onExpired() {
+      recordEvent('auth-expired');
+      reportToServer('auth-expired', 'A request was rejected with 401; signing out');
+      logout();
+      setAuthNotice('Your session expired — sign in again to keep catching.');
+      setAuthView('login');
+    }
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
+  }, [isAuthenticated, logout]);
 
   // Wrapped save: writes to localStorage + pushes to server.
   // After a first-time fallback-location setup, navigates back to catching.
@@ -123,7 +164,7 @@ function App() {
   const catchLat = usingFallback ? settings.latitude : geo.latitude;
   const catchLon = usingFallback ? settings.longitude : geo.longitude;
 
-  const { data, error: flightError, lastPollTime } = useFlightData({
+  const feed = useFlightData({
     latitude:        catchLat,
     longitude:       catchLon,
     radiusNm:        settings.radiusNm,
@@ -147,6 +188,7 @@ function App() {
     setSessionNew(0);
   }, [userId]);
 
+  const data = feed.data;
   useEffect(() => {
     const flights = data?.flights ?? [];
     let changed = false;
@@ -217,7 +259,11 @@ function App() {
     if (authView === 'login') {
       return (
         <LoginScreen
-          onLogin={login}
+          notice={authNotice}
+          onLogin={(t, u) => {
+            setAuthNotice(null);
+            login(t, u);
+          }}
           onShowRegister={() => setAuthView('register')}
           onShowForgotPassword={() => setAuthView('forgot')}
           onBackToGuest={() => setAuthView('guest')}
@@ -281,6 +327,7 @@ function App() {
           sessionCaught={sessionCaught}
           sessionNew={sessionNew}
           usingFallback={usingFallback}
+          staleSince={staleSinceOf(feed)}
         />
       );
     }
@@ -298,10 +345,18 @@ function App() {
     if (!usingFallback && (geo.status === 'idle' || geo.status === 'loading')) {
       return <EmptyState variant="geo-loading" />;
     }
-    // The catch feed is erroring (backend down, or all upstream ADS-B feeds
-    // unreachable) — say so instead of pretending the sky is empty.
-    if (flightError) {
-      return <EmptyState variant="source-down" />;
+    // The catch feed is erroring — say what failed (feeds, our server, the
+    // connection) instead of pretending the sky is empty.
+    if (feed.errorKind) {
+      return (
+        <EmptyState
+          variant="feed-error"
+          errorKind={feed.errorKind}
+          nextRetryAt={feed.nextRetryAt}
+          onRetry={feed.retryNow}
+          requestId={feed.errorRequestId}
+        />
+      );
     }
     return <EmptyState variant="no-aircraft-overhead" />;
   }
@@ -319,6 +374,7 @@ function App() {
         setView={setView}
         radiusNm={settings.radiusNm}
         listening={isAuthenticated && pageVisible && catchLat !== null}
+        feedStatus={feedStatusOf(feed)}
         latitude={catchLat}
         longitude={catchLon}
         userEmail={user?.email}
@@ -327,11 +383,13 @@ function App() {
       />
       {showVerifyBanner && <EmailVerificationBanner email={user!.email} />}
       <main className="app-main">
-        <Suspense fallback={null}>
-          {renderMain()}
-        </Suspense>
+        <ErrorBoundary resetKey={view}>
+          <Suspense fallback={null}>
+            {renderMain()}
+          </Suspense>
+        </ErrorBoundary>
       </main>
-      <BottomBar lastPollTime={lastPollTime} />
+      <BottomBar lastPollTime={feed.lastPollTime} />
     </div>
   );
 }
@@ -356,6 +414,12 @@ function GuestShell({
     record:          false,
   });
 
+  const guestStatus = feedStatusOf(guestFlight);
+  const guestDotClass = guestStatus === 'down' ? ' scan-dot-error' : guestStatus === 'delayed' ? ' scan-dot-warn' : '';
+  const guestStatusLabel = guestStatus === 'down' ? 'No feed · retrying'
+    : guestStatus === 'delayed' ? 'Reconnecting…'
+    : 'Guest · live view';
+
   function renderPane() {
     const flights = guestFlight.data?.flights ?? [];
     if (flights.length > 0) {
@@ -363,6 +427,7 @@ function GuestShell({
         <OverheadFlightScreen
           flights={flights}
           matchedRadiusNm={guestFlight.data?.matchedRadiusNm}
+          staleSince={staleSinceOf(guestFlight)}
         />
       );
     }
@@ -372,8 +437,16 @@ function GuestShell({
     if (geo.status === 'idle' || geo.status === 'loading') {
       return <EmptyState variant="geo-loading" />;
     }
-    if (guestFlight.error) {
-      return <EmptyState variant="source-down" />;
+    if (guestFlight.errorKind) {
+      return (
+        <EmptyState
+          variant="feed-error"
+          errorKind={guestFlight.errorKind}
+          nextRetryAt={guestFlight.nextRetryAt}
+          onRetry={guestFlight.retryNow}
+          requestId={guestFlight.errorRequestId}
+        />
+      );
     }
     return <EmptyState variant="no-aircraft-overhead" />;
   }
@@ -388,9 +461,9 @@ function GuestShell({
             </svg>
             <span className="app-name">Overhead</span>
           </div>
-          <div className="scan-status">
-            <div className="scan-dot" />
-            <span className="scan-text">Guest · live view</span>
+          <div className="scan-status" role="status">
+            <div className={`scan-dot${guestDotClass}`} />
+            <span className="scan-text">{guestStatusLabel}</span>
           </div>
         </div>
         <div className="top-bar-right guest-top-bar-actions">
@@ -403,7 +476,9 @@ function GuestShell({
         </div>
       </header>
       <main className="app-main">
-        {renderPane()}
+        <ErrorBoundary>
+          {renderPane()}
+        </ErrorBoundary>
         <p className="guest-upsell">
           Sign up to save your flight history, stats, and achievements.
         </p>

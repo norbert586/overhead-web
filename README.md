@@ -138,6 +138,22 @@ logged but never delivered — the server prints a warning at startup. See
 
 To add a new user: share the `INVITE_CODE`. Registration is otherwise closed.
 
+### Diagnosing problems
+
+| Where | Who | What it shows |
+|---|---|---|
+| `curl -s https://overheadflight.com/api/health` | anyone, uptime monitors | `status` ok/degraded + plain-English `problems`, deployed commit, per-provider feed health, poll outcomes in the last 5 min |
+| **Menu → Diagnostics** in the app (or add `?debug` to the URL) | any user | app + server build, session expiry, GPS fix, last poll result + request id, recent events — **Copy report** gives a pasteable JSON |
+| **Admin → System** | admins | poll outcomes and error codes for 5/60 min, recent polls, server warnings/errors, client error reports, feed history, **Run live probe** |
+| `GET /api/diagnostics`, `/api/diagnostics/probe` | admins, or `X-Diagnostics-Key: $DIAGNOSTICS_KEY` | the System tab's data as JSON |
+| `cd backend && BASE=https://overheadflight.com DIAGNOSTICS_KEY=… npm run smoke` | you / a debugging session | read-only production check incl. live probe of every upstream |
+
+Error screens show `ref <id>` — the same id is the response's `X-Request-Id` and `reqId` in the server logs (`pm2 logs overhead-backend --nostream --lines 500 | grep <id>`). If every provider in the probe fails, the outage is upstream or the droplet's outbound network; if `/api/health` itself fails, the backend is down.
+
+Local, offline testing: `npm run mock-feed` (fake feed + adsbdb, switchable to slow/down/empty) and `node scripts/e2e.mjs` (full stack in a headless phone browser). See `CLAUDE.md`.
+
+Every deploy is gated on CI (typecheck, lint, build), health-checks the backend after the restart, and builds the frontend beside the live one before swapping it in, so a deploy never serves a half-built site.
+
 ---
 
 ## Account setup flows

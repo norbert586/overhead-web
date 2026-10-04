@@ -28,6 +28,11 @@ export function useAuth() {
     setUser(u);
   }, []);
 
+  // Swap in a refreshed token without touching the rest of the session.
+  const replaceToken = useCallback((token: string) => {
+    localStorage.setItem(TOKEN_KEY, token);
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
@@ -45,9 +50,27 @@ export function useAuth() {
     });
   }, []);
 
-  return { user, isAuthenticated: !!user, login, logout, refreshUser };
+  return { user, isAuthenticated: !!user, login, logout, refreshUser, replaceToken };
 }
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
+}
+
+/**
+ * Milliseconds since the stored token was issued, read from its `iat`
+ * claim. Null when there is no token or it can't be decoded. This is only
+ * used to decide when to refresh — the server is what validates it.
+ */
+export function getTokenAgeMs(): number | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const iat = (JSON.parse(json) as { iat?: unknown }).iat;
+    return typeof iat === 'number' ? Date.now() - iat * 1000 : null;
+  } catch {
+    return null;
+  }
 }

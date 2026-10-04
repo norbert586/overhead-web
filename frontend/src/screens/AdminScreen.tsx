@@ -8,8 +8,9 @@ import {
   type AdminUser,
   type AdminResetPasswordResponse,
 } from '../services/api';
+import SystemPanel from '../components/SystemPanel';
 
-type Tab = 'overview' | 'users' | 'changelog';
+type Tab = 'overview' | 'users' | 'system' | 'changelog';
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '—';
@@ -162,13 +163,21 @@ export default function AdminScreen() {
           onClick={() => setTab('users')}
         >Users{users ? ` · ${users.length}` : ''}</button>
         <button
+          className={`admin-tab${tab === 'system' ? ' active' : ''}`}
+          onClick={() => setTab('system')}
+        >System</button>
+        <button
           className={`admin-tab${tab === 'changelog' ? ' active' : ''}`}
           onClick={() => setTab('changelog')}
         >Changelog</button>
       </div>
 
-      {loading && <div className="admin-loading">Loading…</div>}
-      {error && !loading && <div className="admin-error">Failed to load admin data: {error}</div>}
+      {/* Independent of the overview fetch — if that is what's broken,
+          System is exactly the tab you need to still work. */}
+      {tab === 'system' && <SystemPanel />}
+
+      {tab !== 'system' && loading && <div className="admin-loading">Loading…</div>}
+      {tab !== 'system' && error && !loading && <div className="admin-error">Failed to load admin data: {error}</div>}
 
       {!loading && !error && tab === 'overview' && overview && (
         <div className="admin-grid">

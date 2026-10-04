@@ -7,9 +7,11 @@ interface Props {
   onShowRegister: () => void;
   onShowForgotPassword: () => void;
   onBackToGuest?: () => void;
+  /** Why the user is here, e.g. their session expired. */
+  notice?: string | null;
 }
 
-export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassword, onBackToGuest }: Props) {
+export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassword, onBackToGuest, notice }: Props) {
   const [email,    setEmail   ] = useState('');
   const [password, setPassword] = useState('');
   const [error,    setError   ] = useState('');
@@ -39,6 +41,7 @@ export default function LoginScreen({ onLogin, onShowRegister, onShowForgotPassw
           <span className="auth-wordmark">OVERHEAD</span>
         </div>
         <p className="auth-subtitle">Catch the flights overhead — sign in to continue</p>
+        {notice && <p className="auth-notice" role="status">{notice}</p>}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label">

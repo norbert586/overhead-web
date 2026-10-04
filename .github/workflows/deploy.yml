@@ -4,8 +4,17 @@ on:
   push:
     branches: [main]
 
+# Two merges in quick succession must not deploy on top of each other.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to server
@@ -25,16 +34,49 @@ jobs:
               apt-get update && apt-get install -y build-essential python3
             fi
             cd /var/www/overhead-web
-            git pull origin main
+            # Match origin exactly. `git pull` aborts the whole deploy if a
+            # server-side `npm install` ever rewrote a tracked lockfile. reset
+            # leaves untracked and ignored files alone (.env, data/, dist/).
+            git fetch --prune origin main
+            git reset --hard origin/main
             # One command per line on purpose. In a `a && b && c` chain, `set -e`
             # does NOT abort when a non-final command fails, so a broken backend
             # `npm install` would silently skip the build + restart and still
             # report success. Separate statements let `set -e` stop the deploy.
             cd backend
-            npm install
+            npm install --no-audit --no-fund
             npm run build
             pm2 restart overhead-backend
+            # Don't report success for a backend that didn't come back up —
+            # and don't ship a frontend that needs it.
+            HEALTH_PORT=$( (sed -n 's/^PORT=//p' .env 2>/dev/null || true) | tail -1 )
+            HEALTH_PORT=${HEALTH_PORT:-3001}
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:${HEALTH_PORT}/api/health" >/dev/null; then
+                echo "Backend healthy"
+                break
+              fi
+              if [ "$i" = 30 ]; then
+                echo "Backend failed its health check after restart"
+                pm2 logs overhead-backend --lines 80 --nostream || true
+                exit 1
+              fi
+              sleep 1
+            done
             cd ../frontend
-            npm install
-            npm run build
+            npm install --no-audit --no-fund
+            # Build beside the live site, then swap. `vite build` empties its
+            # output directory first, so building straight into dist/ served
+            # 404s for the length of every build.
+            npx tsc -b
+            npx vite build --outDir dist-next --emptyOutDir
+            # Keep the previous build's hashed files for a week: a tab opened
+            # before this deploy still asks for its old screen chunks by name.
+            # (Asset names are content hashes, so a same-named file is identical.)
+            if [ -d dist/assets ]; then
+              find dist/assets -maxdepth 1 -type f -mtime -7 -exec cp -np {} dist-next/assets/ \;
+            fi
+            rm -rf dist-prev
+            if [ -d dist ]; then mv dist dist-prev; fi
+            mv dist-next dist
             echo "Deploy complete"

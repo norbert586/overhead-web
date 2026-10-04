@@ -185,6 +185,37 @@ router.post('/login', async (req: Request, res: Response) => {
 
 /**
  * @openapi
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Exchange a still-valid token for a fresh 30-day one
+ *     description: |
+ *       Sliding sessions. The client calls this when the app opens with a
+ *       token more than a day old, so anyone who uses Overhead at least once
+ *       a month is never signed out mid-catch by a hard expiry.
+ *     tags: [Auth]
+ *     responses:
+ *       200: { description: New token + user }
+ *       401: { description: Token missing, invalid, expired, or user deleted }
+ */
+router.post('/refresh', requireAuth, (req: Request, res: Response) => {
+  const user = findUserById(req.userId);
+  if (!user) {
+    res.status(401).json({ error: 'Account not found — sign in again', code: 'auth_invalid' });
+    return;
+  }
+  res.json({
+    token: issueAuthToken(user.id, user.email),
+    user: {
+      id: user.id,
+      email: user.email,
+      isAdmin: !!user.is_admin,
+      emailVerified: !!user.email_verified_at,
+    },
+  });
+});
+
+/**
+ * @openapi
  * /api/auth/me:
  *   get:
  *     summary: Get the currently authenticated user

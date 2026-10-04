@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import HamburgerMenu from './HamburgerMenu';
 import type { View } from '../App';
+import { openDiagnostics } from '../utils/diagnostics';
 
 interface TopBarProps {
   view: View;
@@ -8,6 +9,8 @@ interface TopBarProps {
   radiusNm?: number;
   /** True while the catch feed is actively polling (page visible, coords available). */
   listening?: boolean;
+  /** Health of the catch feed while listening: data is live, delayed (retrying), or down. */
+  feedStatus?: 'live' | 'delayed' | 'down';
   latitude?: number | null;
   longitude?: number | null;
   userEmail?: string;
@@ -20,6 +23,7 @@ export default function TopBar({
   setView,
   radiusNm = 5,
   listening = false,
+  feedStatus = 'live',
   latitude,
   longitude,
   userEmail,
@@ -41,6 +45,16 @@ export default function TopBar({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [menuOpen]);
 
+  // "Listening" used to stay up even while every poll was failing.
+  const dotClass = !listening ? ' scan-dot-paused'
+    : feedStatus === 'down' ? ' scan-dot-error'
+    : feedStatus === 'delayed' ? ' scan-dot-warn'
+    : '';
+  const statusLabel = !listening ? 'Paused'
+    : feedStatus === 'down' ? 'No feed · retrying'
+    : feedStatus === 'delayed' ? 'Reconnecting…'
+    : `Listening · ${radiusNm} nm`;
+
   const coordsLabel =
     latitude != null && longitude != null
       ? `${Math.abs(latitude).toFixed(4)}° ${latitude >= 0 ? 'N' : 'S'}, ${Math.abs(longitude).toFixed(4)}° ${longitude >= 0 ? 'E' : 'W'}`
@@ -56,11 +70,9 @@ export default function TopBar({
             </svg>
             <span className="app-name">Overhead</span>
           </div>
-          <div className="scan-status">
-            <div className={`scan-dot${listening ? '' : ' scan-dot-paused'}`} />
-            <span className="scan-text">
-              {listening ? `Listening · ${radiusNm} nm` : 'Paused'}
-            </span>
+          <div className="scan-status" role="status">
+            <div className={`scan-dot${dotClass}`} />
+            <span className="scan-text">{statusLabel}</span>
           </div>
         </div>
         <div className="top-bar-right">
@@ -89,6 +101,10 @@ export default function TopBar({
         onLogout={() => {
           setMenuOpen(false);
           onLogout?.();
+        }}
+        onDiagnostics={() => {
+          setMenuOpen(false);
+          openDiagnostics();
         }}
       />
     </div>
