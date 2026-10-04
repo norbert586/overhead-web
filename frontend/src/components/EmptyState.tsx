@@ -1,15 +1,22 @@
+import type { ApiErrorKind } from '../services/api';
+import { useNow } from '../hooks/useNow';
+
 export type EmptyVariant =
   | 'no-settings'
   | 'no-aircraft'
   | 'geo-loading'
   | 'geo-denied'
   | 'no-aircraft-overhead'
-  | 'source-down';
+  | 'feed-error';
 
 interface EmptyStateProps {
   variant: EmptyVariant;
   onOpenSettings?: () => void;
   onRetry?: () => void;
+  /** For 'feed-error': what failed, which decides the message. */
+  errorKind?: ApiErrorKind | null;
+  /** For 'feed-error': epoch ms of the next automatic retry. */
+  nextRetryAt?: number | null;
 }
 
 function PlaneIcon({ className }: { className?: string }) {
@@ -100,25 +107,74 @@ function NoAircraftOverhead() {
   );
 }
 
-function SourceDown() {
+// Each failure gets its own honest explanation. Everything used to read
+// "this is on the data side, not your device" — including an expired
+// session and a phone with no signal.
+const FEED_ERROR_COPY: Record<ApiErrorKind, { title: string; body: string }> = {
+  upstream: {
+    title: 'Live feeds not answering',
+    body: "The public ADS-B networks we read aircraft from aren't responding. Your phone and connection are fine — catching picks back up the moment a feed answers.",
+  },
+  server: {
+    title: 'Reconnecting to Overhead',
+    body: "Our server didn't answer. This is usually a quick restart after an update.",
+  },
+  offline: {
+    title: 'No connection',
+    body: "This device can't reach the internet right now. We'll reconnect as soon as you have signal.",
+  },
+  timeout: {
+    title: 'Slow connection',
+    body: 'The last request took too long — the signal here may be weak. Trying again.',
+  },
+  'rate-limited': {
+    title: 'Taking a breather',
+    body: 'Too many requests from this network. Sign in for uninterrupted live data.',
+  },
+  auth: {
+    title: 'Session expired',
+    body: 'Sign in again to keep catching.',
+  },
+};
+
+function FeedError({
+  kind,
+  nextRetryAt,
+  onRetry,
+}: {
+  kind: ApiErrorKind;
+  nextRetryAt?: number | null;
+  onRetry?: () => void;
+}) {
+  const copy = FEED_ERROR_COPY[kind];
+  const now = useNow(!!nextRetryAt);
+  const secs = nextRetryAt ? Math.max(0, Math.ceil((nextRetryAt - now) / 1000)) : null;
   return (
-    <div className="empty-full empty-error">
+    <div className="empty-full empty-error" role="alert">
       <PlaneIcon className="empty-icon empty-icon-error" />
-      <div className="empty-title empty-title-error">Flight data unavailable</div>
-      <div className="empty-body empty-body-error">
-        We can't reach the live aircraft feeds right now. This is on the data side, not your
-        device — we keep retrying automatically and will pick catching back up the moment a
-        feed answers.
-      </div>
+      <div className="empty-title empty-title-error">{copy.title}</div>
+      <div className="empty-body empty-body-error">{copy.body}</div>
+      {kind !== 'auth' && (
+        <div className="empty-retry-row">
+          <span className="empty-retry-status">
+            {secs === null || secs === 0 ? 'Retrying…' : `Retrying in ${secs}s`}
+          </span>
+          {onRetry && (
+            <button type="button" className="empty-error-retry" onClick={onRetry}>
+              Retry now
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-export default function EmptyState({ variant, onOpenSettings, onRetry }: EmptyStateProps) {
+export default function EmptyState({ variant, onOpenSettings, onRetry, errorKind, nextRetryAt }: EmptyStateProps) {
   if (variant === 'no-settings')          return <NoSettings onOpenSettings={onOpenSettings} />;
   if (variant === 'geo-loading')          return <GeoLoading />;
   if (variant === 'geo-denied')           return <GeoDenied onRetry={onRetry} onOpenSettings={onOpenSettings} />;
   if (variant === 'no-aircraft-overhead') return <NoAircraftOverhead />;
-  if (variant === 'source-down')          return <SourceDown />;
+  if (variant === 'feed-error')           return <FeedError kind={errorKind ?? 'server'} nextRetryAt={nextRetryAt} onRetry={onRetry} />;
   return <NoAircraft />;
 }

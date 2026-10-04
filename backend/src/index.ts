@@ -9,6 +9,7 @@ import { swaggerSpec } from './swagger';
 import { logger, httpLogger } from './logger';
 import { isEmailConfigured } from './services/email';
 import { getAdsbStatus } from './services/adsb';
+import { getEnrichmentStatus } from './services/enrichment';
 import flightsRouter from './routes/flights';
 import statsRouter from './routes/stats';
 import authRouter from './routes/auth';
@@ -27,10 +28,20 @@ async function start() {
     try { pruneFlightTrack(); } catch (err) { logger.error({ err }, 'track prune failed'); }
   }, 6 * 60 * 60 * 1000).unref();
 
+  if (!process.env.JWT_SECRET) {
+    logger.error('JWT_SECRET is not set — sessions are signed with a public default and can be forged. Set it in backend/.env.');
+  }
+
   const app = express();
   app.use(cors());
   app.use(express.json());
   app.use(httpLogger);
+
+  // Live data must never be served from a browser, proxy, or CDN cache.
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
 
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
   app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
@@ -42,14 +53,25 @@ async function start() {
   app.use('/api/stats', statsRouter);
 
   // /api/log proxies to the log route on the flights router
-  app.get('/api/log', (req, res) => {
+  app.get('/api/log', (req, res, next) => {
     req.url = '/log';
-    flightsRouter(req, res, () => {});
+    flightsRouter(req, res, next);
   });
 
-  // Includes per-provider ADS-B feed health so an upstream outage can be
-  // diagnosed in production with a single curl.
-  app.get('/health', (_req, res) => res.json({ status: 'ok', adsb: getAdsbStatus() }));
+  // Includes per-provider ADS-B feed health and the adsbdb breaker so an
+  // upstream outage can be diagnosed in production with a single curl.
+  // nginx only forwards /api/* to Express, so /api/health is the public
+  // address; /health stays for on-box checks.
+  const health = (_req: express.Request, res: express.Response) => {
+    res.json({
+      status: 'ok',
+      uptimeSec: Math.round(process.uptime()),
+      adsb: getAdsbStatus(),
+      enrichment: getEnrichmentStatus(),
+    });
+  };
+  app.get('/health', health);
+  app.get('/api/health', health);
 
   // Global error handler — must be registered last, after all routes. Catches
   // anything a handler throws or passes to next(err) and turns it into a clean
@@ -68,9 +90,26 @@ async function start() {
     );
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info({ port: PORT, docs: `/api/docs` }, `Overhead backend running on http://0.0.0.0:${PORT}`);
   });
+
+  // Node closes idle keep-alive sockets after 5 s by default. If nginx (or
+  // any proxy) reuses a socket just as Node closes it, that request fails
+  // with a 502. Outlive the proxy's idle timeout instead.
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+
+  // pm2 restart (every deploy) sends SIGINT. Stop accepting connections and
+  // let in-flight polls finish instead of cutting them off mid-response.
+  const shutdown = (signal: string) => {
+    logger.info({ signal }, 'shutting down');
+    server.close(() => process.exit(0));
+    server.closeIdleConnections();
+    setTimeout(() => process.exit(0), 5_000).unref();
+  };
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 // Last-resort process guards. Before these, a single stray rejected promise or

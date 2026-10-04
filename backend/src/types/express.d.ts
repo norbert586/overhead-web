@@ -4,5 +4,7 @@
 declare namespace Express {
   interface Request {
     userId: number;
+    /** Set by optionalAuth when a token was presented but rejected. */
+    authFailure?: 'auth_expired' | 'auth_invalid';
   }
 }

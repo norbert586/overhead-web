@@ -138,6 +138,16 @@ logged but never delivered — the server prints a warning at startup. See
 
 To add a new user: share the `INVITE_CODE`. Registration is otherwise closed.
 
+### Diagnosing "flight data unavailable"
+
+```bash
+curl -s https://overheadflight.com/api/health
+```
+
+Shows, per ADS-B provider, the last success, last error (with the real cause — DNS, timeout, HTTP status), latency, and whether it's cooling down, plus the adsbdb enrichment circuit breaker. If every provider shows a recent error, the outage is upstream (or the droplet's outbound network); if the request itself fails, the backend is down — check `pm2 logs overhead-backend`.
+
+Every deploy is gated on CI (typecheck, lint, build), health-checks the backend after the restart, and builds the frontend beside the live one before swapping it in, so a deploy never serves a half-built site.
+
 ---
 
 ## Account setup flows

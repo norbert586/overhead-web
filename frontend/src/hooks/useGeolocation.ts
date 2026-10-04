@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 export type GeoStatus = 'idle' | 'loading' | 'ready' | 'denied' | 'unsupported' | 'error';
 
@@ -23,9 +23,11 @@ interface CachedFix {
   timestamp: number;
 }
 
+// localStorage, not sessionStorage: a home-screen app starts a fresh session
+// on every launch, which threw the cache away exactly when it mattered.
 function readCachedFix(): CachedFix | null {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedFix;
     if (
@@ -42,12 +44,12 @@ function readCachedFix(): CachedFix | null {
 
 function writeCachedFix(latitude: number, longitude: number) {
   try {
-    sessionStorage.setItem(
+    localStorage.setItem(
       CACHE_KEY,
       JSON.stringify({ latitude, longitude, timestamp: Date.now() }),
     );
   } catch {
-    // sessionStorage may be unavailable (private mode, etc.) — ignore.
+    // Storage may be unavailable (private mode, etc.) — ignore.
   }
 }
 
@@ -72,6 +74,11 @@ export function useGeolocation({ enabled = true }: UseGeolocationOptions = {}): 
     supported ? null : 'Geolocation is not available in this browser.',
   );
   const [tick, setTick]           = useState(0);
+  // Whether this watch has produced a fix. Once it has, transient errors
+  // (TIMEOUT while stationary, a brief POSITION_UNAVAILABLE indoors) keep the
+  // last fix instead of declaring location unavailable.
+  const haveFix = useRef(cached !== null);
+  const havePreciseFix = useRef(false);
 
   const retry = useCallback(() => {
     if (!supported) return;
@@ -83,23 +90,47 @@ export function useGeolocation({ enabled = true }: UseGeolocationOptions = {}): 
   useEffect(() => {
     if (!enabled || !supported) return;
 
+    const apply = (pos: GeolocationPosition) => {
+      haveFix.current = true;
+      setLatitude(pos.coords.latitude);
+      setLongitude(pos.coords.longitude);
+      setStatus('ready');
+      setError(null);
+      writeCachedFix(pos.coords.latitude, pos.coords.longitude);
+    };
+
+    const onError = (err: GeolocationPositionError) => {
+      if (err.code === err.PERMISSION_DENIED) {
+        haveFix.current = false;
+        setStatus('denied');
+        setError('Location permission denied.');
+        return;
+      }
+      // Previously any timeout flipped status to 'error' — which switched a
+      // signed-in user's catch point to their saved home location and
+      // stopped the guest feed altogether, all over a GPS hiccup.
+      if (haveFix.current) return;
+      setStatus('error');
+      setError(err.message || 'Unable to determine location.');
+    };
+
+    // Fast first fix: Wi-Fi / cell positioning answers in well under a
+    // second, against several for a cold GPS lock, and is plenty for a
+    // multi-mile hearing radius. The precise watch below refines it.
+    if (!havePreciseFix.current) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { if (!havePreciseFix.current) apply(pos); },
+        onError,
+        { enableHighAccuracy: false, maximumAge: 5 * 60_000, timeout: 10_000 },
+      );
+    }
+
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        setLatitude(pos.coords.latitude);
-        setLongitude(pos.coords.longitude);
-        setStatus('ready');
-        setError(null);
-        writeCachedFix(pos.coords.latitude, pos.coords.longitude);
+        havePreciseFix.current = true;
+        apply(pos);
       },
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          setStatus('denied');
-          setError('Location permission denied.');
-        } else {
-          setStatus('error');
-          setError(err.message || 'Unable to determine location.');
-        }
-      },
+      onError,
       {
         enableHighAccuracy: true,
         maximumAge: 30_000,

@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { fetchNearby } from '../services/adsb';
-import { enrichAircraft, enrichCallsign } from '../services/enrichment';
+import { fetchArea } from '../services/adsb';
+import {
+  enrichAircraft, enrichCallsign, EMPTY_AIRCRAFT, EMPTY_ROUTE,
+  type AircraftEnrichment, type RouteEnrichment,
+} from '../services/enrichment';
 import { classify } from '../services/classifier';
 import {
   upsertFlight, getFlightHistory, getLog, getSessionStats, findPhotoByType,
@@ -33,6 +36,28 @@ const EMPTY_STATS = {
 // write frequency — anything faster is served as live view only. In-memory is
 // fine: a restart just lets the next poll record immediately.
 const lastRecordedAt = new Map<number, number>();
+
+// The catch screen shows the closest few contacts; only those need enriching
+// when nothing is being recorded.
+const DISPLAY_LIMIT = 3;
+
+// Display-only search rings when the hearing radius is empty.
+const EXPANDED_RADII_NM = [25, 50];
+
+// Upper bound on how long a poll waits for adsbdb. Lookups that miss the
+// budget keep running and land in the cache, so the next poll (10 s later)
+// has them — and recorded rows are back-filled via COALESCE on that upsert.
+const ENRICH_BUDGET_MS = 3_000;
+
+function withinBudget<T>(p: Promise<T>, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ENRICH_BUDGET_MS);
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      () => { clearTimeout(timer); resolve(fallback); },
+    );
+  });
+}
 
 /**
  * @openapi
@@ -76,7 +101,10 @@ const lastRecordedAt = new Map<number, number>();
  *                 stats: { type: object }
  *                 timestamp: { type: string, format: date-time }
  *       400: { description: Missing lat/lon }
- *       502: { description: Upstream fetch failed }
+ *       401: { description: "Recording requested without a valid session (code: auth_required | auth_expired | auth_invalid)" }
+ *       429: { description: Guest rate limit (code: rate_limited) }
+ *       500: { description: Server error processing the poll (code: server_error) }
+ *       502: { description: "Every ADS-B provider is unreachable (code: upstream_unavailable)" }
  */
 router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response) => {
   const lat    = parseFloat(req.query.lat    as string);
@@ -86,14 +114,21 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
   const isGuest = req.userId === undefined;
 
   // Guests get the live ephemeral view only — recording sightings is a
-  // signed-in feature because the log/stats endpoints are user-scoped.
+  // signed-in feature because the log/stats endpoints are user-scoped. A
+  // signed-in client whose token has lapsed lands here too: tell it the
+  // session expired so it can send the user to sign in, rather than a
+  // generic refusal it can only show as "flight data unavailable".
   if (isGuest && record) {
-    res.status(401).json({ error: 'Sign in to record sightings' });
+    const code = req.authFailure ?? 'auth_required';
+    res.status(401).json({
+      error: code === 'auth_required' ? 'Sign in to record sightings' : 'Session expired — sign in again',
+      code,
+    });
     return;
   }
 
-  if (isNaN(lat) || isNaN(lon)) {
-    res.status(400).json({ error: 'lat and lon are required' });
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    res.status(400).json({ error: 'lat and lon are required', code: 'bad_request' });
     return;
   }
 
@@ -104,42 +139,45 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     Date.now() - (lastRecordedAt.get(req.userId!) ?? 0) >= CATCH_MIN_RECORD_INTERVAL_MS;
 
   try {
-    const first = await fetchNearby(lat, lon, radius);
-    let allAc = first.aircraft;
-    let anyOk = first.ok;
+    // One upstream fetch answers the hearing radius and the display-only
+    // expansion alike (see AREA_RADIUS_NM).
+    const area = await fetchArea(lat, lon);
+
+    // Every provider failed and nothing recent is cached — that's an
+    // upstream outage, not an empty sky. Say so instead of serving a
+    // fake-empty 200 that leaves the client "listening" forever.
+    if (!area.ok) {
+      log.error('poll: all flight data sources unreachable');
+      res.status(502).json({ error: 'Live flight data sources are unreachable', code: 'upstream_unavailable' });
+      return;
+    }
+
+    // A stale snapshot is fine to look at but not to catch from — the user
+    // wasn't necessarily under those positions.
+    if (area.stale) shouldRecord = false;
+
+    let allAc = area.aircraft.filter((ac) => ac.dst! <= radius);
     let matchedRadius = radius;
 
-    // The hearing radius is deliberately small, so it's often empty — expand
-    // the search so the user sees the nearest contact and its true distance
+    // The hearing radius is deliberately small, so it's often empty — widen
+    // the view so the user sees the nearest contact and its true distance
     // instead of an empty pane. Expanded contacts are display-only: catching
-    // only ever happens inside the actual hearing radius. When the first
-    // fetch already proved every provider down, skip the expansion — wider
-    // radii would just re-pay the timeouts against dead upstreams.
+    // only ever happens inside the actual hearing radius.
     if (!allAc.length) {
       shouldRecord = false;
-    }
-    if (!allAc.length && first.ok) {
-      for (const r of [25, 50]) {
+      for (const r of EXPANDED_RADII_NM) {
         if (r <= radius) continue;
-        const expanded = await fetchNearby(lat, lon, r);
-        anyOk = anyOk || expanded.ok;
-        if (expanded.aircraft.length) {
-          allAc = expanded.aircraft;
+        const within = area.aircraft.filter((ac) => ac.dst! <= r);
+        if (within.length) {
+          allAc = within;
           matchedRadius = r;
-          log.debug({ radius, expandedRadius: r, count: expanded.aircraft.length }, 'poll: expanded radius');
+          log.debug({ radius, expandedRadius: r, count: within.length }, 'poll: expanded radius');
           break;
         }
       }
     }
 
-    // Every provider failed on every attempt — that's an upstream outage,
-    // not an empty sky. Say so instead of serving a fake-empty 200 that
-    // leaves the client "searching" forever.
-    if (!allAc.length && !anyOk) {
-      log.error('poll: all flight data sources unreachable');
-      res.status(502).json({ error: 'Live flight data sources are unreachable' });
-      return;
-    }
+    const freshness = area.stale ? { stale: true, dataAgeSec: Math.round(area.ageMs / 1000) } : {};
 
     if (!allAc.length) {
       log.debug('poll: no aircraft in range');
@@ -148,6 +186,7 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
         flights: [],
         stats: { ...dbStats, activeCount: 0 },
         timestamp: new Date().toISOString(),
+        ...freshness,
       };
       res.json(response);
       return;
@@ -157,20 +196,24 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
 
     if (shouldRecord) lastRecordedAt.set(req.userId!, Date.now());
 
-    // Enrich all aircraft in parallel; upsert only when this poll records.
+    // A recording poll catches everything inside the hearing radius, so all
+    // of it is enriched and upserted. A display-only poll shows just the
+    // closest few — enriching the rest (up to every aircraft within 50 nm)
+    // was the main reason first loads in a new area were slow.
+    const toProcess = shouldRecord ? allAc : allAc.slice(0, DISPLAY_LIMIT);
+
     const nowIso = new Date().toISOString();
-    const processed = await Promise.all(allAc.map(async (ac) => {
+    const processed = await Promise.all(toProcess.map(async (ac) => {
       const callsign     = ac.flight?.trim() || null;
       const registration = ac.r?.trim()      || null;
 
       const [aircraftInfo, routeInfo] = await Promise.all([
-        registration ? enrichAircraft(registration) : Promise.resolve({
-          manufacturer: null, owner: null, country: null, countryIso: null, photoUrl: null,
-        }),
-        callsign ? enrichCallsign(callsign) : Promise.resolve({
-          operator: null, originIata: null, originCity: null, originCountry: null,
-          destinationIata: null, destinationCity: null, destinationCountry: null,
-        }),
+        registration
+          ? withinBudget<AircraftEnrichment>(enrichAircraft(registration), EMPTY_AIRCRAFT)
+          : Promise.resolve(EMPTY_AIRCRAFT),
+        callsign
+          ? withinBudget<RouteEnrichment>(enrichCallsign(callsign), EMPTY_ROUTE)
+          : Promise.resolve(EMPTY_ROUTE),
       ]);
 
       const classification = classify({
@@ -275,7 +318,7 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
       };
     }));
 
-    // Closest first — adsb.lol returns sorted by distance, but enforce here so we can slice.
+    // Closest first — fetchArea already sorts, but enforce here so we can slice.
     const sorted = processed.slice().sort((a, b) => {
       const da = a.distanceNm ?? Number.POSITIVE_INFINITY;
       const db = b.distanceNm ?? Number.POSITIVE_INFINITY;
@@ -288,16 +331,19 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
 
     const dbStats = isGuest ? EMPTY_STATS : getSessionStats(req.userId);
     const response: FlightsResponse = {
-      flights: sorted.slice(0, 3),
+      flights: sorted.slice(0, DISPLAY_LIMIT),
       stats: { ...dbStats, activeCount: allAc.length },
       timestamp: new Date().toISOString(),
       ...(matchedRadius !== radius && { matchedRadiusNm: matchedRadius }),
+      ...freshness,
     };
 
     res.json(response);
   } catch (err) {
+    // Anything that reaches here is our bug (DB, scoring), not the feed —
+    // report it as a server error so the client doesn't blame upstream.
     log.error({ err }, 'GET /api/flights error');
-    res.status(502).json({ error: 'Failed to fetch flight data' });
+    res.status(500).json({ error: 'Failed to process flight data', code: 'server_error' });
   }
 });
 

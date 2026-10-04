@@ -59,4 +59,7 @@ export interface FlightsResponse {
   stats: SessionStats;
   timestamp: string;
   matchedRadiusNm?: number;
+  /** Every feed just failed; this is a recent snapshot instead. */
+  stale?: boolean;
+  dataAgeSec?: number;
 }

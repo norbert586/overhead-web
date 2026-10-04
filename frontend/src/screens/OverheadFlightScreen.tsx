@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNow } from '../hooks/useNow';
 import CallsignBlock from '../components/CallsignBlock';
 import AircraftPhoto from '../components/AircraftPhoto';
 import HeadingArrow from '../components/HeadingArrow';
@@ -26,6 +27,8 @@ interface OverheadFlightScreenProps {
   sessionNew?: number;
   /** True when catching from the saved home location instead of live GPS. */
   usingFallback?: boolean;
+  /** Epoch ms the on-screen positions date from, set only while the feed is delayed. */
+  staleSince?: number | null;
 }
 
 function NearbyRow({ flight, onSelect, isActive }: { flight: Flight; onSelect: () => void; isActive: boolean }) {
@@ -77,8 +80,11 @@ export default function OverheadFlightScreen({
   sessionCaught = 0,
   sessionNew = 0,
   usingFallback = false,
+  staleSince = null,
 }: OverheadFlightScreenProps) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const now = useNow(staleSince !== null);
+  const delayedSec = staleSince !== null ? Math.max(0, Math.round((now - staleSince) / 1000)) : null;
   const safeIdx = Math.min(activeIdx, flights.length - 1);
   const active = flights[safeIdx];
 
@@ -133,6 +139,11 @@ export default function OverheadFlightScreen({
             <span>Overhead now</span>
             <span className="overhead-nearby-count">{flights.length}</span>
           </div>
+          {delayedSec !== null ? (
+            <div className="overhead-stale-note" role="status">
+              Feed delayed · positions from {delayedSec}s ago · reconnecting
+            </div>
+          ) : null}
           {matchedRadiusNm ? (
             <div className="overhead-expanded-note">
               Nearest within {matchedRadiusNm} nm — beyond your hearing radius, not caught

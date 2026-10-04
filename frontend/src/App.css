@@ -368,6 +368,18 @@ body {
   letter-spacing: 0.3px;
 }
 
+.auth-notice {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--text-primary);
+  background: var(--accent-dim);
+  border: 1px solid var(--border-accent);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0 0 4px;
+}
+
 .auth-btn {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -5241,9 +5253,50 @@ body {
   text-align: center;
 }
 
-/* ── Empty state error variant (geo denied) ───────────────── */
+/* Feed delayed: last good data is on screen while the feed reconnects. */
+.overhead-stale-note {
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: #8A5A14;
+  text-align: center;
+}
+
+/* ── Empty state error variant (geo denied, feed errors) ──── */
 .empty-full.empty-error {
   /* Same layout, red accent treatment. */
+}
+
+/* Empty-state copy was running edge to edge on phones. */
+.empty-full {
+  box-sizing: border-box;
+  padding: 24px 20px;
+}
+
+.empty-full .empty-body {
+  max-width: 40ch;
+  line-height: 1.55;
+}
+
+.empty-retry-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.empty-retry-row .empty-error-retry {
+  margin-top: 0;
+}
+
+.empty-retry-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
 }
 
 .empty-icon-error {
@@ -5256,7 +5309,10 @@ body {
 }
 
 .empty-body-error {
-  color: #d09090;
+  /* Was #d09090 under .empty-body's 0.6 opacity — about 1.6:1 on the
+     beige background, i.e. unreadable outdoors. Now ~6.5:1. */
+  color: #8E2F3E;
+  opacity: 1;
 }
 
 .empty-error-retry {
@@ -5276,7 +5332,7 @@ body {
 
 .empty-error-retry:hover {
   background: rgba(196, 56, 79, 0.12);
-  color: #f08585;
+  color: #8E2F3E;
 }
 
 @media (max-width: 900px) {
@@ -5564,6 +5620,19 @@ body {
 /* Paused scan indicator — solid dim dot, no pulse */
 .scan-dot-paused {
   background: var(--text-dim);
+  animation: none;
+  box-shadow: none;
+}
+
+/* Feed delayed / reconnecting — amber, still pulsing (we're retrying) */
+.scan-dot-warn {
+  background: #B07023;
+  box-shadow: 0 0 8px rgba(176, 112, 35, 0.5);
+}
+
+/* Feed down — solid red */
+.scan-dot-error {
+  background: #C4384F;
   animation: none;
   box-shadow: none;
 }
