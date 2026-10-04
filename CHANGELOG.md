@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-10-04
+
+- Reliability overhaul: fix false "flight data unavailable", faster polls, safe deploys ([#62](https://github.com/norbert586/overhead-web/pull/62))
+
 ## 2026-08-26
 
 - Fix days-long empty flight feed: provider failover, honest 502s, feed health ([#61](https://github.com/norbert586/overhead-web/pull/61))
