@@ -1,103 +1,66 @@
-import { useState, useEffect } from 'react';
-import { findPhotoDeep, thumbnailFallback, type ResolvedPhoto } from '../utils/photos';
+import { useEffect, useState } from 'react';
+import type { PhotoResult } from '../types/photo';
+import { resolvePhotos, photoCredit, photoMatchLabel, photoSearchUrl } from '../utils/photos';
+import type { Insets } from '../utils/photoLayout';
 import AircraftSilhouette from './AircraftSilhouette';
+import SmartPhoto from './SmartPhoto';
 
 interface AircraftPhotoProps {
-  photoUrl: string | null;       // Tier 1: adsbdb (from backend)
   callsign: string | null;
   registration: string | null;
-  hex?: string | null;           // Enables Planespotters hex lookup
-  aircraftType?: string | null;  // Enables similar-airframe fallback
+  hex?: string | null;
+  aircraftType?: string | null;
 }
 
-interface PhotoState {
-  src: string | null;
-  /** null while tier 1; otherwise where the fallback photo came from. */
-  resolved: ResolvedPhoto | null;
-  fbSrc: string | null;
-  /** True once every tier has been tried and failed. */
-  exhausted: boolean;
-}
+// Keep the aircraft clear of the callsign (top) and the registration and
+// photo credit (bottom) drawn over the photo, and of the fades behind them.
+const heroInsets = (_w: number, h: number): Insets => ({
+  top: Math.min(h * 0.15, 40),
+  bottom: Math.min(h * 0.2, 48),
+  left: 0,
+  right: 0,
+});
 
-const EMPTY: PhotoState = { src: null, resolved: null, fbSrc: null, exhausted: false };
-
-function tier1State(url: string): PhotoState {
-  const fb = thumbnailFallback(url);
-  return { src: url, resolved: null, fbSrc: fb !== url ? fb : null, exhausted: false };
-}
-
-function fallbackState(r: ResolvedPhoto): PhotoState {
-  const fb = thumbnailFallback(r.url);
-  return { src: r.url, resolved: r, fbSrc: fb !== r.url ? fb : null, exhausted: false };
-}
-
-export default function AircraftPhoto({ photoUrl, callsign, registration, hex, aircraftType }: AircraftPhotoProps) {
-  const [photo, setPhoto] = useState<PhotoState>(EMPTY);
-
-  // Reset when the airframe changes — derived state during render so the old
-  // aircraft's photo never flashes on the new one.
-  const propKey = `${photoUrl ?? ''}|${registration ?? ''}|${hex ?? ''}|${aircraftType ?? ''}`;
-  const [loadedKey, setLoadedKey] = useState(propKey);
-  if (loadedKey !== propKey) {
-    setLoadedKey(propKey);
-    setPhoto(photoUrl ? tier1State(photoUrl) : EMPTY);
-  }
+export default function AircraftPhoto({ callsign, registration, hex, aircraftType }: AircraftPhotoProps) {
+  const subjectKey = `${hex ?? ''}|${registration ?? ''}|${aircraftType ?? ''}|${callsign ?? ''}`;
+  const [loaded, setLoaded] = useState<{ key: string; result: PhotoResult } | null>(null);
+  const result = loaded?.key === subjectKey ? loaded.result : null;
 
   useEffect(() => {
-    if (photoUrl) return; // tier 1 already applied synchronously
     let cancelled = false;
-    findPhotoDeep(registration ?? null, hex ?? null, aircraftType ?? null).then((r) => {
-      if (cancelled) return;
-      setPhoto(r ? fallbackState(r) : { ...EMPTY, exhausted: true });
-    });
+    resolvePhotos({ hex: hex ?? null, registration, aircraftType: aircraftType ?? null, callsign })
+      .then((r) => { if (!cancelled) setLoaded({ key: subjectKey, result: r }); })
+      .catch(() => { if (!cancelled) setLoaded({ key: subjectKey, result: { candidates: [], complete: false } }); });
     return () => { cancelled = true; };
-  }, [photoUrl, registration, hex, aircraftType]);
+  }, [subjectKey, hex, registration, aircraftType, callsign]);
 
-  async function handleError(e: React.SyntheticEvent<HTMLImageElement>) {
-    const img = e.target as HTMLImageElement;
-
-    // First: the safe thumbnail fallback (Planespotters full_nosym → thumbnail_large)
-    if (photo.fbSrc && img.src !== photo.fbSrc) {
-      setPhoto({ ...photo, src: photo.fbSrc, fbSrc: null });
-      return;
-    }
-    // A broken tier-1 URL cascades into the full fallback waterfall
-    if (!photo.resolved) {
-      const r = await findPhotoDeep(registration ?? null, hex ?? null, aircraftType ?? null);
-      if (r) { setPhoto(fallbackState(r)); return; }
-    }
-    setPhoto({ ...EMPTY, exhausted: true });
-  }
-
-  const { src, resolved } = photo;
-  const isSimilar = resolved?.source === 'similar';
-
-  const sourceLabel = src
-    ? (resolved === null ? 'ADSBDB'
-      : resolved.source === 'similar'
-        ? `SIMILAR · ${aircraftType ?? '?'}${resolved.surrogateReg ? ` · ${resolved.surrogateReg}` : ''}`
-        : 'PLANESPOTTERS')
-    : null;
+  const notFound = (
+    <AircraftSilhouette aircraftType={aircraftType ?? null} searching={false} searchUrl={photoSearchUrl(registration)} />
+  );
 
   return (
     <div className="aircraft-photo-wrap">
-      {src ? (
-        <img src={src} alt={callsign ?? 'Aircraft'} onError={handleError} />
-      ) : (
-        <AircraftSilhouette
-          aircraftType={aircraftType ?? null}
-          searching={!photo.exhausted}
-        />
+      {!result ? (
+        <AircraftSilhouette aircraftType={aircraftType ?? null} searching />
+      ) : !result.candidates.length ? notFound : (
+        <SmartPhoto candidates={result.candidates} alt={callsign ?? registration ?? 'Aircraft'} insets={heroInsets}>
+          {({ active, loaded: shown, exhausted }) => {
+            if (exhausted) return notFound;
+            if (!active || !shown) return <AircraftSilhouette aircraftType={aircraftType ?? null} searching />;
+            const label = photoMatchLabel(active, aircraftType ?? null);
+            return (
+              <>
+                {label && <div className="photo-match-label">{label}</div>}
+                {active.link
+                  ? <a className="photo-credit" href={active.link} target="_blank" rel="noopener">{photoCredit(active)}</a>
+                  : <span className="photo-credit">{photoCredit(active)}</span>}
+              </>
+            );
+          }}
+        </SmartPhoto>
       )}
       {callsign     && <div className="photo-callsign">{callsign}</div>}
       {registration && <div className="photo-registration">{registration}</div>}
-      {sourceLabel  && <div className="photo-source-tag">{sourceLabel}</div>}
-      {isSimilar && (
-        <div className="photo-similar-note">
-          Photo is of a different {aircraftType ?? 'aircraft'} of the same model
-          {resolved?.surrogateReg ? ` (${resolved.surrogateReg})` : ''}, not the actual airframe overhead.
-        </div>
-      )}
     </div>
   );
 }

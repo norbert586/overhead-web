@@ -80,7 +80,10 @@ export default function DiagnosticsPanel({ onClose }: Props) {
 
   const server = report?.server as Record<string, unknown> | undefined;
   const serverError = server && 'error' in server ? String(server.error) : null;
-  const serverVersion = (server?.version as { commit?: string } | undefined)?.commit;
+  const serverBuild = server?.version as { version?: string; commit?: string } | undefined;
+  const serverVersion = serverBuild?.commit
+    ? `${serverBuild.version ? `v${serverBuild.version} · ` : ''}${serverBuild.commit}`
+    : null;
   const problems = (server?.problems as string[] | undefined) ?? [];
   const warnings = (server?.warnings as string[] | undefined) ?? [];
   const providers = ((server?.adsb as { providers?: Array<Record<string, unknown>> } | undefined)?.providers) ?? [];
@@ -101,7 +104,7 @@ export default function DiagnosticsPanel({ onClose }: Props) {
         ) : (
           <>
             <div className="diag-section">
-              <Row label="App build" value={`${report.app.version} · ${ago(report.app.builtAt)}`} />
+              <Row label="App build" value={`v${report.app.version} · ${report.app.commit} · ${ago(report.app.builtAt)}`} />
               <Row
                 label="Server build"
                 value={serverError ? `unreachable — ${serverError}` : `${serverVersion ?? '?'}${report.versionMismatch ? ' · differs from app — reload' : ''}`}

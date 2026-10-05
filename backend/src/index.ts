@@ -5,6 +5,7 @@ import swaggerUi from 'swagger-ui-express';
 import { initDb } from './database/db';
 import { runMigrations } from './database/migrations';
 import { pruneFlightTrack } from './database/queries';
+import { prunePhotoCaches, getPhotoStatus } from './services/photos';
 import { swaggerSpec } from './swagger';
 import { logger, httpLogger } from './logger';
 import { isEmailConfigured } from './services/email';
@@ -18,6 +19,7 @@ import authRouter from './routes/auth';
 import userRouter from './routes/user';
 import adminRouter from './routes/admin';
 import diagnosticsRouter from './routes/diagnostics';
+import photosRouter from './routes/photos';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 
@@ -25,11 +27,13 @@ async function start() {
   await initDb();
   runMigrations();
 
-  // Keep the position-track table bounded: prune at startup and every 6 hours.
-  try { pruneFlightTrack(); } catch (err) { logger.error({ err }, 'track prune failed'); }
-  setInterval(() => {
+  // Keep the position-track and photo tables bounded: prune at startup and every 6 hours.
+  const prune = () => {
     try { pruneFlightTrack(); } catch (err) { logger.error({ err }, 'track prune failed'); }
-  }, 6 * 60 * 60 * 1000).unref();
+    try { prunePhotoCaches(); } catch (err) { logger.error({ err }, 'photo cache prune failed'); }
+  };
+  prune();
+  setInterval(prune, 6 * 60 * 60 * 1000).unref();
 
   if (!process.env.JWT_SECRET) {
     logger.error('JWT_SECRET is not set — sessions are signed with a public default and can be forged. Set it in backend/.env.');
@@ -58,6 +62,7 @@ async function start() {
   app.use('/api/flights', flightsRouter);
   app.use('/api/stats', statsRouter);
   app.use('/api/diagnostics', diagnosticsRouter);
+  app.use('/api/photos', photosRouter);
 
   // /api/log proxies to the log route on the flights router
   app.get('/api/log', (req, res, next) => {
@@ -87,6 +92,13 @@ async function start() {
     if (polls.upstream_unavailable) problems.push(`${polls.upstream_unavailable} poll(s) got no flight data in the last 5 min`);
     if (enrichment.breakerOpen) problems.push('adsbdb lookups paused (circuit breaker open)');
     if (!process.env.JWT_SECRET) warnings.push('JWT_SECRET not set — sessions can be forged');
+    // Photos are decoration: a failing provider is worth knowing about, but
+    // users still get a stand-in or the reference photo, so it's a warning.
+    const photos = getPhotoStatus();
+    const photoFailing = photos.providers.filter((p) => p.name !== 'image-analysis' && (p.breakerOpen ||
+      (p.lastErrorAt && Date.now() - Date.parse(p.lastErrorAt) < recentMs &&
+        (!p.lastSuccessAt || Date.parse(p.lastErrorAt) > Date.parse(p.lastSuccessAt)))));
+    if (photoFailing.length) warnings.push(`failing photo providers: ${photoFailing.map((p) => p.name).join(', ')}`);
     res.json({
       status: problems.length ? 'degraded' : 'ok',
       problems,
@@ -96,6 +108,7 @@ async function start() {
       pollsLast5Min: polls,
       adsb,
       enrichment,
+      photos: { providers: photos.providers, outcomesSinceStart: photos.outcomesSinceStart },
     });
   };
   app.get('/health', health);

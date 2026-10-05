@@ -4,6 +4,7 @@ import fs from 'fs';
 import { requireAuth, requireAdmin, optionalAuth } from '../middleware/auth';
 import { getAdsbStatus, probeProviders, type ProbeResult } from '../services/adsb';
 import { getEnrichmentStatus, probeAdsbdb } from '../services/enrichment';
+import { getPhotoStatus, probePhotoProviders } from '../services/photos';
 import { getMetrics, getRecent, recordClientReport } from '../services/diagnostics';
 import { get, DB_PATH } from '../database/db';
 import { VERSION } from '../version';
@@ -86,6 +87,9 @@ function processStats() {
       jwtSecretSet: !!process.env.JWT_SECRET,
       emailConfigured: !!(process.env.RESEND_API_KEY || process.env.SMTP_HOST),
       adsbBaseUrlOverride: process.env.ADSB_BASE_URL ?? null,
+      // Set only for local mocks — any of these in production means photos come from the wrong place.
+      photoUrlOverrides: [process.env.PLANESPOTTERS_BASE_URL, process.env.AIRPORT_DATA_BASE_URL, process.env.WIKIPEDIA_API_URL]
+        .filter(Boolean).join(' ') || null,
       diagnosticsKeyEnabled: KEY_ENABLED,
     },
   };
@@ -115,12 +119,13 @@ router.get('/', requireDiagnosticsAccess, (_req: Request, res: Response) => {
     database: databaseStats(),
     adsb: getAdsbStatus(true),
     enrichment: getEnrichmentStatus(),
+    photos: getPhotoStatus(true),
     metrics: getMetrics(),
     recent: getRecent(),
   });
 });
 
-// Probes hit four external APIs; cache the answer so a refresh-happy admin
+// Probes hit seven external APIs; cache the answer so a refresh-happy admin
 // page (or a leaked key) can't turn this into a load generator.
 const PROBE_CACHE_MS = 30_000;
 let lastProbe: { at: number; body: unknown } | null = null;
@@ -146,7 +151,7 @@ router.get('/probe', requireDiagnosticsAccess, async (_req: Request, res: Respon
   }
   probing ??= (async () => {
     const started = Date.now();
-    const [providers, adsbdb] = await Promise.all([probeProviders(), probeAdsbdb()]);
+    const [providers, adsbdb, photos] = await Promise.all([probeProviders(), probeAdsbdb(), probePhotoProviders()]);
     let databaseOk = false;
     try {
       databaseOk = get<{ ok: number }>('SELECT 1 AS ok')?.ok === 1;
@@ -157,6 +162,7 @@ router.get('/probe', requireDiagnosticsAccess, async (_req: Request, res: Respon
       allProvidersDown: providers.every((p: ProbeResult) => !p.ok),
       providers,
       adsbdb,
+      photos,
       database: { ok: databaseOk },
     };
     lastProbe = { at: Date.now(), body };

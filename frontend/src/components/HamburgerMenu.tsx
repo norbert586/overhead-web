@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import type { View } from '../App';
-import { APP_VERSION } from '../utils/diagnostics';
+import { APP_VERSION, APP_COMMIT } from '../utils/diagnostics';
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -116,7 +116,7 @@ export default function HamburgerMenu({ isOpen, view, userEmail, isAdmin = false
         Sign out
       </div>
       {/* The build in every screenshot of the menu. */}
-      <div className="menu-version">Overhead · {APP_VERSION}</div>
+      <div className="menu-version">Overhead v{APP_VERSION} · {APP_COMMIT}</div>
     </div>
   );
 }

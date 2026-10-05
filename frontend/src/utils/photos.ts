@@ -1,177 +1,168 @@
-// Shared photo waterfall — module-level caches so results survive re-renders
-// and are shared between AircraftPhoto (main view) and LogScreen (detail rows).
+// Aircraft photos for the UI. The server does the searching (see backend
+// services/photos.ts): one request returns every photo worth trying, best
+// first, with credits and where the aircraft sits in each one.
 //
-// Order of attack for an airframe with no adsbdb photo:
-//   2a. Planespotters by registration
-//   2b. Planespotters by ICAO hex (many contacts have a hex but no reg)
-//   3a. Our own shared photo pool, by ICAO type (backend)
-//   3b. Other registrations of the same type we know about, tried against
-//       Planespotters one by one — the "similar aircraft" everyone expects
-//
-// Every Planespotters hit for a real registration is reported back to the
-// backend so the shared pool grows and 3a answers instantly next time.
+// The browser only searches by itself when the server couldn't: our server
+// unreachable, or it reports a provider it couldn't ask (complete: false). Then
+// we ask Planespotters directly. Browsers have their own IPs, so this still
+// works if the server ever gets rate-limited.
 
 import { getToken } from '../hooks/useAuth';
-
-type PhotoEntry = {
-  thumbnail_large?: { src?: string };
-  large?: { src?: string };
-};
-
-export interface ResolvedPhoto {
-  url: string;
-  /** 'reg' | 'hex' — the actual airframe; 'similar' — same model, different airframe. */
-  source: 'reg' | 'hex' | 'similar';
-  /** For 'similar': the registration of the surrogate airframe shown. */
-  surrogateReg: string | null;
-}
-
-const regCache  = new Map<string, string | null>();
-const hexCache  = new Map<string, string | null>();
-const deepCache = new Map<string, ResolvedPhoto | null>();
+import type { PhotoCandidate, PhotoResult } from '../types/photo';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
+const CACHE_TTL_MS = 10 * 60_000;
+const CACHE_MAX = 300;
+const REQUEST_TIMEOUT_MS = 12_000;
 
-function authHeaders(): Record<string, string> {
+export interface PhotoSubject {
+  hex: string | null;
+  registration: string | null;
+  aircraftType: string | null;
+  callsign?: string | null;
+}
+
+const cache = new Map<string, { at: number; result: Promise<PhotoResult> }>();
+
+const keyOf = (s: PhotoSubject) =>
+  [s.hex, s.registration, s.aircraftType, s.callsign].map((v) => (v ?? '').trim().toUpperCase()).join('|');
+
+async function fromServer(s: PhotoSubject): Promise<PhotoResult> {
+  const q = new URLSearchParams();
+  if (s.hex) q.set('hex', s.hex);
+  if (s.registration) q.set('reg', s.registration);
+  if (s.aircraftType) q.set('type', s.aircraftType);
+  if (s.callsign?.trim()) q.set('callsign', s.callsign.trim());
   const token = getToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  // /api/photos never answers 401 (it's public), so a stale token can't sign
+  // anyone out from here; sending it just lifts the guest rate limit.
+  const res = await fetch(`${API_BASE}/api/photos?${q}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`photos HTTP ${res.status}`);
+  const body = await res.json() as PhotoResult;
+  return { candidates: Array.isArray(body?.candidates) ? body.candidates : [], complete: body?.complete !== false };
 }
 
-function upsizeUrl(url: string): string {
-  return url
-    .replace('/thumbnail_large/', '/full_nosym/')
-    .replace('-thumbnail_large.', '.');
+interface PlanespottersPhoto {
+  thumbnail?: { src?: string; size?: { width?: number; height?: number } };
+  thumbnail_large?: { src?: string; size?: { width?: number; height?: number } };
+  link?: string;
+  photographer?: string;
 }
 
-function bestSrc(photo: PhotoEntry | undefined): string | null {
-  const thumb = photo?.thumbnail_large?.src ?? null;
-  return photo?.large?.src ?? (thumb ? upsizeUrl(thumb) : null);
-}
-
-async function planespotters(path: string): Promise<string | null> {
-  try {
-    const res = await fetch(`https://api.planespotters.net/pub/photos/${path}`);
-    if (!res.ok) return null;
-    const json = await res.json() as { photos?: PhotoEntry[] };
-    return bestSrc(json?.photos?.[0]);
-  } catch {
-    return null;
+/** Planespotters straight from the browser (their API is CORS-enabled). */
+async function fromPlanespotters(s: PhotoSubject): Promise<PhotoCandidate | null> {
+  for (const [kind, id] of [['reg', s.registration], ['hex', s.hex]] as const) {
+    if (!id) continue;
+    try {
+      const res = await fetch(`https://api.planespotters.net/pub/photos/${kind}/${encodeURIComponent(id)}`, {
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (!res.ok) continue;
+      const body = await res.json() as { photos?: PlanespottersPhoto[] };
+      const p = body.photos?.[0];
+      const img = p?.thumbnail_large?.src ? p.thumbnail_large : p?.thumbnail;
+      if (!p || !img?.src || !p.link) continue;
+      return {
+        url: img.src,
+        width: img.size?.width ?? null,
+        height: img.size?.height ?? null,
+        provider: 'planespotters',
+        match: 'exact',
+        link: p.link,
+        photographer: p.photographer ?? null,
+        license: null,
+        registration: null,
+        sameAirline: false,
+        focus: null,
+      };
+    } catch { /* try the next identifier */ }
   }
+  return null;
 }
 
-/** Planespotters by registration. */
-export async function fetchPhoto(
-  registration: string,
-  aircraftType: string | null = null,
-): Promise<string | null> {
-  const key = registration.toUpperCase();
-  if (regCache.has(key)) return regCache.get(key)!;
-  const src = await planespotters(`reg/${encodeURIComponent(key)}`);
-  regCache.set(key, src);
-  if (src) reportPhoto(key, src, aircraftType);
-  return src;
-}
-
-/** Planespotters by ICAO 24-bit hex. */
-export async function fetchPhotoByHex(hex: string): Promise<string | null> {
-  const key = hex.toLowerCase();
-  if (hexCache.has(key)) return hexCache.get(key)!;
-  const src = await planespotters(`hex/${encodeURIComponent(key)}`);
-  hexCache.set(key, src);
-  return src;
-}
-
-/** Fire-and-forget: grow the backend's shared photo pool. */
-function reportPhoto(registration: string, photoUrl: string, aircraftType: string | null): void {
-  if (!getToken()) return;
-  fetch(`${API_BASE}/api/flights/photo-cache`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ registration, photoUrl, aircraftType }),
-  }).catch(() => {});
-}
-
-async function fetchStoredPoolPhoto(
-  typeCode: string,
-  excludeRegistration: string | null,
-): Promise<ResolvedPhoto | null> {
+async function resolve(s: PhotoSubject): Promise<PhotoResult> {
+  let result: PhotoResult;
   try {
-    const params = excludeRegistration ? `?exclude=${encodeURIComponent(excludeRegistration)}` : '';
-    const res = await fetch(
-      `${API_BASE}/api/flights/photo-by-type/${encodeURIComponent(typeCode)}${params}`,
-      { headers: authHeaders() },
-    );
-    if (!res.ok) return null;
-    const json = await res.json() as { photoUrl?: string; registration?: string | null };
-    if (!json?.photoUrl) return null;
-    return { url: json.photoUrl, source: 'similar', surrogateReg: json.registration ?? null };
+    result = await fromServer(s);
   } catch {
-    return null;
+    // Our server is unreachable or failing: the browser asks on its own.
+    const direct = await fromPlanespotters(s);
+    return { candidates: direct ? [direct] : [], complete: false };
   }
-}
-
-async function fetchTypeRegistrations(
-  typeCode: string,
-  excludeRegistration: string | null,
-): Promise<string[]> {
-  try {
-    const params = excludeRegistration ? `?exclude=${encodeURIComponent(excludeRegistration)}` : '';
-    const res = await fetch(
-      `${API_BASE}/api/flights/type-registrations/${encodeURIComponent(typeCode)}${params}`,
-      { headers: authHeaders() },
-    );
-    if (!res.ok) return [];
-    const json = await res.json() as { registrations?: string[] };
-    return json?.registrations ?? [];
-  } catch {
-    return [];
+  if (!result.complete && !result.candidates.some((c) => c.match === 'exact')) {
+    const direct = await fromPlanespotters(s);
+    if (direct) result = { ...result, candidates: [direct, ...result.candidates] };
   }
+  return result;
 }
 
 /**
- * The full fallback waterfall below tier 1 (adsbdb). Cached per airframe;
- * returns null only when every avenue is exhausted.
+ * Every photo worth trying for this aircraft, best first. Cached for ten
+ * minutes per aircraft; concurrent callers share one request.
  */
-export async function findPhotoDeep(
-  registration: string | null,
-  hex: string | null,
-  aircraftType: string | null,
-): Promise<ResolvedPhoto | null> {
-  const cacheKey = `${registration ?? ''}|${hex ?? ''}|${aircraftType ?? ''}`;
-  if (deepCache.has(cacheKey)) return deepCache.get(cacheKey)!;
-
-  const resolved = await (async (): Promise<ResolvedPhoto | null> => {
-    // 2a. The actual airframe, by registration
-    if (registration) {
-      const url = await fetchPhoto(registration, aircraftType);
-      if (url) return { url, source: 'reg', surrogateReg: null };
-    }
-    // 2b. The actual airframe, by hex
-    if (hex) {
-      const url = await fetchPhotoByHex(hex);
-      if (url) return { url, source: 'hex', surrogateReg: null };
-    }
-    if (!aircraftType) return null;
-
-    // 3a. Shared pool of photos we've already found for this type
-    const pooled = await fetchStoredPoolPhoto(aircraftType, registration);
-    if (pooled) return pooled;
-
-    // 3b. Walk sibling airframes of the same type through Planespotters
-    const siblings = await fetchTypeRegistrations(aircraftType, registration);
-    for (const reg of siblings.slice(0, 3)) {
-      const url = await fetchPhoto(reg, aircraftType); // reports hits to the pool
-      if (url) return { url, source: 'similar', surrogateReg: reg };
-    }
-    return null;
-  })();
-
-  deepCache.set(cacheKey, resolved);
-  return resolved;
+export function resolvePhotos(s: PhotoSubject): Promise<PhotoResult> {
+  const key = keyOf(s);
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.result;
+  const result = resolve(s);
+  cache.set(key, { at: Date.now(), result });
+  // A result that came back incomplete is worth asking again sooner.
+  result.then((r) => {
+    if (!r.complete) setTimeout(() => { if (cache.get(key)?.result === result) cache.delete(key); }, 60_000);
+  }).catch(() => cache.delete(key));
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
+  return result;
 }
 
-/** Derive the safe thumbnail_large URL from an upsized URL, for onError fallback. */
-export function thumbnailFallback(upsized: string): string {
-  return upsized
-    .replace('/full_nosym/', '/thumbnail_large/');
+/** Warm the cache and the browser's image cache for aircraft about to be shown. */
+export function prefetchPhotos(subjects: PhotoSubject[]): void {
+  for (const s of subjects) {
+    if (!s.hex && !s.registration && !s.aircraftType) continue;
+    resolvePhotos(s).then((r) => {
+      const first = r.candidates[0];
+      if (first) new Image().src = first.url;
+    }).catch(() => {});
+  }
+}
+
+const reported = new Set<string>();
+
+/** Tell the server an image wouldn't load; it re-checks and purges dead ones. */
+export function reportBrokenPhoto(url: string): void {
+  if (reported.has(url) || !navigator.onLine) return;
+  reported.add(url);
+  fetch(`${API_BASE}/api/photos/broken`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+const PROVIDER_NAMES: Record<PhotoCandidate['provider'], string> = {
+  planespotters: 'Planespotters',
+  'airport-data': 'Airport-Data',
+  wikimedia: 'Wikimedia',
+};
+
+/** Visible photographer credit (Planespotters' terms; CC attribution for Commons). */
+export function photoCredit(c: PhotoCandidate): string {
+  const parts = [c.photographer ? `© ${c.photographer}` : null, c.license, PROVIDER_NAMES[c.provider]];
+  return parts.filter(Boolean).join(' · ');
+}
+
+/** Says plainly when the photo is not of this very airframe; null when it is. */
+export function photoMatchLabel(c: PhotoCandidate, aircraftType: string | null): string | null {
+  if (c.match === 'exact') return null;
+  if (c.provider === 'wikimedia') return `Reference photo${aircraftType ? ` · ${aircraftType}` : ''}`;
+  const reg = c.registration ? ` · ${c.registration}` : '';
+  return c.sameAirline ? `Same airline & model${reg}` : `Same model${reg}`;
+}
+
+/** Where to look by hand when nothing turned up. */
+export function photoSearchUrl(registration: string | null): string | null {
+  return registration ? `https://www.planespotters.net/photos/reg/${encodeURIComponent(registration)}` : null;
 }

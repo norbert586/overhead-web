@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNow } from '../hooks/useNow';
+import { prefetchPhotos } from '../utils/photos';
 import CallsignBlock from '../components/CallsignBlock';
 import AircraftPhoto from '../components/AircraftPhoto';
 import HeadingArrow from '../components/HeadingArrow';
@@ -88,6 +89,15 @@ export default function OverheadFlightScreen({
   const safeIdx = Math.min(activeIdx, flights.length - 1);
   const active = flights[safeIdx];
 
+  // Fetch the other nearby aircraft's photos ahead of a tap, so switching is instant.
+  const nearbyKey = flights.map((f) => `${f.hex}|${f.registration ?? ''}|${f.aircraftType ?? ''}|${f.callsign ?? ''}`).join(',');
+  useEffect(() => {
+    prefetchPhotos(nearbyKey.split(',').map((k) => {
+      const [hex, registration, aircraftType, callsign] = k.split('|');
+      return { hex, registration: registration || null, aircraftType: aircraftType || null, callsign: callsign || null };
+    }));
+  }, [nearbyKey]);
+
   return (
     <div className="flight-screen overhead-screen">
       <div className="col-left">
@@ -119,7 +129,6 @@ export default function OverheadFlightScreen({
 
       <div className="col-center">
         <AircraftPhoto
-          photoUrl={active.photoUrl}
           callsign={active.callsign}
           registration={active.registration}
           hex={active.hex}

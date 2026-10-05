@@ -1,13 +1,17 @@
-// Photo placeholder: when no photo exists at any tier, show a chart-style
-// top-view silhouette matched to the aircraft category instead of a text
-// shrug. Reads like a chart symbol, not a broken image.
+// Photo placeholder: while the photo search runs, and — only when every
+// source and fallback has come up empty — the "no photo found" state: a
+// chart-style top-view silhouette matched to the aircraft category, with a
+// link to look the airframe up by hand. Reads like a chart symbol, not a
+// broken image.
 
 import { categorize, type SilhouetteCategory } from '../utils/aircraftCategory';
 
 interface AircraftSilhouetteProps {
   aircraftType: string | null;
-  /** True while the photo waterfall is still being tried. */
+  /** True while the photo search is still running. */
   searching: boolean;
+  /** "Look it up yourself" link for the no-photo state. */
+  searchUrl?: string | null;
 }
 
 
@@ -54,19 +58,28 @@ export function SilhouetteGlyph({ category, className = '' }: {
   );
 }
 
-export default function AircraftSilhouette({ aircraftType, searching }: AircraftSilhouetteProps) {
+export default function AircraftSilhouette({ aircraftType, searching, searchUrl }: AircraftSilhouetteProps) {
   const category = categorize(aircraftType);
 
   return (
-    <div className="photo-silhouette" role="img" aria-label={searching ? 'Searching photo archives' : 'No photo on file'}>
+    <div
+      className={`photo-silhouette${searching ? '' : ' not-found'}`}
+      role="img"
+      aria-label={searching ? 'Searching photo archives' : 'No photo found'}
+    >
       <SilhouetteGlyph
         category={category}
         className={`photo-silhouette-glyph${searching ? ' searching' : ''}`}
       />
       {aircraftType && <div className="photo-silhouette-type">{aircraftType}</div>}
       <div className="photo-silhouette-label">
-        {searching ? 'Checking photo archives…' : 'No photo on file'}
+        {searching ? 'Checking photo archives…' : 'No photo found'}
       </div>
+      {!searching && searchUrl && (
+        <a className="photo-silhouette-search" href={searchUrl} target="_blank" rel="noopener">
+          Search Planespotters ↗
+        </a>
+      )}
     </div>
   );
 }
