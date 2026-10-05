@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-10-05
+
+- Aircraft photos: server-side lookup, aircraft-aware framing; semver releases ([#63](https://github.com/norbert586/overhead-web/pull/63)) · v2.5.0
+
 ## 2026-10-04
 
 - Reliability overhaul: fix false "flight data unavailable", faster polls, safe deploys ([#62](https://github.com/norbert586/overhead-web/pull/62))
