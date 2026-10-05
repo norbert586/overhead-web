@@ -1,12 +1,13 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import path from 'path';
+import { VERSION } from './version';
 
 const options: swaggerJsdoc.Options = {
   definition: {
     openapi: '3.0.3',
     info: {
       title: 'Overhead API',
-      version: '1.0.0',
+      version: VERSION.version,
       description: 'Backend API for the Overhead aircraft-spotting app.',
     },
     servers: [

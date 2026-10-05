@@ -49,7 +49,7 @@ export default function BottomBar({ lastPollTime }: BottomBarProps) {
         onClick={() => setDiagOpen(true)}
         aria-label="Open diagnostics"
       >
-        <span>Overhead · {APP_VERSION}</span>
+        <span>Overhead v{APP_VERSION}</span>
         <span>{label}</span>
       </button>
       {diagOpen && <DiagnosticsPanel onClose={() => setDiagOpen(false)} />}

@@ -6,8 +6,7 @@ import {
 } from '../services/enrichment';
 import { classify } from '../services/classifier';
 import {
-  upsertFlight, getFlightHistory, getLog, getSessionStats, findPhotoByType,
-  findRegistrationsByType, recordAircraftPhoto,
+  upsertFlight, getFlightHistory, getLog, getSessionStats,
 } from '../database/queries';
 import { scoreFlight } from '../services/interestScore';
 import { isNightAt } from '../services/solar';
@@ -103,8 +102,8 @@ function withinBudget<T>(p: Promise<T>, fallback: T): Promise<T> {
  *                 timestamp: { type: string, format: date-time }
  *       400: { description: Missing lat/lon }
  *       401: { description: "Recording requested without a valid session (code: auth_required | auth_expired | auth_invalid)" }
- *       429: { description: Guest rate limit (code: rate_limited) }
- *       500: { description: Server error processing the poll (code: server_error) }
+ *       429: { description: "Guest rate limit (code: rate_limited)" }
+ *       500: { description: "Server error processing the poll (code: server_error)" }
  *       502: { description: "Every ADS-B provider is unreachable (code: upstream_unavailable)" }
  */
 router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response) => {
@@ -361,120 +360,6 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     log.error({ err }, 'GET /api/flights error');
     res.status(500).json({ error: 'Failed to process flight data', code: 'server_error' });
   }
-});
-
-/**
- * @openapi
- * /api/flights/photo-by-type/{type}:
- *   get:
- *     summary: Fallback photo lookup by ICAO aircraft type
- *     tags: [Flights]
- *     parameters:
- *       - in: path
- *         name: type
- *         required: true
- *         schema: { type: string }
- *       - in: query
- *         name: exclude
- *         schema: { type: string, description: Registration to exclude from the result }
- *     responses:
- *       200: { description: Photo found }
- *       400: { description: Missing type }
- *       404: { description: No photo for type }
- */
-router.get('/photo-by-type/:type', requireAuth, (req: Request, res: Response) => {
-  const type    = (req.params.type ?? '').trim().toUpperCase();
-  const exclude = ((req.query.exclude as string | undefined) ?? '').trim().toUpperCase() || null;
-  if (!type) {
-    res.status(400).json({ error: 'type is required' });
-    return;
-  }
-  const hit = findPhotoByType(type, exclude);
-  if (!hit) {
-    res.status(404).json({ error: 'No photo for type' });
-    return;
-  }
-  res.json(hit);
-});
-
-/**
- * @openapi
- * /api/flights/type-registrations/{type}:
- *   get:
- *     summary: Known registrations of an ICAO type (surrogate-photo candidates)
- *     tags: [Flights]
- *     parameters:
- *       - in: path
- *         name: type
- *         required: true
- *         schema: { type: string }
- *       - in: query
- *         name: exclude
- *         schema: { type: string }
- *     responses:
- *       200: { description: Registration list }
- */
-router.get('/type-registrations/:type', requireAuth, (req: Request, res: Response) => {
-  const type    = (req.params.type ?? '').trim().toUpperCase();
-  const exclude = ((req.query.exclude as string | undefined) ?? '').trim().toUpperCase() || null;
-  if (!type) {
-    res.status(400).json({ error: 'type is required' });
-    return;
-  }
-  res.json({ registrations: findRegistrationsByType(type, exclude) });
-});
-
-// Only accept photo URLs from hosts the waterfall actually fetches from, so
-// this can't be used to plant arbitrary links in the shared cache.
-const PHOTO_HOST_ALLOWLIST = ['plnspttrs.net', 'planespotters.net'];
-
-function isAllowedPhotoUrl(raw: string): boolean {
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:') return false;
-    return PHOTO_HOST_ALLOWLIST.some(
-      (host) => url.hostname === host || url.hostname.endsWith(`.${host}`),
-    );
-  } catch {
-    return false;
-  }
-}
-
-/**
- * @openapi
- * /api/flights/photo-cache:
- *   post:
- *     summary: Record a Planespotters photo the client found, growing the shared pool
- *     tags: [Flights]
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               registration: { type: string }
- *               photoUrl: { type: string }
- *     responses:
- *       204: { description: Stored }
- *       400: { description: Invalid registration or URL }
- */
-router.post('/photo-cache', requireAuth, (req: Request, res: Response) => {
-  const { registration, photoUrl, aircraftType } = req.body as {
-    registration?: string; photoUrl?: string; aircraftType?: string;
-  };
-  const reg = (registration ?? '').trim().toUpperCase();
-  if (!reg || reg.length > 12 || !/^[A-Z0-9-]+$/.test(reg)) {
-    res.status(400).json({ error: 'Invalid registration' });
-    return;
-  }
-  if (typeof photoUrl !== 'string' || photoUrl.length > 500 || !isAllowedPhotoUrl(photoUrl)) {
-    res.status(400).json({ error: 'Invalid photo URL' });
-    return;
-  }
-  const type = (aircraftType ?? '').trim().toUpperCase();
-  const validType = type && type.length <= 8 && /^[A-Z0-9]+$/.test(type) ? type : null;
-  recordAircraftPhoto(reg, photoUrl, validType);
-  res.status(204).end();
 });
 
 /**

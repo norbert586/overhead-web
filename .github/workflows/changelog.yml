@@ -19,21 +19,32 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Append changelog entry
+      - name: Append changelog entry and bump VERSION
+        id: release
         env:
           PR_TITLE:  ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_URL:    ${{ github.event.pull_request.html_url }}
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
         run: node .github/scripts/update-changelog.mjs
 
-      - name: Commit and push
+      # The deploy for the merge commit usually starts after this lands (CI
+      # runs first), so it builds with the new VERSION; this push deploys it
+      # again either way.
+      - name: Commit, tag and push
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          if git diff --quiet -- CHANGELOG.md; then
+          if git diff --quiet -- CHANGELOG.md VERSION; then
             echo "No changelog change — skipping commit."
             exit 0
           fi
           git config user.name  "overhead-changelog-bot"
           git config user.email "overhead-changelog-bot@users.noreply.github.com"
-          git add CHANGELOG.md
-          git commit -m "Update CHANGELOG for #${{ github.event.pull_request.number }}"
+          git add CHANGELOG.md VERSION
+          git commit -m "Update CHANGELOG for #${{ github.event.pull_request.number }} (v${VERSION})"
           git push origin main
+          if ! git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            git tag "v${VERSION}"
+            git push origin "v${VERSION}"
+          fi

@@ -15,6 +15,7 @@ const KEY = process.env.DIAGNOSTICS_KEY ?? '';
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(BASE) || process.argv.includes('--allow-writes');
 const LAT = Number(process.env.LAT ?? 40.69);
 const LON = Number(process.env.LON ?? -74.17);
+// PHOTO_REG / PHOTO_TYPE pick the airframe for the photo check (default D-AIMA / A388).
 
 let failures = 0;
 const ok = (msg) => console.log(`  ✓ ${msg}`);
@@ -81,6 +82,8 @@ async function main() {
         for (const p of probe.body.providers) (p.ok ? ok : warn)(`probe ${p.name}: ${p.ok ? `${p.aircraft} aircraft, ${p.ms} ms` : p.error}`);
         if (probe.body.allProvidersDown) bad('probe: NO ADS-B provider is reachable from the server');
         (probe.body.adsbdb.ok ? ok : bad)(`probe adsbdb: ${probe.body.adsbdb.ok ? `${probe.body.adsbdb.ms} ms` : probe.body.adsbdb.error}`);
+        // Photos are decoration: a failing provider is a warning, not a failure.
+        for (const p of probe.body.photos ?? []) (p.ok ? ok : warn)(`probe ${p.name} (photos): ${p.ok ? `${p.ms} ms` : p.error}`);
       } else {
         bad(`/api/diagnostics/probe → HTTP ${probe.res.status}`);
       }
@@ -96,6 +99,24 @@ async function main() {
     else bad(`HTTP ${res.status} in ${ms} ms: ${JSON.stringify(body)}`);
   } catch (err) {
     bad(`guest poll failed: ${err.message}`);
+  }
+
+  console.log('\nphotos');
+  try {
+    // A well-photographed airframe (Lufthansa's first A380) unless told otherwise.
+    const reg = process.env.PHOTO_REG ?? 'D-AIMA';
+    const type = process.env.PHOTO_TYPE ?? 'A388';
+    const { res, body, ms } = await call(`/api/photos?reg=${encodeURIComponent(reg)}&type=${encodeURIComponent(type)}`);
+    if (res.status !== 200) {
+      bad(`/api/photos → HTTP ${res.status}: ${JSON.stringify(body)}`);
+    } else {
+      const [first] = body.candidates ?? [];
+      const summary = (body.candidates ?? []).map((c) => `${c.provider}/${c.match}${c.focus ? '/framed' : ''}`).join(', ') || 'none';
+      (first ? ok : warn)(`${reg} (${type}) in ${ms} ms → ${summary}${body.complete ? '' : ' · INCOMPLETE (a provider could not be asked)'}`);
+      if (first && first.match !== 'exact') warn(`no photo of ${reg} itself — showing a ${first.provider} stand-in`);
+    }
+  } catch (err) {
+    bad(`photo lookup failed: ${err.message}`);
   }
 
   if (LOCAL) {

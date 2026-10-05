@@ -1017,15 +1017,50 @@ button.bottom-bar {
   box-shadow: var(--card-shadow-elevated);
 }
 
-.aircraft-photo-wrap img {
+/* ── Framed photo (SmartPhoto) ────────────────────────────────── */
+/* The image is sized and placed by utils/photoLayout.ts around the
+   aircraft; until it has a frame it falls back to a plain cover crop. It
+   fades in once loaded. When the photo can't fill the box without cropping
+   the aircraft, a blurred copy of it fills the rest. */
+.smart-photo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.smart-photo-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  max-width: none;
   object-fit: cover;
-  object-position: center center;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.smart-photo-img.framed {
+  inset: auto;
+  object-fit: fill;
+}
+
+.smart-photo-img.loaded {
   opacity: 1;
-  filter: none;
+}
+
+.smart-photo-backdrop {
+  position: absolute;
+  inset: -10%;
+  width: 120%;
+  height: 120%;
+  object-fit: cover;
+  filter: blur(24px) saturate(1.1);
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.smart-photo-link {
+  cursor: pointer;
 }
 
 /* Top fade */
@@ -1033,7 +1068,7 @@ button.bottom-bar {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 60px;
+  height: min(18%, 56px);
   background: linear-gradient(#EDE7D3, transparent);
   z-index: 2;
   pointer-events: none;
@@ -1044,7 +1079,7 @@ button.bottom-bar {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 80px;
+  height: min(24%, 72px);
   background: linear-gradient(transparent, #EDE7D3);
   z-index: 2;
   pointer-events: none;
@@ -1076,46 +1111,48 @@ button.bottom-bar {
   z-index: 3;
 }
 
-.photo-no-image {
+.photo-credit {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  bottom: 9px;
+  left: 12px;
+  max-width: calc(100% - 100px); /* clear of the registration, bottom right */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 9px;
-  color: var(--text-ghost);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-}
-
-.photo-source-tag {
-  position: absolute;
-  bottom: 10px;
-  left: 12px;
-  font-family: var(--font-mono);
-  font-size: 7px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: rgba(30, 111, 160, 0.45);
-  background: rgba(252, 247, 231, 0.65);
-  border: 1px solid rgba(30, 111, 160, 0.10);
+  letter-spacing: 0.2px;
+  color: rgba(30, 60, 85, 0.8);
+  background: rgba(252, 247, 231, 0.72);
+  border: 1px solid rgba(30, 111, 160, 0.12);
   border-radius: 2px;
   padding: 2px 6px;
+  text-decoration: none;
   z-index: 3;
 }
 
-.photo-similar-note {
-  margin-top: 6px;
+a.photo-credit:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* Not this airframe: a stand-in of the same model, or a reference photo. */
+.photo-match-label {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  max-width: 70%;
   font-family: var(--font-mono);
   font-size: 9px;
-  letter-spacing: 0.5px;
-  line-height: 1.4;
-  color: rgba(176, 112, 35, 0.85);
-  background: rgba(40, 28, 18, 0.55);
-  border: 1px solid rgba(176, 112, 35, 0.25);
-  border-radius: 3px;
-  padding: 6px 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #8a5a1c;
+  background: rgba(252, 241, 214, 0.9);
+  border: 1px solid rgba(176, 112, 35, 0.35);
+  border-radius: 2px;
+  padding: 3px 7px;
+  z-index: 3;
+  pointer-events: none;
 }
 
 /* ── Right column shared ────────────────────────────────────── */
@@ -2150,26 +2187,6 @@ button.bottom-bar {
   min-width: 0;
 }
 
-.log-photo-btn {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--accent);
-  background: var(--accent-micro);
-  border: 1px solid rgba(30, 111, 160, 0.15);
-  border-radius: 2px;
-  padding: 7px 14px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.log-photo-btn:hover {
-  background: var(--accent-dim);
-  border-color: rgba(30, 111, 160, 0.25);
-}
-
-.log-photo-loading,
 .log-photo-unavailable {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -2177,84 +2194,72 @@ button.bottom-bar {
   letter-spacing: 0.5px;
 }
 
-.log-photo-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.log-photo-img {
-  width: 100%;
-  max-height: 200px;
+.log-photo-frame {
+  position: relative;
+  height: 180px;
   border-radius: 5px;
+  overflow: hidden;
   border: 1px solid var(--glass-border);
-  object-fit: cover;
-  display: block;
-  filter: saturate(0.55) brightness(1.05);
-  opacity: 0.9;
   background: var(--bg-card);
   box-shadow: var(--card-shadow);
 }
 
-.log-photo-source {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--text-ghost);
-  opacity: 0.6;
-}
-
-.log-photo-similar-note {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  line-height: 1.4;
-  color: rgba(176, 112, 35, 0.85);
-  background: rgba(40, 28, 18, 0.45);
-  border: 1px solid rgba(176, 112, 35, 0.20);
-  border-radius: 3px;
-  padding: 5px 7px;
-}
-
-/* Clickable photo (opens lightbox) */
-.log-photo-zoom-btn {
-  position: relative;
-  display: block;
-  padding: 0;
-  background: none;
-  border: none;
-  cursor: zoom-in;
-  border-radius: 5px;
+.log-photo-credit {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(30, 60, 85, 0.85);
+  background: rgba(252, 247, 231, 0.78);
+  border-radius: 2px;
+  padding: 2px 5px;
+  text-decoration: none;
+  z-index: 2;
 }
 
-.log-photo-zoom-btn:hover .log-photo-img {
-  filter: saturate(0.75) brightness(1.1);
-  opacity: 1;
+a.log-photo-credit:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
-.log-photo-zoom-btn:hover .log-photo-zoom-hint {
-  opacity: 1;
+.log-photo-frame .photo-match-label {
+  top: 6px;
+  left: 6px;
+  right: auto;
+  font-size: 8px;
 }
 
-.log-photo-zoom-hint {
+/* Opens the lightbox; the photo itself links to its source page. */
+.log-photo-zoom-btn {
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
   font-size: 14px;
   color: var(--text-primary);
-  background: rgba(252, 247, 231, 0.7);
+  background: rgba(252, 247, 231, 0.78);
   border: 1px solid var(--glass-border);
   border-radius: 3px;
-  opacity: 0;
-  transition: opacity 0.15s;
-  pointer-events: none;
+  cursor: zoom-in;
+  z-index: 2;
+}
+
+.log-photo-zoom-btn:hover {
+  background: rgba(252, 247, 231, 0.95);
+}
+
+.log-photo-frame .photo-silhouette-type {
+  font-size: 14px;
 }
 
 /* ── Photo lightbox modal ───────────────────────────────────── */
@@ -2337,11 +2342,21 @@ button.bottom-bar {
 
 .log-lightbox-source {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--text-ghost);
-  opacity: 0.7;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: rgba(236, 232, 220, 0.85);
+  text-decoration: none;
+}
+
+a.log-lightbox-source:hover {
+  text-decoration: underline;
+}
+
+.log-lightbox-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: #e9c48a;
 }
 
 /* ── Rarity / interest chips and panel ──────────────────────── */
@@ -4175,16 +4190,8 @@ button.bottom-bar {
     border-top: 1px solid rgba(30, 111, 160, 0.06);
   }
 
-  .log-photo-btn {
-    padding: 12px 18px;
-    font-size: 12px;
-    min-height: 44px;
-    width: 100%;
-    text-align: center;
-  }
-
-  .log-photo-img {
-    max-height: 220px;
+  .log-photo-frame {
+    height: 200px;
   }
 
   /* ══ STATS SCREEN ══════════════════════════════════════════════ */
@@ -5708,8 +5715,9 @@ button.bottom-bar {
 }
 
 /* ── Photo silhouette placeholder ─────────────────────────────────────────── */
-/* When no photo exists at any tier: a chart-symbol silhouette of the
-   aircraft category instead of a text shrug. */
+/* While the photo search runs, and when every source and fallback came up
+   empty: a chart-symbol silhouette of the aircraft category instead of a
+   text shrug. */
 .photo-silhouette {
   position: absolute;
   inset: 0;
@@ -5751,6 +5759,26 @@ button.bottom-bar {
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--text-ghost);
+}
+
+/* Every source came up empty. Say so plainly and offer a manual lookup. */
+.photo-silhouette.not-found .photo-silhouette-label {
+  color: var(--text-dim);
+}
+
+.photo-silhouette-search {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(30, 111, 160, 0.3);
+  z-index: 3;
+}
+
+.photo-silhouette-search:hover {
+  border-bottom-color: var(--accent);
 }
 
 /* ── Heading arrows ───────────────────────────────────────────────────────── */

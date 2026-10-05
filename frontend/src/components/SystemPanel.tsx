@@ -7,7 +7,7 @@ import {
   type HealthSnapshot,
   type ProbeSnapshot,
 } from '../services/api';
-import { APP_VERSION } from '../utils/diagnostics';
+import { APP_VERSION, APP_COMMIT } from '../utils/diagnostics';
 
 function ago(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -111,8 +111,8 @@ export default function SystemPanel() {
           <div key={w} className="diag-tone-warn" style={{ marginTop: 4 }}>▲ {w}</div>
         ))}
         <div className="diag-kv" style={{ marginTop: 8 }}>
-          <span><b>server</b>{diag.version.commit}</span>
-          <span><b>this app</b>{APP_VERSION}{APP_VERSION !== diag.version.commit ? ' (differs)' : ''}</span>
+          <span><b>server</b>{diag.version.version ? `v${diag.version.version} · ` : ''}{diag.version.commit}</span>
+          <span><b>this app</b>v{APP_VERSION} · {APP_COMMIT}{APP_COMMIT !== diag.version.commit ? ' (differs)' : ''}</span>
           <span><b>up</b>{duration(diag.process.uptimeSec)}</span>
           <span><b>node</b>{diag.version.node}</span>
           <span><b>rss</b>{diag.process.memoryMb.rss} MB</span>
@@ -142,6 +142,14 @@ export default function SystemPanel() {
                   <td className="admin-num">{probe.adsbdb.ms}</td>
                   <td>{probe.adsbdb.error ?? `HTTP ${probe.adsbdb.status}`}</td>
                 </tr>
+                {(probe.photos ?? []).map((p) => (
+                  <tr key={`photo-${p.name}`}>
+                    <td>{p.name} (photos)</td>
+                    <td className={p.ok ? 'diag-tone-ok' : 'diag-tone-bad'}>{p.ok ? 'reachable' : 'FAILED'}</td>
+                    <td className="admin-num">{p.ms}</td>
+                    <td>{p.error ?? `HTTP ${p.status}`}</td>
+                  </tr>
+                ))}
                 <tr>
                   <td>database</td>
                   <td className={probe.database.ok ? 'diag-tone-ok' : 'diag-tone-bad'}>{probe.database.ok ? 'ok' : 'FAILED'}</td>
@@ -185,6 +193,31 @@ export default function SystemPanel() {
           {Object.entries(diag.enrichment).map(([k, v]) => <span key={k}><b>adsbdb.{k}</b>{String(v)}</span>)}
         </div>
       </div>
+
+      {diag.photos && (
+        <div className="diag-admin-block">
+          <div className="diag-section-title">Photos</div>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Provider</th><th>Last ok</th><th>requests / errors</th><th>Last error</th></tr></thead>
+              <tbody>
+                {diag.photos.providers.map((p) => (
+                  <tr key={p.name}>
+                    <td>{p.name}{p.breakerOpen ? ' · paused' : ''}</td>
+                    <td>{ago(p.lastSuccessAt)}</td>
+                    <td>{p.requests} / {p.errors}</td>
+                    <td>{p.lastError ? `${ago(p.lastErrorAt)} — ${p.lastError}` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="diag-kv" style={{ marginTop: 8 }}>
+            {Object.entries(diag.photos.outcomesSinceStart).map(([k, v]) => <span key={k}><b>shown.{k}</b>{v}</span>)}
+            {diag.photos.cache && Object.entries(diag.photos.cache).map(([k, v]) => <span key={k}><b>cache.{k}</b>{v}</span>)}
+          </div>
+        </div>
+      )}
 
       <div className="diag-admin-block">
         <div className="diag-section-title">Traffic</div>

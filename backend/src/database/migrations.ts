@@ -230,6 +230,40 @@ export function runMigrations(): void {
     );
   `);
 
+  // Server-side photo resolution (services/photos.ts). airframe_photos is
+  // keyed by ICAO hex ('reg:<REG>' when there's none) and holds every photo
+  // found for that airframe as JSON, '[]' meaning "looked, found nothing";
+  // rows with photos double as the same-model stand-in pool, hence the type
+  // index. type_photos holds one Wikimedia reference photo per ICAO type.
+  // photo_focus is where the aircraft sits in each image, per URL.
+  exec(`
+    CREATE TABLE IF NOT EXISTS airframe_photos (
+      hex           TEXT PRIMARY KEY,
+      registration  TEXT,
+      aircraft_type TEXT,
+      airline       TEXT,
+      candidates    TEXT NOT NULL,
+      checked_at    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_airframe_photos_type ON airframe_photos(aircraft_type, airline);
+
+    CREATE TABLE IF NOT EXISTS type_photos (
+      aircraft_type TEXT PRIMARY KEY,
+      candidate     TEXT,
+      checked_at    INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS photo_focus (
+      url         TEXT PRIMARY KEY,
+      width       INTEGER,
+      height      INTEGER,
+      box         TEXT,
+      analyzed_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_flights_type ON flights(aircraft_type);
+  `);
+
   // One-time fresh start for the catch model: the flight history up to this
   // point was auto-recorded by the retired background scanner, not personally
   // witnessed, so it doesn't count under the new rules. Wipe sightings and

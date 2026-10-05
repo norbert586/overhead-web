@@ -10,7 +10,12 @@
 //
 // Imports nothing from services/api.ts (which imports this) to stay acyclic.
 
+/** The release people see, e.g. "2.5.0" — bumped on every merge. */
 export const APP_VERSION: string = __APP_VERSION__;
+/** The exact build; compared with the server's to spot a stale cached app. */
+export const APP_COMMIT: string = __APP_COMMIT__;
+/** Release + build in one string, for reports: "2.5.0+9aed1ee". */
+export const APP_BUILD = `${APP_VERSION}+${APP_COMMIT}`;
 export const APP_BUILT_AT: string = __APP_BUILT_AT__;
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
@@ -84,7 +89,7 @@ export function reportToServer(
       body: JSON.stringify({
         kind,
         message,
-        appVersion: APP_VERSION,
+        appVersion: APP_BUILD,
         requestId: extra.requestId ?? null,
         detail: extra.detail ?? null,
       }),
@@ -110,7 +115,7 @@ export function installGlobalErrorReporting(): void {
   window.addEventListener('online', () => recordEvent('online'));
   window.addEventListener('offline', () => recordEvent('offline'));
   document.addEventListener('visibilitychange', () => recordEvent(`page-${document.visibilityState}`));
-  recordEvent('app-start', { version: APP_VERSION });
+  recordEvent('app-start', { version: APP_BUILD });
 }
 
 // ── Report ──────────────────────────────────────────────────────────────────
@@ -137,7 +142,7 @@ function sessionInfo() {
 
 export interface DiagnosticReport {
   generatedAt: string;
-  app: { version: string; builtAt: string };
+  app: { version: string; commit: string; builtAt: string };
   server: Record<string, unknown> | { error: string };
   versionMismatch: boolean | null;
   page: Record<string, unknown>;
@@ -160,9 +165,9 @@ export async function buildReport(): Promise<DiagnosticReport> {
   const serverCommit = (server as { version?: { commit?: string } }).version?.commit;
   return {
     generatedAt: new Date().toISOString(),
-    app: { version: APP_VERSION, builtAt: APP_BUILT_AT },
+    app: { version: APP_VERSION, commit: APP_COMMIT, builtAt: APP_BUILT_AT },
     server,
-    versionMismatch: serverCommit && APP_VERSION !== 'dev' ? serverCommit !== APP_VERSION : null,
+    versionMismatch: serverCommit && APP_COMMIT !== 'dev' ? serverCommit !== APP_COMMIT : null,
     page: {
       path: location.pathname,
       online: navigator.onLine,

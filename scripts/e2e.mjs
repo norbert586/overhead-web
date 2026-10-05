@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Full-stack end-to-end check in a real (headless) mobile browser — no
-// network needed. Starts the mock upstreams, a backend on a throwaway
-// database, and the Vite dev server; drives the app through the failure
-// modes that matter; tears everything down. ~2.5 minutes (the outage
-// scenario waits out the real 45 s stale windows).
+// network needed. Starts the mock upstreams (feed, adsbdb and the photo
+// providers), a backend on a throwaway database, and the Vite dev server;
+// drives the app through aircraft photos and the failure modes that matter;
+// tears everything down. ~3 minutes (the outage scenario waits out the real
+// 45 s stale windows).
 //
 //   node scripts/e2e.mjs              # from the repo root, deps installed in backend/ + frontend/
 //   E2E_SHOTS=/tmp/shots node scripts/e2e.mjs   # keep screenshots somewhere specific
@@ -66,6 +67,9 @@ const backendEnv = {
   DB_PATH: path.join(TMP, 'e2e.db'),
   ADSB_BASE_URL: `http://localhost:${PORTS.mock}/v2/point`,
   ADSBDB_BASE_URL: `http://localhost:${PORTS.mock}/v0`,
+  PLANESPOTTERS_BASE_URL: `http://localhost:${PORTS.mock}/planespotters/pub/photos`,
+  AIRPORT_DATA_BASE_URL: `http://localhost:${PORTS.mock}/airport-data/api`,
+  WIKIPEDIA_API_URL: `http://localhost:${PORTS.mock}/wikipedia/w/api.php`,
   NODE_ENV: 'production',
   LOG_LEVEL: 'warn',
 };
@@ -110,6 +114,8 @@ async function main() {
     geolocation: { latitude: 40.69, longitude: -74.17 },
     permissions: ['geolocation'],
   });
+  // The browser's own Planespotters fallback must not reach the internet.
+  await ctx.route('https://api.planespotters.net/**', (r) => r.abort());
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
@@ -132,10 +138,75 @@ async function main() {
     check((await page.locator('.overhead-nearby-row').count()) === 3, 'three nearest aircraft listed');
     await shot('1-healthy');
 
+    console.log('aircraft photos');
+    const hero = page.locator('.aircraft-photo-wrap');
+    const heroPhoto = async () => {
+      await hero.locator('.smart-photo-img.loaded, .photo-silhouette.not-found').first().waitFor({ timeout: 15_000 });
+      return hero.evaluate((el) => ({
+        provider: el.querySelector('.smart-photo')?.getAttribute('data-provider') ?? null,
+        credit: el.querySelector('.photo-credit')?.textContent ?? null,
+        creditHref: el.querySelector('a.photo-credit')?.getAttribute('href') ?? null,
+        photoHref: el.querySelector('.smart-photo-link')?.getAttribute('href') ?? null,
+        label: el.querySelector('.photo-match-label')?.textContent ?? null,
+        notFound: !!el.querySelector('.photo-silhouette.not-found'),
+        searchHref: el.querySelector('.photo-silhouette-search')?.getAttribute('href') ?? null,
+      }));
+    };
+    let p = await heroPhoto();
+    check(p.provider === 'planespotters' && /Mock Spotter/.test(p.credit ?? '') && !p.label,
+      `exact Planespotters photo with photographer credit ("${p.credit}")`);
+    check(p.photoHref === p.creditHref && /planespotters\.net\/photo\//.test(p.photoHref ?? ''),
+      'photo and credit link to the Planespotters photo page');
+    // Framing: the aircraft (the server's focus box) must be inside the visible frame.
+    const api = `http://localhost:${PORTS.api}`;
+    const photos = await fetch(`${api}/api/photos?hex=a00000&reg=N100T&type=B738&callsign=TST100`).then((r) => r.json());
+    const focus = photos.candidates[0]?.focus;
+    const framing = await hero.evaluate((el, f) => {
+      const box = el.getBoundingClientRect();
+      const img = el.querySelector('.smart-photo-img').getBoundingClientRect();
+      const plane = { l: img.left + f.x * img.width, t: img.top + f.y * img.height, r: img.left + (f.x + f.w) * img.width, b: img.top + (f.y + f.h) * img.height };
+      return { inside: plane.l >= box.left - 1 && plane.r <= box.right + 1 && plane.t >= box.top - 1 && plane.b <= box.bottom + 1, fill: (plane.r - plane.l) / box.width };
+    }, focus);
+    check(!!focus && framing.inside, `aircraft fully inside the frame (fills ${Math.round(framing.fill * 100)}% of the width)`);
+    await page.locator('.overhead-nearby-row').nth(1).click();
+    p = await heroPhoto();
+    check(p.provider === 'airport-data' && /Mock Photographer/.test(p.credit ?? ''), `Airport-Data photo when Planespotters has none ("${p.credit}")`);
+    await page.locator('.overhead-nearby-row').nth(2).click();
+    p = await heroPhoto();
+    check(p.provider === 'wikimedia' && /reference photo/i.test(p.label ?? '') && /CC BY-SA/.test(p.credit ?? ''),
+      `no airframe photo → labelled, licensed reference photo ("${p.label}")`);
+    await shot('1b-reference-photo');
+    await page.locator('.overhead-nearby-row').nth(0).click();
+
+    // A dead image URL falls through to the next candidate; an aircraft with
+    // nothing anywhere gets the plain "no photo" state with a manual lookup.
+    const ctx2 = await browser.newContext({ ...devices['iPhone 13'], geolocation: { latitude: 40.69, longitude: -74.17 }, permissions: ['geolocation'] });
+    await ctx2.route('https://api.planespotters.net/**', (r) => r.abort());
+    await ctx2.route('**/img/ps-runway.jpg', (r) => r.fulfill({ status: 404, body: 'gone' }));
+    await ctx2.route((u) => u.pathname === '/api/photos' && u.searchParams.get('hex') === 'a00001',
+      (r) => r.fulfill({ json: { candidates: [], complete: true } }));
+    const page2 = await ctx2.newPage();
+    await page2.goto(app);
+    await page2.evaluate(([t, u]) => {
+      localStorage.setItem('overhead_token', t);
+      localStorage.setItem('overhead_user', JSON.stringify(u));
+    }, [login.token, login.user]);
+    await page2.reload();
+    const hero2 = page2.locator('.aircraft-photo-wrap');
+    await hero2.locator('.smart-photo-img.loaded').waitFor({ timeout: 15_000 });
+    check(await hero2.locator('.smart-photo').getAttribute('data-provider') === 'wikimedia', 'broken photo URL → next candidate shown');
+    await page2.locator('.overhead-nearby-row').nth(1).click();
+    await hero2.locator('.photo-silhouette.not-found').waitFor({ timeout: 10_000 });
+    const search = await hero2.locator('.photo-silhouette-search').getAttribute('href');
+    check(/planespotters\.net\/photos\/reg\/N101T/.test(search ?? ''), `nothing anywhere → "No photo found" + manual search link`);
+    await page2.screenshot({ path: path.join(SHOTS, '1c-no-photo.png') });
+    await ctx2.close();
+
     console.log('diagnostics panel');
     // Phones hide the bottom bar, so open it the way a phone user would.
     await page.locator('.hamburger').click();
-    check(/overhead · \w+/i.test(await page.locator('.menu-version').innerText()), 'menu shows the build version');
+    const menuVersion = await page.locator('.menu-version').innerText();
+    check(/overhead v\d+\.\d+\.\d+ · \w+/i.test(menuVersion), `menu shows the release and build ("${menuVersion}")`);
     await page.locator('.menu-item', { hasText: 'Diagnostics' }).click();
     await page.locator('.diag-panel .diag-row').first().waitFor({ timeout: 10_000 });
     const panelText = await page.locator('.diag-panel').innerText();

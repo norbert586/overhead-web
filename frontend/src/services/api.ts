@@ -386,7 +386,7 @@ type Counts = Record<string, number>;
 
 export interface DiagnosticsSnapshot {
   generatedAt: string;
-  version: { commit: string; committedAt: string | null; startedAt: string; node: string };
+  version: { version?: string; commit: string; committedAt: string | null; startedAt: string; node: string };
   process: {
     uptimeSec: number;
     memoryMb: { rss: number; heapUsed: number; heapTotal: number };
@@ -409,6 +409,15 @@ export interface DiagnosticsSnapshot {
     inflightAreas: number;
   };
   enrichment: Record<string, unknown>;
+  /** Absent on servers older than the photo service. */
+  photos?: {
+    providers: Array<{
+      name: string; breakerOpen: boolean; lastSuccessAt: string | null; lastErrorAt: string | null;
+      lastError: string | null; requests: number; errors: number;
+    }>;
+    outcomesSinceStart: Counts;
+    cache: Counts | false;
+  };
   metrics: {
     last5min: { requests: Counts; errorCodes: Counts; pollOutcomes: Counts };
     last60min: { requests: Counts; errorCodes: Counts; pollOutcomes: Counts };
@@ -435,6 +444,7 @@ export interface ProbeSnapshot {
   allProvidersDown: boolean;
   providers: Array<{ name: string; ok: boolean; ms: number; status: number | null; aircraft: number | null; error: string | null }>;
   adsbdb: { ok: boolean; ms: number; status: number | null; error: string | null };
+  photos?: Array<{ name: string; ok: boolean; ms: number; status: number | null; error: string | null }>;
   database: { ok: boolean };
 }
 
@@ -442,7 +452,7 @@ export interface HealthSnapshot {
   status: 'ok' | 'degraded';
   problems: string[];
   warnings: string[];
-  version: { commit: string; startedAt: string };
+  version: { version?: string; commit: string; startedAt: string };
 }
 
 export async function fetchDiagnostics(): Promise<DiagnosticsSnapshot> {

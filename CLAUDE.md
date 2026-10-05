@@ -7,9 +7,12 @@ Live flight "catching" app: open it when you hear a plane, it records every airc
 - `backend/` — Express + TypeScript + better-sqlite3 (sync DB calls).
   - `src/services/adsb.ts` — live feed: one 50 nm fetch per ~1 nm grid cell, shared + cached 5 s, served stale ≤ 45 s if every provider fails; providers raced (next one starts after 1.5 s), 4 s timeout, 60 s cooldown.
   - `src/services/enrichment.ts` — adsbdb lookups: deduped, ≤ 6 concurrent, circuit breaker; only 404/400 are cached as misses.
+  - `src/services/photos.ts` + `src/routes/photos.ts` — `GET /api/photos`: every photo worth trying for an aircraft, best first. Exact airframe (Planespotters by reg then hex, Airport-Data, in parallel; cached per hex 24 h, misses 12 h) → same-model stand-in from our own pool, same airline first → Wikimedia Commons reference photo of the type (always appended last; cached per type 30 d). Each candidate carries credit, link-back page and `focus` (aircraft bounding box). `complete: false` = a provider couldn't be asked; the browser then tries Planespotters itself. `POST /api/photos/broken` re-checks a dead URL from the server and purges it.
+  - `src/services/photoFocus.ts` — finds the aircraft in a JPEG (background-connectivity saliency, no ML), cached per URL. Fails wide: too big a box only costs zoom; it must never crop the aircraft. Tests: `npm test`.
   - `src/routes/flights.ts` — `GET /api/flights`, the catch poll. Records only aircraft inside the hearing radius, never from a stale snapshot or the display-only 25/50 nm expansion.
   - `src/services/diagnostics.ts` + `src/routes/diagnostics.ts` — in-memory log ring, per-minute metrics, poll log, client error reports, live probe.
-- `frontend/` — React 19 + Vite PWA. `src/hooks/useFlightData.ts` is the poll loop (one request at a time, 15 s timeout, backoff, keeps last data 45 s marked delayed). `src/utils/diagnostics.ts` is the client event ring + error reporting.
+- `frontend/` — React 19 + Vite PWA. `src/hooks/useFlightData.ts` is the poll loop (one request at a time, 15 s timeout, backoff, keeps last data 45 s marked delayed). `src/utils/diagnostics.ts` is the client event ring + error reporting. Photos: `src/utils/photos.ts` (client for `/api/photos`, credits/labels), `src/components/SmartPhoto.tsx` (walks candidates on load error), `src/utils/photoLayout.ts` (frames the aircraft for any box shape; letterboxes over a blurred copy rather than crop it).
+- `VERSION` — the release (semver) shown in the app and `/api/health`. The changelog bot bumps it on every merged PR: `major`/`breaking` label → major, `patch`/`fix`/`bug` label or a title starting Fix/Hotfix/Repair → patch, else minor; it also tags `vX.Y.Z`. Don't bump it by hand in a PR.
 - `scripts/e2e.mjs` — full-stack browser test. `backend/scripts/` — mock upstreams + smoke test.
 
 ## Verify before pushing
@@ -17,7 +20,7 @@ Live flight "catching" app: open it when you hear a plane, it records every airc
 CI (`.github/workflows/ci.yml`) runs these on every PR and gates every deploy:
 
 ```bash
-cd backend  && npm run typecheck && npm run lint && npm run build
+cd backend  && npm run typecheck && npm run lint && npm test && npm run build
 cd frontend && npm run lint && npm run build
 ```
 
@@ -35,8 +38,9 @@ cd backend && BASE=http://localhost:3001 INVITE_CODE=<server's code> npm run smo
 ## Run locally, offline
 
 ```bash
-cd backend && npm run mock-feed      # :4555 — fake ADS-B feed + adsbdb; flip modes:
+cd backend && npm run mock-feed      # :4555 — fake ADS-B feed, adsbdb and photo providers; flip modes:
                                      # curl localhost:4555/__mode?mode=ok|empty|slow|down|garbage
+                                     # curl localhost:4555/__photos?mode=ok|none|down|broken
 cd backend && JWT_SECRET=dev INVITE_CODE=dev DB_PATH=/tmp/overhead-dev.db npm run dev:mock   # :3001
 cd frontend && VITE_API_URL=http://localhost:3001 npm run dev                                # :5174
 ```
@@ -73,6 +77,7 @@ Cloud sessions are often blocked from `overheadflight.com` and the ADS-B hosts b
 - The bottom bar is `display: none` at ≤ 900 px. Phone-reachable entry points belong in the hamburger menu.
 - `--panel-bg` is never defined: `.auth-card`, `.s-card`, `.chart-tooltip` render transparent (left as-is; design call).
 - Hamburger menu items are clickable `<div>`s, not buttons — select them by `.menu-item` in tests.
+- Planespotters' terms: show their thumbnail URL unchanged (never rewrite it for a bigger size), link the photo to its photo page, credit the photographer visibly next to it, and keep photo areas free to view (not member-only). Requests must identify themselves (User-Agent server-side, Origin/Referer in the browser).
 
 ## Session gotchas
 

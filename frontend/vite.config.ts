@@ -1,11 +1,13 @@
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Stamp the build with its commit so the app can say exactly what it is
-// running (bottom bar, diagnostics panel) and spot when it's older than the
-// server — e.g. a home-screen app still on a cached build.
+// Stamp the build with its release and commit. The release (VERSION at the
+// repo root, bumped by the changelog bot on every merge) is what people see;
+// the commit is how the app spots that it's older than the server — e.g. a
+// home-screen app still on a cached build.
 function gitSha(): string {
   try {
     return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
@@ -14,10 +16,19 @@ function gitSha(): string {
   }
 }
 
+function release(): string {
+  try {
+    return readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim() || '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.GIT_SHA ?? gitSha()),
+    __APP_VERSION__: JSON.stringify(release()),
+    __APP_COMMIT__: JSON.stringify(process.env.GIT_SHA ?? gitSha()),
     __APP_BUILT_AT__: JSON.stringify(new Date().toISOString()),
   },
   plugins: [

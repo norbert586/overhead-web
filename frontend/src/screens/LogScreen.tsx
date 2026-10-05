@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchLog } from '../services/api';
 import { readCache, writeCache } from '../utils/swrCache';
-import { findPhotoDeep, thumbnailFallback } from '../utils/photos';
+import { resolvePhotos, photoCredit, photoMatchLabel, photoSearchUrl } from '../utils/photos';
+import type { PhotoCandidate, PhotoResult } from '../types/photo';
+import SmartPhoto from '../components/SmartPhoto';
+import AircraftSilhouette from '../components/AircraftSilhouette';
 import type { Flight, Classification, InterestTier } from '../types/flight';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -67,93 +70,85 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-// ── Photo loader ─────────────────────────────────────────────────────────────
+// ── Photo ────────────────────────────────────────────────────────────────────
 
-function RowPhoto({ registration, hex, aircraftType }: { registration: string | null; hex?: string | null; aircraftType?: string | null }) {
-  const [state,        setState       ] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [src,          setSrc         ] = useState<string | null>(null);
-  const [fb,           setFb          ] = useState<string | null>(null);
-  const [source,       setSource      ] = useState<'planespotters' | 'similar' | null>(null);
-  const [surrogateReg, setSurrogateReg] = useState<string | null>(null);
-  const [zoomed,       setZoomed      ] = useState(false);
+function RowPhoto({ registration, hex, aircraftType, callsign }: {
+  registration: string | null;
+  hex?: string | null;
+  aircraftType?: string | null;
+  callsign?: string | null;
+}) {
+  const subjectKey = `${hex ?? ''}|${registration ?? ''}|${aircraftType ?? ''}|${callsign ?? ''}`;
+  const [loaded, setLoaded] = useState<{ key: string; result: PhotoResult } | null>(null);
+  const [zoomed, setZoomed] = useState<PhotoCandidate | null>(null);
+  const result = loaded?.key === subjectKey ? loaded.result : null;
+  const hasIdentity = !!(registration || hex || aircraftType);
 
-  if (!registration && !hex && !aircraftType) {
+  // The detail panel only mounts when a row is opened, and the lookup is one
+  // cached request, so load straight away.
+  useEffect(() => {
+    if (!hasIdentity) return;
+    let cancelled = false;
+    resolvePhotos({ hex: hex ?? null, registration, aircraftType: aircraftType ?? null, callsign })
+      .then((r) => { if (!cancelled) setLoaded({ key: subjectKey, result: r }); })
+      .catch(() => { if (!cancelled) setLoaded({ key: subjectKey, result: { candidates: [], complete: false } }); });
+    return () => { cancelled = true; };
+  }, [subjectKey, hasIdentity, hex, registration, aircraftType, callsign]);
+
+  if (!hasIdentity) {
     return <div className="log-photo-unavailable">No identifiers — photo unavailable</div>;
   }
 
-  async function load() {
-    setState('loading');
-    const r = await findPhotoDeep(registration, hex ?? null, aircraftType ?? null);
-    if (!r) {
-      setState('error');
-      return;
-    }
-    const fallback = thumbnailFallback(r.url);
-    setSrc(r.url);
-    if (fallback !== r.url) setFb(fallback);
-    setSource(r.source === 'similar' ? 'similar' : 'planespotters');
-    setSurrogateReg(r.surrogateReg);
-    setState('done');
-  }
-
-  function handleError(e: React.SyntheticEvent<HTMLImageElement>) {
-    if (fb && (e.target as HTMLImageElement).src !== fb) {
-      setSrc(fb);
-    } else {
-      setState('error');
-      setSrc(null);
-    }
-  }
-
-  if (state === 'idle') {
-    return <button className="log-photo-btn" onClick={load}>↓ Load photo</button>;
-  }
-  if (state === 'loading') return <div className="log-photo-loading">Loading…</div>;
-  if (state === 'error' || !src) return <div className="log-photo-unavailable">No photo available</div>;
-
-  const sourceLabel = source === 'similar'
-    ? `SIMILAR · ${aircraftType ?? ''}${surrogateReg ? ` · ${surrogateReg}` : ''}`
-    : 'PLANESPOTTERS';
   const caption = registration ?? aircraftType ?? 'Aircraft';
+  const notFound = (
+    <div className="log-photo-frame">
+      <AircraftSilhouette aircraftType={aircraftType ?? null} searching={false} searchUrl={photoSearchUrl(registration)} />
+    </div>
+  );
+  if (!result) {
+    return <div className="log-photo-frame"><AircraftSilhouette aircraftType={aircraftType ?? null} searching /></div>;
+  }
+  if (!result.candidates.length) return notFound;
 
   return (
-    <>
-      <div className="log-photo-wrap">
-        <button
-          type="button"
-          className="log-photo-zoom-btn"
-          onClick={() => setZoomed(true)}
-          title="View larger"
-          aria-label="View photo larger"
-        >
-          <img className="log-photo-img" src={src} alt={caption} onError={handleError} />
-          <span className="log-photo-zoom-hint" aria-hidden="true">⤢</span>
-        </button>
-        <div className="log-photo-source">{sourceLabel}</div>
-        {source === 'similar' && (
-          <div className="log-photo-similar-note">
-            Different airframe, same model{surrogateReg ? ` (${surrogateReg})` : ''}.
-          </div>
-        )}
-      </div>
+    <div className="log-photo-frame">
+      <SmartPhoto candidates={result.candidates} alt={caption}>
+        {({ active, loaded: shown, exhausted }) => {
+          if (exhausted) return <AircraftSilhouette aircraftType={aircraftType ?? null} searching={false} searchUrl={photoSearchUrl(registration)} />;
+          if (!active || !shown) return <AircraftSilhouette aircraftType={aircraftType ?? null} searching />;
+          const label = photoMatchLabel(active, aircraftType ?? null);
+          return (
+            <>
+              {label && <div className="photo-match-label">{label}</div>}
+              <button
+                type="button"
+                className="log-photo-zoom-btn"
+                onClick={() => setZoomed(active)}
+                title="View larger"
+                aria-label="View photo larger"
+              >⤢</button>
+              <PhotoCreditLine photo={active} className="log-photo-credit" />
+            </>
+          );
+        }}
+      </SmartPhoto>
       {zoomed && (
-        <PhotoLightbox
-          src={src}
-          alt={caption}
-          sourceLabel={sourceLabel}
-          similarNote={source === 'similar' ? `Different airframe, same model${surrogateReg ? ` (${surrogateReg})` : ''}.` : null}
-          onClose={() => setZoomed(false)}
-        />
+        <PhotoLightbox photo={zoomed} alt={caption} label={photoMatchLabel(zoomed, aircraftType ?? null)} onClose={() => setZoomed(null)} />
       )}
-    </>
+    </div>
   );
 }
 
-function PhotoLightbox({ src, alt, sourceLabel, similarNote, onClose }: {
-  src: string;
+function PhotoCreditLine({ photo, className }: { photo: PhotoCandidate; className: string }) {
+  return photo.link
+    ? <a className={className} href={photo.link} target="_blank" rel="noopener">{photoCredit(photo)}</a>
+    : <span className={className}>{photoCredit(photo)}</span>;
+}
+
+function PhotoLightbox({ photo, alt, label, onClose }: {
+  photo: PhotoCandidate;
   alt: string;
-  sourceLabel: string;
-  similarNote: string | null;
+  label: string | null;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -169,16 +164,17 @@ function PhotoLightbox({ src, alt, sourceLabel, similarNote, onClose }: {
     };
   }, [onClose]);
 
+  const img = <img className="log-lightbox-img" src={photo.url} alt={alt} />;
   return (
     <div className="log-lightbox" role="dialog" aria-modal="true" aria-label={alt} onClick={onClose}>
       <button className="log-lightbox-close" onClick={onClose} aria-label="Close">✕</button>
       <div className="log-lightbox-inner" onClick={(e) => e.stopPropagation()}>
-        <img className="log-lightbox-img" src={src} alt={alt} />
+        {photo.link ? <a href={photo.link} target="_blank" rel="noopener">{img}</a> : img}
         <div className="log-lightbox-meta">
           <span className="log-lightbox-caption">{alt}</span>
-          <span className="log-lightbox-source">{sourceLabel}</span>
+          <PhotoCreditLine photo={photo} className="log-lightbox-source" />
         </div>
-        {similarNote && <div className="log-photo-similar-note">{similarNote}</div>}
+        {label && <div className="log-lightbox-note">{label} — not the aircraft you caught.</div>}
       </div>
     </div>
   );
@@ -268,7 +264,7 @@ function DetailsTab({ f, typeLabel }: { f: Flight; typeLabel: string }) {
       </div>
       <div className="log-photo-section">
         <div className="log-detail-section-label" style={{ marginBottom: 10 }}>Photo</div>
-        <RowPhoto registration={f.registration} hex={f.hex} aircraftType={f.aircraftType} />
+        <RowPhoto registration={f.registration} hex={f.hex} aircraftType={f.aircraftType} callsign={f.callsign} />
       </div>
     </div>
   );
