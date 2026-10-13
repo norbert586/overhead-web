@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { buildReport, reportToServer, type DiagnosticReport } from '../utils/diagnostics';
 
 interface Props {
@@ -22,6 +22,31 @@ function until(iso: unknown): string {
   return days >= 1 ? `${Math.floor(days)}d left` : `${Math.round(days * 24)}h left`;
 }
 
+/**
+ * Copy text from inside a tap handler. execCommand runs synchronously, so it
+ * keeps the user gesture that iOS Safari demands — navigator.clipboard
+ * rejected there (NotAllowedError) and the button looked dead, because the
+ * fallback textarea opened below the fold of a scrolled panel.
+ */
+function copyViaSelection(text: string): boolean {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  // Off-screen but not display:none (unselectable); 16px stops iOS zooming.
+  ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;font-size:16px;';
+  document.body.appendChild(ta);
+  try {
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length); // iOS ignores select() alone
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    ta.remove();
+  }
+}
+
 type Tone = 'ok' | 'warn' | 'bad' | 'muted';
 
 function Row({ label, value, tone = 'muted' }: { label: string; value: string; tone?: Tone }) {
@@ -42,6 +67,7 @@ export default function DiagnosticsPanel({ onClose }: Props) {
   const [report, setReport] = useState<DiagnosticReport | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [sent, setSent] = useState(false);
+  const fallbackRef = useRef<HTMLTextAreaElement>(null);
 
   const refresh = useCallback(() => {
     buildReport().then(setReport);
@@ -60,15 +86,34 @@ export default function DiagnosticsPanel({ onClose }: Props) {
   const json = report ? JSON.stringify(report, null, 2) : '';
 
   async function copy() {
+    if (copyViaSelection(json)) {
+      setCopyState('copied');
+      return;
+    }
     try {
       await navigator.clipboard.writeText(json);
       setCopyState('copied');
     } catch {
-      // Clipboard needs a secure context + permission; the textarea below
-      // is the fallback (long-press → Select all → Copy).
+      // Last resort: show the JSON to copy by hand (long-press → Select all).
       setCopyState('failed');
     }
   }
+
+  // The share sheet is the most dependable way off a phone (and it has its
+  // own Copy).
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  function share() {
+    navigator.share({ title: 'Overhead diagnostics', text: json }).catch(() => {
+      /* dismissed */
+    });
+  }
+
+  useEffect(() => {
+    if (copyState === 'failed') fallbackRef.current?.scrollIntoView({ block: 'nearest' });
+    if (copyState !== 'copied') return;
+    const t = setTimeout(() => setCopyState('idle'), 2_500);
+    return () => clearTimeout(t);
+  }, [copyState]);
 
   function send() {
     if (!report) return;
@@ -171,8 +216,11 @@ export default function DiagnosticsPanel({ onClose }: Props) {
 
             <div className="diag-actions">
               <button type="button" className="admin-row-action" onClick={copy}>
-                {copyState === 'copied' ? 'Copied' : 'Copy report'}
+                {copyState === 'copied' ? 'Copied ✓' : 'Copy report'}
               </button>
+              {canShare && (
+                <button type="button" className="admin-row-action" onClick={share}>Share</button>
+              )}
               <button type="button" className="admin-row-action" onClick={send} disabled={sent}>
                 {sent ? 'Sent' : 'Send to server'}
               </button>
@@ -180,7 +228,10 @@ export default function DiagnosticsPanel({ onClose }: Props) {
               <button type="button" className="admin-row-action" onClick={() => window.location.reload()}>Reload app</button>
             </div>
             {copyState === 'failed' && (
-              <textarea className="diag-json" readOnly value={json} onFocus={(e) => e.currentTarget.select()} />
+              <>
+                <div className="diag-event diag-tone-warn">Couldn't copy automatically — long-press the text below → Select All → Copy.</div>
+                <textarea ref={fallbackRef} className="diag-json" readOnly value={json} onFocus={(e) => e.currentTarget.select()} />
+              </>
             )}
           </>
         )}
