@@ -8,6 +8,19 @@
     <meta name="theme-color" content="#EDE7D3" />
     <meta name="description" content="Catch the flights overhead. Open the app when you hear one — it grabs your location and logs whatever is in the sky above you." />
     <title>Overhead</title>
+    <!-- Link previews: shared catches end with this site's URL, and Messages,
+         WhatsApp and Slack build the card from these (static HTML only — they
+         don't run JS). og:image must be an absolute URL. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Overhead" />
+    <meta property="og:title" content="Overhead — catch the planes flying over you" />
+    <meta property="og:description" content="Hear a plane? Open Overhead and see the airline, the aircraft and where it's headed — then add it to your log." />
+    <meta property="og:url" content="https://overheadflight.com/" />
+    <meta property="og:image" content="https://overheadflight.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Overhead — catch the planes flying over you" />
+    <meta name="twitter:card" content="summary_large_image" />
     <!-- Photo + logo hosts: warm up the connections before the first aircraft renders -->
     <link rel="preconnect" href="https://api.planespotters.net" crossorigin />
     <link rel="preconnect" href="https://images.kiwi.com" crossorigin />

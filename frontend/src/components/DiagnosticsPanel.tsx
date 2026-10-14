@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { buildReport, reportToServer, type DiagnosticReport } from '../utils/diagnostics';
+import { copyText } from '../utils/clipboard';
 
 interface Props {
   onClose: () => void;
@@ -20,31 +21,6 @@ function until(iso: unknown): string {
   const days = (Date.parse(iso) - Date.now()) / 86_400_000;
   if (days < 0) return 'expired';
   return days >= 1 ? `${Math.floor(days)}d left` : `${Math.round(days * 24)}h left`;
-}
-
-/**
- * Copy text from inside a tap handler. execCommand runs synchronously, so it
- * keeps the user gesture that iOS Safari demands — navigator.clipboard
- * rejected there (NotAllowedError) and the button looked dead, because the
- * fallback textarea opened below the fold of a scrolled panel.
- */
-function copyViaSelection(text: string): boolean {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.setAttribute('readonly', '');
-  // Off-screen but not display:none (unselectable); 16px stops iOS zooming.
-  ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;font-size:16px;';
-  document.body.appendChild(ta);
-  try {
-    ta.focus();
-    ta.select();
-    ta.setSelectionRange(0, text.length); // iOS ignores select() alone
-    return document.execCommand('copy');
-  } catch {
-    return false;
-  } finally {
-    ta.remove();
-  }
 }
 
 type Tone = 'ok' | 'warn' | 'bad' | 'muted';
@@ -86,17 +62,8 @@ export default function DiagnosticsPanel({ onClose }: Props) {
   const json = report ? JSON.stringify(report, null, 2) : '';
 
   async function copy() {
-    if (copyViaSelection(json)) {
-      setCopyState('copied');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(json);
-      setCopyState('copied');
-    } catch {
-      // Last resort: show the JSON to copy by hand (long-press → Select all).
-      setCopyState('failed');
-    }
+    // Last resort on failure: show the JSON to copy by hand (long-press → Select all).
+    setCopyState(await copyText(json) ? 'copied' : 'failed');
   }
 
   // The share sheet is the most dependable way off a phone (and it has its

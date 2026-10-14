@@ -6424,3 +6424,213 @@ a.log-lightbox-source:hover {
   letter-spacing: 1px;
   white-space: nowrap;
 }
+
+/* ── Share catch ────────────────────────────────────────────── */
+.share-catch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  flex-shrink: 0;
+  min-height: 32px;
+  margin-top: 16px;
+  padding: 0 14px 0 11px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--border-accent);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.share-catch-btn:hover {
+  background: rgba(30, 111, 160, 0.16);
+  border-color: var(--border-active);
+}
+
+.share-catch-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* In the log's tab bar, pushed to the far end */
+.share-catch-btn.log-share-btn {
+  align-self: center;
+  margin: 0 0 0 auto;
+  min-height: 26px;
+  padding: 0 11px 0 9px;
+  font-size: 10px;
+}
+
+.share-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(34, 48, 59, 0.38);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: lightbox-fade 0.18s ease;
+}
+
+.share-sheet {
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 18px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--card-shadow-elevated);
+}
+
+.share-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.share-sheet-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.share-sheet-close {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.share-sheet-close:hover {
+  color: var(--text-primary);
+  border-color: var(--border-accent);
+}
+
+/* A preview of the text as it will look sent: an outgoing message bubble */
+.share-bubble-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+
+.share-bubble {
+  max-width: 94%;
+  padding: 9px 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 18px 18px 4px 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.share-sheet-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.share-sheet-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border-accent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.share-sheet-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--border-active);
+}
+
+.share-sheet-btn.primary {
+  color: #fff;
+  background: var(--accent-grad);
+  border-color: transparent;
+}
+
+.share-sheet-btn.primary:hover {
+  filter: brightness(1.08);
+}
+
+.share-sheet-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+@keyframes share-sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* Phones: a bottom sheet, thumb-reach buttons */
+@media (max-width: 640px) {
+  .share-catch-btn { min-height: 38px; }
+
+  .share-sheet-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .share-sheet {
+    max-width: none;
+    max-height: 92dvh;
+    padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    animation: share-sheet-up 0.22s ease;
+  }
+
+  /* Icon only, and pinned to the end of the tab strip, which scrolls
+     sideways on narrow phones — otherwise Share sits off-screen. The
+     opaque under-layer stops the tabs showing through as they pass. */
+  .share-catch-btn.log-share-btn {
+    position: sticky;
+    right: 0;
+    min-height: 30px;
+    padding: 0 9px;
+    background: linear-gradient(var(--accent-dim), var(--accent-dim)), var(--bg-elevated);
+    box-shadow: -14px 0 10px -4px var(--bg-elevated);
+  }
+
+  .share-catch-btn.log-share-btn span { display: none; }
+}

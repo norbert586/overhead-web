@@ -56,6 +56,8 @@ export default defineConfig({
         // Precache the shell; never intercept API or external photo traffic —
         // live aircraft data must always be live.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Only link-preview crawlers fetch this; don't make every install download it.
+        globIgnores: ['og-image.png'],
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [],
       },

@@ -8,6 +8,7 @@ import RouteBlock from '../components/RouteBlock';
 import TelemetryGrid from '../components/TelemetryGrid';
 import IntelCard from '../components/IntelCard';
 import ClassificationBadge from '../components/ClassificationBadge';
+import ShareCatchButton from '../components/ShareCatch';
 import {
   formatAltitude,
   formatSpeed,
@@ -107,6 +108,11 @@ export default function OverheadFlightScreen({
           manufacturer={active.manufacturer}
           operator={active.operator}
           classification={active.classification}
+        />
+        <ShareCatchButton
+          flight={active}
+          mode={recording && active.timesSeen >= 1 ? 'caught' : 'live'}
+          nearby={!!matchedRadiusNm}
         />
         <div className="col-divider" />
         <RouteBlock
