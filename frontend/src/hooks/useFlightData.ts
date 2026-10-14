@@ -43,6 +43,12 @@ const STALE_DATA_MAX_MS = 45_000;
 // retry storm from every open phone.
 const BACKOFF_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
 
+// How often the loop checks that it is still alive. An iPhone showed "No feed
+// · retrying" for 17 minutes with no poll started or failed after coming back
+// from the background — whatever wedged it (a fetch that ignored its abort,
+// a dropped timer), the loop must restart itself rather than trust both.
+const WATCHDOG_MS = 5_000;
+
 function jitter(ms: number): number {
   return Math.round(ms * (0.8 + Math.random() * 0.4));
 }
@@ -61,6 +67,10 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const failures = useRef(0);
   const lastSuccessAt = useRef(0);
+  // performance.now() when the in-flight request started; null when idle.
+  const inflightSince = useRef<number | null>(null);
+  // Set after a rejected session: no retry is scheduled on purpose.
+  const halted = useRef(false);
 
   // Keep the latest params in a ref so `poll` stays stable across GPS updates.
   // watchPosition fires often; restarting the loop on every fix would cancel
@@ -95,7 +105,9 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
       setStale(true);
     }
     setLoading(true);
+    halted.current = false;
     const startedAt = performance.now();
+    inflightSince.current = startedAt;
 
     try {
       const result = await fetchFlights(latitude, longitude, radiusNm, record, ctrl.signal);
@@ -143,6 +155,7 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
 
       // A rejected session won't fix itself — the app signs out on 401.
       if (kind === 'auth') {
+        halted.current = true;
         setNextRetryAt(null);
         return;
       }
@@ -154,7 +167,10 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
       timerRef.current = setTimeout(() => void poll(), delay);
     } finally {
       clearTimeout(timeout);
-      if (abortRef.current === ctrl) setLoading(false);
+      if (abortRef.current === ctrl) {
+        inflightSince.current = null;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -174,11 +190,22 @@ export function useFlightData(params: UseFlightDataParams): FlightFeed {
     // Back online after a dead zone: don't wait out the backoff.
     const onOnline = () => void poll();
     window.addEventListener('online', onOnline);
+    const watchdog = setInterval(() => {
+      if (halted.current) return;
+      const since = inflightSince.current;
+      const stuck = since !== null && performance.now() - since > REQUEST_TIMEOUT_MS + WATCHDOG_MS;
+      const idle = since === null && timerRef.current === null;
+      if (!stuck && !idle) return;
+      recordEvent('poll-stalled', { reason: stuck ? 'request-never-settled' : 'nothing-scheduled' });
+      void poll();
+    }, WATCHDOG_MS);
     return () => {
       window.removeEventListener('online', onOnline);
+      clearInterval(watchdog);
       clearTimer();
       abortRef.current?.abort();
       abortRef.current = null;
+      inflightSince.current = null;
     };
   }, [poll, enabled, hasCoords]);
 

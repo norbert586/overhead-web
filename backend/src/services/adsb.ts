@@ -46,9 +46,9 @@ interface Provider {
   buildUrl: (lat: number, lon: number, radiusNm: number) => string;
 }
 
-// All three aggregators serve the same readsb-derived shape ({ ac: [...] }
-// with hex/flight/r/t/alt_baro/...), so aircraft from any of them flow
-// through the rest of the pipeline unchanged. Order is preference.
+// Both aggregators serve readsb-derived aircraft (hex/flight/r/t/alt_baro/...)
+// — see aircraftList for the wrapper — so aircraft from either flow through
+// the rest of the pipeline unchanged. Order is preference.
 //
 // Every URL here must return ALL aircraft in the circle. adsb.lol's
 // /v2/closest (used before) returns only the single nearest aircraft, which
@@ -63,11 +63,6 @@ const PROVIDERS: Provider[] = [
     name: 'adsb.fi',
     buildUrl: (lat, lon, r) =>
       `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${r}`,
-  },
-  {
-    name: 'airplanes.live',
-    buildUrl: (lat, lon, r) =>
-      `https://api.airplanes.live/v2/point/${lat}/${lon}/${r}`,
   },
 ];
 
