@@ -23,37 +23,37 @@ export const RANK_TIERS: RankTier[] = [
     tier: 'OBSERVER',
     label: 'Observer',
     minScore: 0,
-    description: 'Passive monitoring. No pattern established.',
+    description: 'Just getting started. Every plane counts.',
   },
   {
     tier: 'ANALYST',
     label: 'Analyst',
     minScore: 500,
-    description: 'Consistent observation. Signal emerging.',
+    description: 'You look up when you hear one. Patterns are starting to show.',
   },
   {
     tier: 'TRACKER',
     label: 'Tracker',
     minScore: 2000,
-    description: 'Sustained coverage. Multiple classifications logged.',
+    description: 'Airliners, private jets, cargo — a bit of everything in your log.',
   },
   {
     tier: 'SPOTTER',
     label: 'Spotter',
     minScore: 6000,
-    description: 'High-volume operation. Rare contacts recorded.',
+    description: 'A proper spotter. The rare ones have started turning up.',
   },
   {
     tier: 'SENTINEL',
     label: 'Sentinel',
     minScore: 15000,
-    description: 'Continuous long-term surveillance. Deep dataset.',
+    description: 'Months of catches. Your log is a history of your sky.',
   },
   {
     tier: 'INTELLIGENCE',
     label: 'Intelligence',
     minScore: 40000,
-    description: 'Full-spectrum persistent observer. Maximum coverage.',
+    description: 'Few people know their sky this well.',
   },
 ];
 

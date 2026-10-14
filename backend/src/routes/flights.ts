@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { fetchArea } from '../services/adsb';
+import { fetchArea, bearingDeg } from '../services/adsb';
 import {
   enrichAircraft, enrichCallsign, EMPTY_AIRCRAFT, EMPTY_ROUTE,
   type AircraftEnrichment, type RouteEnrichment,
@@ -344,9 +344,18 @@ router.get('/', optionalAuth, guestRateLimit, async (req: Request, res: Response
     // the catch model the recording poll is the only place sightings land.
     if (shouldRecord) evaluateAchievements(req.userId!);
 
+    // Which way to look from the catch point: the sky dome on the catch
+    // screen places each aircraft by it. Live only, never stored.
+    const azimuthByHex = new Map<string, number | null>(toProcess.map((ac) => [
+      ac.hex,
+      typeof ac.lat === 'number' && typeof ac.lon === 'number'
+        ? Math.round(bearingDeg(lat, lon, ac.lat, ac.lon))
+        : null,
+    ]));
+
     const dbStats = isGuest ? EMPTY_STATS : getSessionStats(req.userId);
     const response: FlightsResponse = {
-      flights: sorted.slice(0, DISPLAY_LIMIT),
+      flights: sorted.slice(0, DISPLAY_LIMIT).map((f) => ({ ...f, azimuthDeg: azimuthByHex.get(f.hex) ?? null })),
       stats: { ...dbStats, activeCount: allAc.length },
       timestamp: new Date().toISOString(),
       ...(matchedRadius !== radius && { matchedRadiusNm: matchedRadius }),

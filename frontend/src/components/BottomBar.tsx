@@ -7,9 +7,9 @@ interface BottomBarProps {
 }
 
 function pollLabel(lastPollTime: Date | null): string {
-  if (!lastPollTime) return 'No data yet';
+  if (!lastPollTime) return 'Waiting for the first update';
   const sec = Math.floor((Date.now() - lastPollTime.getTime()) / 1000);
-  return `Last poll: ${sec}s ago`;
+  return `Updated ${sec}s ago`;
 }
 
 function wantsDebugOnLoad(): boolean {

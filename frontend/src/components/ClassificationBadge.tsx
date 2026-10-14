@@ -1,4 +1,5 @@
 import type { Classification } from '../types/flight';
+import { CLASS_LABEL } from '../utils/labels';
 
 interface ClassificationBadgeProps {
   classification: Classification;
@@ -7,7 +8,7 @@ interface ClassificationBadgeProps {
 export default function ClassificationBadge({ classification }: ClassificationBadgeProps) {
   return (
     <span className={`classification-badge ${classification}`}>
-      {classification}
+      {CLASS_LABEL[classification] ?? 'Unknown'}
     </span>
   );
 }

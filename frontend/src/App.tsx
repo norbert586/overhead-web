@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import './App.css';
 import TopBar from './components/TopBar';
+import TabBar from './components/TabBar';
+import Logo from './components/Logo';
+import CatchToast, { type CatchToastData } from './components/CatchToast';
 import BottomBar from './components/BottomBar';
 import EmptyState from './components/EmptyState';
 import OverheadFlightScreen from './screens/OverheadFlightScreen';
@@ -23,11 +26,13 @@ import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useSettings } from './hooks/useSettings';
+import { useTheme } from './hooks/useTheme';
 import { useFlightData, type FlightFeed } from './hooks/useFlightData';
 import { playCatchSound } from './utils/catchSound';
 import { useAuth, getTokenAgeMs } from './hooks/useAuth';
 import { fetchProfile, updateProfile, apiRefreshSession, AUTH_EXPIRED_EVENT } from './services/api';
 import { recordEvent, reportToServer } from './utils/diagnostics';
+import { withViewTransition } from './utils/motion';
 
 export type View = 'flight' | 'log' | 'hangar' | 'stats' | 'settings' | 'profile' | 'admin';
 // 'guest' is the default for unauthenticated visitors — they see a live
@@ -71,7 +76,9 @@ function App() {
   const [verifyToken, setVerifyToken] = useState<string | null>(() => readUrlToken('verify_token'));
   const [authView, setAuthView] = useState<AuthView>('guest');
   const [authNotice, setAuthNotice] = useState<string | null>(null);
-  const [view, setView] = useState<View>('flight');
+  const [view, setViewNow] = useState<View>('flight');
+  // Screens cross-fade (View Transitions where supported) rather than cut.
+  const setView = (v: View) => withViewTransition(() => setViewNow(v), 'screen');
   const { settings, saveSettings, syncFromServer, hasSettings } = useSettings();
   const profileFetched = useRef(false);
 
@@ -164,6 +171,9 @@ function App() {
   const catchLat = usingFallback ? settings.latitude : geo.latitude;
   const catchLon = usingFallback ? settings.longitude : geo.longitude;
 
+  // Day or night chart. In "follow the sun" mode the catch point decides.
+  useTheme(catchLat, catchLon);
+
   const feed = useFlightData({
     latitude:        catchLat,
     longitude:       catchLon,
@@ -178,6 +188,8 @@ function App() {
   const sessionHexes = useRef(new Map<string, boolean>()); // hex → was new to the log
   const [sessionCaught, setSessionCaught] = useState(0);
   const [sessionNew, setSessionNew] = useState(0);
+  const [toast, setToast] = useState<CatchToastData | null>(null);
+  const clearToast = useCallback(() => setToast(null), []);
 
   // The tally belongs to one account: signing out (or switching users in the
   // same tab) starts a fresh session count.
@@ -191,20 +203,30 @@ function App() {
   const data = feed.data;
   useEffect(() => {
     const flights = data?.flights ?? [];
-    let changed = false;
     let rareCatch = false;
+    const caught: typeof flights = [];
     for (const f of flights) {
       if (f.timesSeen >= 1 && !sessionHexes.current.has(f.hex)) {
         sessionHexes.current.set(f.hex, f.timesSeen === 1);
-        changed = true;
+        caught.push(f);
         if (f.interestTier === 'rare' || f.interestTier === 'interesting') rareCatch = true;
       }
     }
-    if (changed) {
+    if (caught.length) {
       const entries = [...sessionHexes.current.values()];
       setSessionCaught(entries.length);
       setSessionNew(entries.filter(Boolean).length);
       playCatchSound(rareCatch);
+      // Lead with the most interesting of this poll's catches.
+      const lead = caught.find((f) => f.interestTier === 'rare') ?? caught.find((f) => f.timesSeen === 1) ?? caught[0];
+      const more = caught.length - 1;
+      setToast({
+        id: Date.now(),
+        label: lead.callsign ?? lead.registration ?? 'An aircraft',
+        detail: `${[lead.manufacturer, lead.aircraftType].filter(Boolean).join(' ') || 'Just caught'}${more > 0 ? `, plus ${more} more` : ''}`,
+        isNew: lead.timesSeen === 1,
+        rare: rareCatch,
+      });
     }
   }, [data]);
 
@@ -328,6 +350,8 @@ function App() {
           sessionNew={sessionNew}
           usingFallback={usingFallback}
           staleSince={staleSinceOf(feed)}
+          latitude={catchLat}
+          longitude={catchLon}
         />
       );
     }
@@ -358,7 +382,7 @@ function App() {
         />
       );
     }
-    return <EmptyState variant="no-aircraft-overhead" />;
+    return <EmptyState variant="no-aircraft-overhead" radiusNm={settings.radiusNm} latitude={catchLat} longitude={catchLon} />;
   }
 
   // Verification banner shows when we have a confirmed answer from the
@@ -390,6 +414,11 @@ function App() {
         </ErrorBoundary>
       </main>
       <BottomBar lastPollTime={feed.lastPollTime} />
+      <TabBar view={view} setView={setView} />
+      {/* On the catch screen the catch is already in front of you. */}
+      {toast && view !== 'flight' && (
+        <CatchToast key={toast.id} toast={toast} onOpen={() => setView('flight')} onDone={clearToast} />
+      )}
     </div>
   );
 }
@@ -416,9 +445,9 @@ function GuestShell({
 
   const guestStatus = feedStatusOf(guestFlight);
   const guestDotClass = guestStatus === 'down' ? ' scan-dot-error' : guestStatus === 'delayed' ? ' scan-dot-warn' : '';
-  const guestStatusLabel = guestStatus === 'down' ? 'No feed · retrying'
+  const guestStatusLabel = guestStatus === 'down' ? 'No feed, retrying'
     : guestStatus === 'delayed' ? 'Reconnecting…'
-    : 'Guest · live view';
+    : 'Live';
 
   function renderPane() {
     const flights = guestFlight.data?.flights ?? [];
@@ -428,6 +457,8 @@ function GuestShell({
           flights={flights}
           matchedRadiusNm={guestFlight.data?.matchedRadiusNm}
           staleSince={staleSinceOf(guestFlight)}
+          latitude={geo.latitude}
+          longitude={geo.longitude}
         />
       );
     }
@@ -448,7 +479,7 @@ function GuestShell({
         />
       );
     }
-    return <EmptyState variant="no-aircraft-overhead" />;
+    return <EmptyState variant="no-aircraft-overhead" radiusNm={10} latitude={geo.latitude} longitude={geo.longitude} />;
   }
 
   return (
@@ -456,9 +487,7 @@ function GuestShell({
       <header className="top-bar guest-top-bar">
         <div className="top-bar-left">
           <div className="app-logo">
-            <svg viewBox="0 0 24 24" className="app-logo-icon" aria-hidden="true">
-              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
-            </svg>
+            <Logo />
             <span className="app-name">Overhead</span>
           </div>
           <div className="scan-status" role="status">
@@ -480,7 +509,7 @@ function GuestShell({
           {renderPane()}
         </ErrorBoundary>
         <p className="guest-upsell">
-          Sign up to save your flight history, stats, and achievements.
+          You're watching live. <button type="button" className="auth-link" onClick={onShowRegister}>Create an account</button> to keep every plane you catch.
         </p>
       </main>
       <BottomBar lastPollTime={guestFlight.lastPollTime} />

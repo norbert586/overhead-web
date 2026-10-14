@@ -12,8 +12,8 @@ interface AircraftPhotoProps {
   aircraftType?: string | null;
 }
 
-// Keep the aircraft clear of the callsign (top) and the registration and
-// photo credit (bottom) drawn over the photo, and of the fades behind them.
+// Keep the aircraft clear of the match label (top) and the registration and
+// photo credit (bottom) drawn over the photo, and of the shade behind them.
 const heroInsets = (_w: number, h: number): Insets => ({
   top: Math.min(h * 0.15, 40),
   bottom: Math.min(h * 0.2, 48),
@@ -59,7 +59,6 @@ export default function AircraftPhoto({ callsign, registration, hex, aircraftTyp
           }}
         </SmartPhoto>
       )}
-      {callsign     && <div className="photo-callsign">{callsign}</div>}
       {registration && <div className="photo-registration">{registration}</div>}
     </div>
   );

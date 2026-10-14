@@ -4,8 +4,23 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#EDE7D3" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#ECEEE6" />
+    <!-- Pick the chart before first paint so a night launch never flashes the
+         day theme. Mirrors src/hooks/useTheme.ts (same keys, same colours). -->
+    <script>
+      (function () {
+        var t = 'light';
+        try {
+          var p = localStorage.getItem('overhead_theme') || 'device';
+          if (p === 'light' || p === 'dark') t = p;
+          else if (p === 'sun' && localStorage.getItem('overhead_theme_sun')) t = localStorage.getItem('overhead_theme_sun');
+          else if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+        } catch (e) { /* storage blocked: day chart */ }
+        document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+        if (t === 'dark') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0F192C');
+      })();
+    </script>
     <meta name="description" content="Catch the flights overhead. Open the app when you hear one — it grabs your location and logs whatever is in the sky above you." />
     <title>Overhead</title>
     <!-- Link previews: shared catches end with this site's URL, and Messages,

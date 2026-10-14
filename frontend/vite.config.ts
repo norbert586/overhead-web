@@ -42,8 +42,8 @@ export default defineConfig({
         name: 'Overhead',
         short_name: 'Overhead',
         description: 'Catch the flights overhead — open the app when you hear one.',
-        theme_color: '#EDE7D3',
-        background_color: '#EDE7D3',
+        theme_color: '#ECEEE6',
+        background_color: '#ECEEE6',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

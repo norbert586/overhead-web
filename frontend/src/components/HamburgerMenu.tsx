@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import type { View } from '../App';
 import { APP_VERSION, APP_COMMIT } from '../utils/diagnostics';
+import { useThemePreference, type ThemePreference } from '../hooks/useTheme';
 
 interface HamburgerMenuProps {
   isOpen: boolean;
@@ -13,19 +14,19 @@ interface HamburgerMenuProps {
   onDiagnostics?: () => void;
 }
 
-const FlightIcon = () => (
+export const FlightIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
   </svg>
 );
 
-const LogIcon = () => (
+export const LogIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
   </svg>
 );
 
-const StatsIcon = () => (
+export const StatsIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M5 9h2v11H5zm4-4h2v15H9zm4 8h2v7h-2zm4-6h2v13h-2z" />
   </svg>
@@ -52,7 +53,7 @@ const AdminIcon = () => (
   </svg>
 );
 
-function HangarIcon() {
+export function HangarIcon() {
   return (
     <svg viewBox="0 0 24 24" className="menu-icon" aria-hidden="true">
       <path d="M3 21V10l9-6 9 6v11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -63,7 +64,7 @@ function HangarIcon() {
 }
 
 const ITEMS: { view: View; label: string; Icon: () => ReactElement }[] = [
-  { view: 'flight',   label: 'Flight',   Icon: FlightIcon },
+  { view: 'flight',   label: 'Catch',    Icon: FlightIcon },
   { view: 'log',      label: 'Log',      Icon: LogIcon },
   { view: 'hangar',   label: 'Hangar',   Icon: HangarIcon },
   { view: 'stats',    label: 'Stats',    Icon: StatsIcon },
@@ -87,6 +88,35 @@ const LogoutIcon = () => (
   </svg>
 );
 
+const THEMES: { value: ThemePreference; label: string }[] = [
+  { value: 'device', label: 'Auto' },
+  { value: 'sun',    label: 'Sun' },
+  { value: 'light',  label: 'Light' },
+  { value: 'dark',   label: 'Dark' },
+];
+
+// Quick theme switch — it's the thing you want at night, outside, mid-catch.
+function ThemeSwitch() {
+  const { pref, setPref } = useThemePreference();
+  return (
+    <div className="menu-theme" role="radiogroup" aria-label="Theme">
+      {THEMES.map((t) => (
+        <button
+          key={t.value}
+          type="button"
+          role="radio"
+          aria-checked={pref === t.value}
+          className={pref === t.value ? 'active' : ''}
+          title={t.value === 'sun' ? 'Dark after sunset where you are' : t.value === 'device' ? 'Match this device' : undefined}
+          onClick={() => setPref(t.value)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function HamburgerMenu({ isOpen, view, userEmail, isAdmin = false, onSelect, onLogout, onDiagnostics }: HamburgerMenuProps) {
   const items = isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS;
   return (
@@ -104,6 +134,8 @@ export default function HamburgerMenu({ isOpen, view, userEmail, isAdmin = false
           {label}
         </div>
       ))}
+      <div className="menu-divider" />
+      <ThemeSwitch />
       <div className="menu-divider" />
       {onDiagnostics && (
         <div className="menu-item" onClick={onDiagnostics}>

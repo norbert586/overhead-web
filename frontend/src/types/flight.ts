@@ -39,6 +39,8 @@ export interface Flight {
   interestReasons: string[];
   caughtLat: number | null;
   caughtLon: number | null;
+  /** Live polls only: compass bearing from the catch point to the aircraft. */
+  azimuthDeg?: number | null;
 }
 
 export interface SessionStats {
