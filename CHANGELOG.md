@@ -6,6 +6,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 ## 2026-10-14
 
 - Fix live feed: drop airplanes.live, fix adsb.fi, self-healing poll, working Copy report ([#65](https://github.com/norbert586/overhead-web/pull/65)) · v2.5.1
+- Fix adsb.fi feed and diagnostics Copy report on iOS ([#64](https://github.com/norbert586/overhead-web/pull/64)) · v2.5.2
 
 ## 2026-10-05
 
