@@ -47,10 +47,10 @@ interface SkyKey { alt: number; zenith: RGB; horizon: RGB; stars: number }
 
 const KEYS: SkyKey[] = [
   { alt: -18, zenith: [9, 15, 32],    horizon: [22, 34, 62],    stars: 1 },
-  { alt: -10, zenith: [14, 24, 54],   horizon: [64, 62, 112],   stars: 0.8 },
-  { alt: -4,  zenith: [36, 52, 104],  horizon: [214, 128, 112], stars: 0.25 },
-  { alt: 0,   zenith: [62, 98, 160],  horizon: [244, 176, 122], stars: 0 },
-  { alt: 8,   zenith: [70, 128, 196], horizon: [238, 214, 176], stars: 0 },
+  { alt: -10, zenith: [14, 24, 54],   horizon: [52, 54, 100],   stars: 0.8 },
+  { alt: -4,  zenith: [36, 52, 104],  horizon: [128, 104, 150], stars: 0.25 },
+  { alt: 0,   zenith: [62, 98, 160],  horizon: [196, 160, 160], stars: 0 },
+  { alt: 8,   zenith: [70, 128, 196], horizon: [226, 212, 190], stars: 0 },
   { alt: 25,  zenith: [52, 122, 204], horizon: [200, 222, 240], stars: 0 },
   { alt: 90,  zenith: [40, 110, 200], horizon: [190, 216, 238], stars: 0 },
 ];
@@ -60,6 +60,8 @@ export interface SkyColors {
   horizon: string;
   /** 0–1: how visible stars are. */
   stars: number;
+  /** 0–1: the warm glow on the sun's side of the horizon around sunrise and sunset. */
+  glow: number;
   /** True when ink drawn on the sky should be light. */
   dark: boolean;
 }
@@ -79,6 +81,8 @@ export function skyColors(sunAltitude: number): SkyColors {
     zenith: css(mix(a.zenith, b.zenith, t)),
     horizon: css(mix(a.horizon, b.horizon, t)),
     stars: a.stars + (b.stars - a.stars) * t,
+    // Strongest with the sun just below the horizon, gone by -12° and +12°.
+    glow: Math.max(0, 1 - Math.abs(alt + 2) / 10),
     dark: alt < -1,
   };
 }

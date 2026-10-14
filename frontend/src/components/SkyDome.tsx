@@ -73,6 +73,7 @@ export default function SkyDome({
   [flights, activeHex]);
 
   const sunPt = sun && sun.altitude > -1 ? project(sun.azimuth, Math.max(0, sun.altitude)) : null;
+  const glowPt = sun && sky.glow > 0.02 ? project(sun.azimuth, 0) : null;
 
   return (
     <svg
@@ -92,6 +93,12 @@ export default function SkyDome({
           <stop offset="0%" stopColor="#FFF6D8" />
           <stop offset="35%" stopColor="#FFE7A3" stopOpacity="0.9" />
           <stop offset="100%" stopColor="#FFD27A" stopOpacity="0" />
+        </radialGradient>
+        {/* Sunrise/sunset glow, centred on the horizon where the sun is. */}
+        <radialGradient id={`glow-${uid}`}>
+          <stop offset="0%" stopColor="#FFB070" stopOpacity="0.95" />
+          <stop offset="45%" stopColor="#F28C6A" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#F28C6A" stopOpacity="0" />
         </radialGradient>
         <clipPath id={`clip-${uid}`}>
           <circle cx={C} cy={C} r={R} />
@@ -122,6 +129,9 @@ export default function SkyDome({
 
       <g clipPath={`url(#clip-${uid})`}>
         <circle cx={C} cy={C} r={R} fill={`url(#sky-${uid})`} className="sky-dome-sky" />
+        {glowPt && (
+          <circle cx={glowPt.x} cy={glowPt.y} r={R * 1.15} fill={`url(#glow-${uid})`} opacity={sky.glow} />
+        )}
         {sky.stars > 0.02 && (
           <g className="sky-dome-stars" opacity={sky.stars}>
             {STARS.map((s, i) => (
