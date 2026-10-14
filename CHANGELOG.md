@@ -8,6 +8,7 @@ Entries are appended automatically when a pull request is merged into `main`.
 - Fix live feed: drop airplanes.live, fix adsb.fi, self-healing poll, working Copy report ([#65](https://github.com/norbert586/overhead-web/pull/65)) · v2.5.1
 - Fix adsb.fi feed and diagnostics Copy report on iOS ([#64](https://github.com/norbert586/overhead-web/pull/64)) · v2.5.2
 - Share catch: a ready-to-text message for any aircraft ([#66](https://github.com/norbert586/overhead-web/pull/66)) · v2.6.0
+- Redesign: night chart dark mode, sky dome, calmer type, rebuilt screens ([#67](https://github.com/norbert586/overhead-web/pull/67)) · v2.7.0
 
 ## 2026-10-05
 
