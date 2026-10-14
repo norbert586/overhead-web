@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-10-14
+
+- Fix live feed: drop airplanes.live, fix adsb.fi, self-healing poll, working Copy report ([#65](https://github.com/norbert586/overhead-web/pull/65)) · v2.5.1
+
 ## 2026-10-05
 
 - Aircraft photos: server-side lookup, aircraft-aware framing; semver releases ([#63](https://github.com/norbert586/overhead-web/pull/63)) · v2.5.0
