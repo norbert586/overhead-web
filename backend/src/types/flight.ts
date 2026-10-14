@@ -84,7 +84,7 @@ export interface FlightsResponse {
 }
 
 // Raw readsb-style shape shared by all the ADS-B providers (adsb.lol,
-// adsb.fi, airplanes.live). Only the fields we read are typed; the v2 APIs
+// adsb.fi). Only the fields we read are typed; the v2 APIs
 // return many more per aircraft.
 export interface AdsbAircraft {
   hex: string;

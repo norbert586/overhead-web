@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Mock upstreams for local development and tests — no network needed.
 //
-// Serves a readsb-style ADS-B feed (the adsb.lol / adsb.fi / airplanes.live
-// shape) AND the adsbdb lookups, so the whole poll pipeline runs offline:
+// Serves a readsb-style ADS-B feed (the adsb.lol / adsb.fi shape) AND the adsbdb lookups, so the whole poll pipeline runs offline:
 //
 //   npm run mock-feed                       # listens on :4555 (PORT to change)
 //   ADSB_BASE_URL=http://localhost:4555/v2/point \

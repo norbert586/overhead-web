@@ -41,7 +41,7 @@ The result: you hear a rumble, open your phone, and catch UAL2044 — a United 7
 
 External data sources:
 - [adsb.lol](https://adsb.lol) — real-time ADS-B aircraft positions (primary)
-- [adsb.fi](https://adsb.fi) and [airplanes.live](https://airplanes.live) — automatic fallbacks when the primary feed is unreachable
+- [adsb.fi](https://adsb.fi) — automatic fallback when the primary feed is unreachable
 - [adsbdb.com](https://adsbdb.com) — aircraft registry and route lookups (cached)
 
 ---

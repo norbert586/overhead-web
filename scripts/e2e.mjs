@@ -213,6 +213,15 @@ async function main() {
     check(/Server build/i.test(panelText) && /Last poll/i.test(panelText), 'panel shows builds + last poll');
     check(/ok .* ms/i.test(panelText), 'panel reports last poll ok');
     await shot('2-diagnostics-panel');
+    // The buttons must be reachable without scrolling the panel on a phone.
+    const copyBtn = page.getByRole('button', { name: 'Copy report' });
+    check(await copyBtn.isVisible() && (await copyBtn.boundingBox()).y + 30 < page.viewportSize().height,
+      'Copy report button on screen');
+    await copyBtn.click();
+    await page.getByRole('button', { name: /Copied/ }).waitFor({ timeout: 5_000 });
+    await ctx.grantPermissions(['geolocation', 'clipboard-read', 'clipboard-write']);
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    check(/"app"/.test(copied) && /"events"/.test(copied), `Copy report put the report on the clipboard (${copied.length} chars)`);
     await page.getByRole('button', { name: 'Close' }).click();
 
     console.log('feeds down');

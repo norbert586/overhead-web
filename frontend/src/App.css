@@ -6263,6 +6263,7 @@ a.log-lightbox-source:hover {
   width: calc(100% - 32px);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px 18px 20px;
 }
 
@@ -6337,8 +6338,13 @@ a.log-lightbox-source:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 10px;
+  padding: 10px 0 12px;
   border-top: 1px solid var(--border-subtle);
+  /* Pinned to the panel's bottom edge (-20px = its padding): on a phone the
+     report is taller than the screen and the buttons sat below the fold. */
+  position: sticky;
+  bottom: -20px;
+  background: var(--bg-elevated);
 }
 
 .diag-json {

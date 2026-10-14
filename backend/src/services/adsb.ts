@@ -46,9 +46,9 @@ interface Provider {
   buildUrl: (lat: number, lon: number, radiusNm: number) => string;
 }
 
-// All three aggregators serve the same readsb-derived shape ({ ac: [...] }
-// with hex/flight/r/t/alt_baro/...), so aircraft from any of them flow
-// through the rest of the pipeline unchanged. Order is preference.
+// Both aggregators serve readsb-derived aircraft (hex/flight/r/t/alt_baro/...)
+// — see aircraftList for the wrapper — so aircraft from either flow through
+// the rest of the pipeline unchanged. Order is preference.
 //
 // Every URL here must return ALL aircraft in the circle. adsb.lol's
 // /v2/closest (used before) returns only the single nearest aircraft, which
@@ -63,11 +63,6 @@ const PROVIDERS: Provider[] = [
     name: 'adsb.fi',
     buildUrl: (lat, lon, r) =>
       `https://opendata.adsb.fi/api/v2/lat/${lat}/lon/${lon}/dist/${r}`,
-  },
-  {
-    name: 'airplanes.live',
-    buildUrl: (lat, lon, r) =>
-      `https://api.airplanes.live/v2/point/${lat}/${lon}/${r}`,
   },
 ];
 
@@ -164,6 +159,20 @@ function describeError(err: unknown): string {
   return cause instanceof Error ? `${err.message} (${cause.message})` : err.message;
 }
 
+/**
+ * The aircraft array from a provider response, or null if it isn't one.
+ * readsb's /v2 API calls it `ac`; adsb.fi's opendata API switched to
+ * `aircraft` (the tar1090 aircraft.json name) in Oct 2026 and sat in
+ * "unexpected response shape" for days before anyone noticed.
+ */
+export function aircraftList(json: unknown): AdsbAircraft[] | null {
+  if (!json || typeof json !== 'object') return null;
+  const { ac, aircraft } = json as { ac?: unknown; aircraft?: unknown };
+  if (Array.isArray(ac)) return ac as AdsbAircraft[];
+  if (Array.isArray(aircraft)) return aircraft as AdsbAircraft[];
+  return null;
+}
+
 async function fetchFromProvider(
   p: Provider,
   lat: number,
@@ -179,13 +188,14 @@ async function fetchFromProvider(
     const body = (await res.text().catch(() => '')).slice(0, 300);
     throw new Error(`HTTP ${res.status}${body ? `: ${body}` : ''}`);
   }
-  const json = (await res.json()) as { ac?: unknown };
-  if (!Array.isArray(json?.ac)) {
+  const json: unknown = await res.json();
+  const aircraft = aircraftList(json);
+  if (!aircraft) {
     // A 200 that isn't the expected shape (moved endpoint, HTML error page,
     // key-required notice) must count as a failure, not an empty sky.
     throw new Error(`unexpected response shape: ${JSON.stringify(json).slice(0, 300)}`);
   }
-  return json.ac as AdsbAircraft[];
+  return aircraft;
 }
 
 /**
@@ -378,8 +388,7 @@ export async function probeProviders(lat = 40.69, lon = -74.17): Promise<ProbeRe
       const text = await res.text();
       let aircraft: number | null = null;
       try {
-        const json = JSON.parse(text) as { ac?: unknown };
-        if (Array.isArray(json.ac)) aircraft = json.ac.length;
+        aircraft = aircraftList(JSON.parse(text))?.length ?? null;
       } catch { /* not JSON — reported below */ }
       const ok = res.ok && aircraft !== null;
       return {
