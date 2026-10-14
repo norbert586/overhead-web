@@ -168,15 +168,22 @@ async function main() {
       return { inside: plane.l >= box.left - 1 && plane.r <= box.right + 1 && plane.t >= box.top - 1 && plane.b <= box.bottom + 1, fill: (plane.r - plane.l) / box.width };
     }, focus);
     check(!!focus && framing.inside, `aircraft fully inside the frame (fills ${Math.round(framing.fill * 100)}% of the width)`);
-    await page.locator('.overhead-nearby-row').nth(1).click();
+    // Switching aircraft runs inside a view transition, so the hero updates a
+    // frame after the tap — wait for the row to show as selected first.
+    const pick = async (pg, i) => {
+      const row = pg.locator('.overhead-nearby-row').nth(i);
+      await row.click();
+      await pg.waitForFunction((n) => document.querySelectorAll('.overhead-nearby-row')[n]?.getAttribute('aria-pressed') === 'true', i);
+    };
+    await pick(page, 1);
     p = await heroPhoto();
     check(p.provider === 'airport-data' && /Mock Photographer/.test(p.credit ?? ''), `Airport-Data photo when Planespotters has none ("${p.credit}")`);
-    await page.locator('.overhead-nearby-row').nth(2).click();
+    await pick(page, 2);
     p = await heroPhoto();
     check(p.provider === 'wikimedia' && /reference photo/i.test(p.label ?? '') && /CC BY-SA/.test(p.credit ?? ''),
       `no airframe photo → labelled, licensed reference photo ("${p.label}")`);
     await shot('1b-reference-photo');
-    await page.locator('.overhead-nearby-row').nth(0).click();
+    await pick(page, 0);
 
     // A dead image URL falls through to the next candidate; an aircraft with
     // nothing anywhere gets the plain "no photo" state with a manual lookup.
@@ -195,7 +202,7 @@ async function main() {
     const hero2 = page2.locator('.aircraft-photo-wrap');
     await hero2.locator('.smart-photo-img.loaded').waitFor({ timeout: 15_000 });
     check(await hero2.locator('.smart-photo').getAttribute('data-provider') === 'wikimedia', 'broken photo URL → next candidate shown');
-    await page2.locator('.overhead-nearby-row').nth(1).click();
+    await pick(page2, 1);
     await hero2.locator('.photo-silhouette.not-found').waitFor({ timeout: 10_000 });
     const search = await hero2.locator('.photo-silhouette-search').getAttribute('href');
     check(/planespotters\.net\/photos\/reg\/N101T/.test(search ?? ''), `nothing anywhere → "No photo found" + manual search link`);
@@ -245,7 +252,7 @@ async function main() {
     check(/^✈️ Caught TST\d+ flying over me · today at /.test(logShare), `flight log → dated message ("${logShare.split('\n')[0]}")`);
     await page.getByRole('button', { name: 'Close' }).click();
     await page.locator('.hamburger').click();
-    await page.locator('.menu-item', { hasText: 'Flight' }).click();
+    await page.locator('.menu-item', { hasText: 'Catch' }).click();
 
     console.log('feeds down');
     await mode('down');
@@ -279,7 +286,7 @@ async function main() {
 
     console.log('offline');
     await page.locator('.hamburger').click();
-    await page.locator('.menu-item', { hasText: 'Flight' }).click();
+    await page.locator('.menu-item', { hasText: 'Catch' }).click();
     await ctx.setOffline(true);
     await page.locator('.empty-title-error').waitFor({ timeout: 90_000 });
     check(/no connection/i.test(await page.locator('.empty-title-error').innerText()), 'offline → "No connection"');

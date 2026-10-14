@@ -1,6 +1,7 @@
 import type { ApiErrorKind } from '../services/api';
 import { useNow } from '../hooks/useNow';
 import { openDiagnostics } from '../utils/diagnostics';
+import SkyDome from './SkyDome';
 
 export type EmptyVariant =
   | 'no-settings'
@@ -20,6 +21,10 @@ interface EmptyStateProps {
   nextRetryAt?: number | null;
   /** For 'feed-error': server request id of the failed poll. */
   requestId?: string | null;
+  /** For 'no-aircraft-overhead': the hearing radius and catch point. */
+  radiusNm?: number;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 function PlaneIcon({ className }: { className?: string }) {
@@ -34,12 +39,12 @@ function NoSettings({ onOpenSettings }: { onOpenSettings?: () => void }) {
   return (
     <div className="empty-full">
       <PlaneIcon className="empty-icon" />
-      <div className="empty-title">No location configured</div>
-      <div className="empty-body">Configure your coordinates to begin monitoring.</div>
+      <div className="empty-title">Where are you?</div>
+      <div className="empty-body">Set a home location so Overhead knows whose sky to watch.</div>
       {onOpenSettings && (
-        <div className="empty-hint" onClick={onOpenSettings} style={{ cursor: 'pointer' }}>
-          Open settings →
-        </div>
+        <button type="button" className="empty-hint" onClick={onOpenSettings}>
+          Open settings
+        </button>
       )}
     </div>
   );
@@ -59,8 +64,8 @@ function GeoLoading() {
   return (
     <div className="empty-full">
       <PlaneIcon className="empty-icon" />
-      <div className="empty-title">Locating you…</div>
-      <div className="empty-body">Reading your device's location to find aircraft directly overhead.</div>
+      <div className="empty-title">Finding your sky…</div>
+      <div className="empty-body">Getting your location so we can see what's flying over you.</div>
     </div>
   );
 }
@@ -71,8 +76,8 @@ function GeoDenied({ onRetry, onOpenSettings }: { onRetry?: () => void; onOpenSe
       <PlaneIcon className="empty-icon empty-icon-error" />
       <div className="empty-title empty-title-error">Location unavailable</div>
       <div className="empty-body empty-body-error">
-        Overhead needs to know where you are to catch flights. Allow location access in your
-        browser, or set a home location in Settings to catch from there instead.
+        Overhead needs your location to know which planes are over you. Allow location access
+        for this site, or set a home location to catch from there instead.
       </div>
       {onRetry && (
         <button type="button" className="empty-error-retry" onClick={onRetry}>
@@ -80,31 +85,24 @@ function GeoDenied({ onRetry, onOpenSettings }: { onRetry?: () => void; onOpenSe
         </button>
       )}
       {onOpenSettings && (
-        <div className="empty-hint" onClick={onOpenSettings} style={{ cursor: 'pointer' }}>
-          Set a home location →
-        </div>
+        <button type="button" className="empty-hint" onClick={onOpenSettings}>
+          Set a home location
+        </button>
       )}
     </div>
   );
 }
 
-function NoAircraftOverhead() {
+function NoAircraftOverhead({ radiusNm, latitude, longitude }: { radiusNm?: number; latitude?: number | null; longitude?: number | null }) {
   return (
     <div className="empty-full listening-state">
-      {/* The hearing radius, live: faint range rings with sound waves
-          expanding from your position. */}
-      <div className="listening-scope" aria-hidden>
-        <div className="listening-crosshair" />
-        <div className="listening-ring listening-ring--range1" />
-        <div className="listening-ring listening-ring--range2" />
-        <div className="listening-wave listening-wave--1" />
-        <div className="listening-wave listening-wave--2" />
-        <div className="listening-wave listening-wave--3" />
-        <div className="listening-center" />
-      </div>
+      {/* Your sky, empty for now: the same dome the catch screen uses, with
+          sound rings spreading from where you stand. */}
+      <SkyDome latitude={latitude ?? null} longitude={longitude ?? null} listening className="listening-dome" />
       <div className="empty-title">Listening</div>
       <div className="empty-body">
-        Nothing in hearing range right now. Whatever crosses your radius gets caught automatically.
+        Nothing within {radiusNm ?? 5} nm right now. Keep Overhead open — anything that flies over is
+        caught the moment it's in range.
       </div>
     </div>
   );
@@ -174,17 +172,17 @@ function FeedError({
       {/* The ref matches the server log line; Details opens the diagnostics
           panel with a copyable report. */}
       <button type="button" className="empty-retry-ref" onClick={openDiagnostics}>
-        {requestId ? `Details · ref ${requestId}` : 'Details'}
+        {requestId ? `Details (ref ${requestId})` : 'Details'}
       </button>
     </div>
   );
 }
 
-export default function EmptyState({ variant, onOpenSettings, onRetry, errorKind, nextRetryAt, requestId }: EmptyStateProps) {
+export default function EmptyState({ variant, onOpenSettings, onRetry, errorKind, nextRetryAt, requestId, radiusNm, latitude, longitude }: EmptyStateProps) {
   if (variant === 'no-settings')          return <NoSettings onOpenSettings={onOpenSettings} />;
   if (variant === 'geo-loading')          return <GeoLoading />;
   if (variant === 'geo-denied')           return <GeoDenied onRetry={onRetry} onOpenSettings={onOpenSettings} />;
-  if (variant === 'no-aircraft-overhead') return <NoAircraftOverhead />;
+  if (variant === 'no-aircraft-overhead') return <NoAircraftOverhead radiusNm={radiusNm} latitude={latitude} longitude={longitude} />;
   if (variant === 'feed-error')           return <FeedError kind={errorKind ?? 'server'} nextRetryAt={nextRetryAt} onRetry={onRetry} requestId={requestId} />;
   return <NoAircraft />;
 }

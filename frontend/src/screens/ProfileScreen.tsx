@@ -31,12 +31,12 @@ function progressPct(score: number, min: number, max: number | null): number {
 // ── Category labels ───────────────────────────────────────────────────────────
 
 const CATEGORY_LABELS: Record<AchievementCategory, string> = {
-  detection:   'Detection',
-  collection:  'Collection',
-  rare:        'Rare Signal',
-  persistence: 'Persistence',
-  signal:      'Signal',
-  country:     'Country Contacts',
+  detection:   'Catching',
+  collection:  'Collecting',
+  rare:        'Rare finds',
+  persistence: 'Keeping at it',
+  signal:      'Odd signals',
+  country:     'Countries',
 };
 
 const CATEGORY_ORDER: AchievementCategory[] = [
@@ -207,16 +207,16 @@ function AchievementIcon({ id, category, unlocked }: {
 // ── Score explainer ───────────────────────────────────────────────────────────
 
 const FORMULA_ROWS = [
-  { component: 'Total Sightings',  multiplier: '× 1', note: 'Raw observation volume' },
-  { component: 'Unique Aircraft',  multiplier: '× 2', note: 'Breadth of airspace coverage' },
-  { component: 'Rare Signals',     multiplier: '× 5', note: 'Military / government contacts', highlight: true },
-  { component: 'Active Days',      multiplier: '× 3', note: 'Sustained, consistent operation' },
+  { component: 'Every catch',         multiplier: '1 pt',  note: 'Each time a plane is caught' },
+  { component: 'A new aircraft',      multiplier: '2 pts', note: 'The first time you catch an airframe' },
+  { component: 'Government or military', multiplier: '5 pts', note: 'The hardest planes to catch', highlight: true },
+  { component: 'A day out',           multiplier: '3 pts', note: 'Each day you catch anything' },
 ];
 
 function ScoreExplainer() {
   return (
     <div className="profile-score-explainer">
-      <div className="profile-section-label">How Scoring Works</div>
+      <h2 className="profile-section-label">How points work</h2>
       <div className="score-formula-table">
         {FORMULA_ROWS.map(({ component, multiplier, note, highlight }) => (
           <div key={component} className={`score-formula-row${highlight ? ' score-formula-highlight' : ''}`}>
@@ -227,9 +227,8 @@ function ScoreExplainer() {
         ))}
       </div>
       <p className="score-formula-context">
-        Rare signals (military and government aircraft) are weighted 5× because they represent genuine
-        intelligence value — difficult to acquire, high signal-to-noise ratio. Rank reflects
-        the quality and persistence of observation, not session count alone.
+        Variety and coming back count for more than leaving the app open. Government and
+        military planes are worth the most because they turn up least.
       </p>
     </div>
   );
@@ -238,19 +237,35 @@ function ScoreExplainer() {
 // ── Rank tier color ───────────────────────────────────────────────────────────
 
 const TIER_COLORS: Record<string, string> = {
-  OBSERVER:     '#8B8778',
-  ANALYST:      '#1E6FA0',
-  TRACKER:      '#8E4FB4',
-  SPOTTER:      '#B07023',
-  SENTINEL:     '#C25E1E',
-  INTELLIGENCE: '#1E6FA0',
+  OBSERVER:     'var(--class-unknown)',
+  ANALYST:      'var(--accent)',
+  TRACKER:      'var(--class-private)',
+  SPOTTER:      'var(--class-cargo)',
+  SENTINEL:     'var(--magenta)',
+  INTELLIGENCE: 'var(--accent)',
 };
 
 function tierColor(tier: string): string {
-  return TIER_COLORS[tier] ?? '#8B8778';
+  return TIER_COLORS[tier] ?? 'var(--class-unknown)';
 }
 
 // ── Rank Card ─────────────────────────────────────────────────────────────────
+
+// Rank worn the way a pilot wears it: gold stripes on an epaulette, one more
+// for each rank climbed.
+function Epaulette({ stripes }: { stripes: number }) {
+  const n = Math.min(stripes, 6);
+  return (
+    <svg className="profile-epaulette" viewBox="0 0 64 84" role="img" aria-label={`${n} stripe${n === 1 ? '' : 's'}`}>
+      <path className="profile-epaulette-board" d="M8 6 Q32 -2 56 6 L58 80 Q32 86 6 80 Z" />
+      <circle className="profile-epaulette-button" cx="32" cy="12" r="3.5" />
+      {Array.from({ length: n }, (_, i) => (
+        <rect key={i} className="profile-epaulette-stripe" x="9" y={72 - i * 9} width="46" height="5" rx="1"
+          style={{ animationDelay: `${i * 70}ms` }} />
+      ))}
+    </svg>
+  );
+}
 
 function RankCard({ rank }: { rank: RankResponse }) {
   const pct = progressPct(rank.score, rank.minScore, rank.nextThreshold);
@@ -259,9 +274,7 @@ function RankCard({ rank }: { rank: RankResponse }) {
   return (
     <div className="profile-rank-card">
       <div className="profile-rank-header">
-        <div className="profile-rank-badge" style={{ '--tier-color': color } as React.CSSProperties}>
-          <div className="profile-rank-tier">{rank.tier}</div>
-        </div>
+        <Epaulette stripes={Math.max(1, rank.tiers.findIndex((t) => t.tier === rank.tier) + 1)} />
         <div className="profile-rank-meta">
           <div className="profile-rank-label">{rank.label}</div>
           <div className="profile-rank-description">{rank.description}</div>
@@ -281,39 +294,39 @@ function RankCard({ rank }: { rank: RankResponse }) {
         </div>
         {rank.nextTier ? (
           <div className="profile-rank-progress-labels">
-            <span>{rank.tier}</span>
+            <span>{rank.label}</span>
             <span className="profile-rank-progress-next">
-              {rank.nextLabel} · {rank.nextThreshold?.toLocaleString()} pts
+              {(rank.nextThreshold! - rank.score).toLocaleString()} pts to {rank.nextLabel}
             </span>
           </div>
         ) : (
           <div className="profile-rank-progress-labels">
-            <span>{rank.tier}</span>
-            <span className="profile-rank-max">Max rank achieved</span>
+            <span>{rank.label}</span>
+            <span className="profile-rank-max">Top rank</span>
           </div>
         )}
       </div>
 
       <div className="profile-rank-breakdown">
         <div className="profile-rank-breakdown-item">
-          <span className="profile-breakdown-label">Sightings</span>
+          <span className="profile-breakdown-label">Catches</span>
           <span className="profile-breakdown-value">{rank.breakdown.totalSightings.toLocaleString()}</span>
-          <span className="profile-breakdown-pts">×1</span>
+          <span className="profile-breakdown-pts">1 pt each</span>
         </div>
         <div className="profile-rank-breakdown-item">
-          <span className="profile-breakdown-label">Unique Aircraft</span>
+          <span className="profile-breakdown-label">Different aircraft</span>
           <span className="profile-breakdown-value">{rank.breakdown.uniqueAircraft.toLocaleString()}</span>
-          <span className="profile-breakdown-pts">×2</span>
+          <span className="profile-breakdown-pts">2 pts each</span>
         </div>
         <div className="profile-rank-breakdown-item">
-          <span className="profile-breakdown-label">Rare Signals</span>
+          <span className="profile-breakdown-label">Gov &amp; military</span>
           <span className="profile-breakdown-value">{rank.breakdown.rareSightings.toLocaleString()}</span>
-          <span className="profile-breakdown-pts">×5</span>
+          <span className="profile-breakdown-pts">5 pts each</span>
         </div>
         <div className="profile-rank-breakdown-item">
-          <span className="profile-breakdown-label">Active Days</span>
+          <span className="profile-breakdown-label">Days out</span>
           <span className="profile-breakdown-value">{rank.breakdown.activeDays.toLocaleString()}</span>
-          <span className="profile-breakdown-pts">×3</span>
+          <span className="profile-breakdown-pts">3 pts each</span>
         </div>
       </div>
     </div>
@@ -538,7 +551,7 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
             <div className="profile-email">{userEmail ?? '—'}</div>
             {rank && (
               <div className="profile-tier-inline" style={{ color: tierColor(rank.tier) }}>
-                {rank.tier}
+                {rank.label}
               </div>
             )}
           </div>
@@ -548,7 +561,7 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
           <div className="profile-summary-stats">
             <div className="profile-summary-stat">
               <span className="profile-summary-value">{achievements.unlockedCount}</span>
-              <span className="profile-summary-label">/ {achievements.total} unlocked</span>
+              <span className="profile-summary-label">of {achievements.total} achievements</span>
             </div>
           </div>
         )}
@@ -578,12 +591,12 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
         {loading && (
           <div className="profile-loading">
             <div className="profile-loading-dot" />
-            <span>Loading profile data…</span>
+            <span>Opening your profile…</span>
           </div>
         )}
 
         {error && (!rank || !achievements) && (
-          <div className="profile-error">Failed to load profile data.</div>
+          <div className="profile-error">Couldn't load your profile. Check your connection and try again.</div>
         )}
 
         {tab === 'rank' && rank && (
@@ -593,7 +606,7 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
             <ScoreExplainer />
 
             <div className="profile-tiers-section">
-              <div className="profile-section-label">Rank Progression</div>
+              <h2 className="profile-section-label">Ranks</h2>
               <div className="profile-tiers-list">
                 {rank.tiers.map((t) => {
                   const isActive = t.tier === rank.tier;
@@ -610,7 +623,7 @@ export default function ProfileScreen({ userEmail }: { userEmail?: string }) {
                       <div className="profile-tier-info">
                         <span className="profile-tier-name" style={isActive ? { color: tierColor(t.tier) } : undefined}>
                           {t.label}
-                          {isActive && <span className="profile-tier-current-tag">current</span>}
+                          {isActive && <span className="profile-tier-current-tag">You</span>}
                         </span>
                         <span className="profile-tier-desc">{t.description}</span>
                       </div>

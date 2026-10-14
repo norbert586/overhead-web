@@ -150,7 +150,7 @@ export default function AdminScreen() {
   return (
     <div className="admin-screen">
       <div className="admin-header">
-        <span className="admin-title">ADMIN · OVERVIEW</span>
+        <h1 className="admin-title">Admin</h1>
       </div>
 
       <div className="admin-tabs">

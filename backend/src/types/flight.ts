@@ -72,8 +72,13 @@ export interface SessionStats {
   topAircraft: { type: string; count: number }[];
 }
 
+/** A live flight as the catch poll returns it: the stored record plus where it is right now. */
+export interface LiveFlight extends Flight {
+  azimuthDeg: number | null;      // compass bearing from the catch point to the aircraft
+}
+
 export interface FlightsResponse {
-  flights: Flight[];
+  flights: LiveFlight[];
   stats: SessionStats;
   timestamp: string;
   // Set only when the route expanded the search radius to find aircraft.

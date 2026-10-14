@@ -7,17 +7,19 @@ interface IntelCardProps {
   hex: string;
   typeCode: string | null;
   manufacturer: string | null;
+  squawk?: string | null;
 }
 
-function IntelRow({ label, children }: { label: string; children: React.ReactNode }) {
+function IntelRow({ label, children, mono = false }: { label: string; children: React.ReactNode; mono?: boolean }) {
   return (
     <div className="intel-row">
-      <span className="i-label">{label}</span>
-      <span className="i-value">{children}</span>
+      <dt className="i-label">{label}</dt>
+      <dd className={`i-value${mono ? ' i-value--mono' : ''}`}>{children}</dd>
     </div>
   );
 }
 
+/** The airframe's paperwork: who registered it, where, and its transponder codes. */
 export default function IntelCard({
   country,
   countryIso,
@@ -25,18 +27,22 @@ export default function IntelCard({
   hex,
   typeCode,
   manufacturer,
+  squawk,
 }: IntelCardProps) {
   return (
-    <div className="intel-card">
-      <div className="intel-header">Intel</div>
-      <IntelRow label="Country">
-        {countryIso && <span className="flag-inline">{countryToFlag(countryIso)}</span>}
-        {country ?? '—'}
-      </IntelRow>
-      <IntelRow label="Reg">{registration ?? '—'}</IntelRow>
-      <IntelRow label="Hex">{hex.toUpperCase()}</IntelRow>
-      <IntelRow label="Type Code">{typeCode ?? '—'}</IntelRow>
-      <IntelRow label="Manufacturer">{manufacturer ?? '—'}</IntelRow>
-    </div>
+    <section className="intel-card" aria-label="Aircraft details">
+      <h2 className="intel-header">Aircraft details</h2>
+      <dl>
+        <IntelRow label="Registration" mono>{registration ?? '—'}</IntelRow>
+        <IntelRow label="Registered in">
+          {countryIso && <span className="flag-inline">{countryToFlag(countryIso)}</span>}
+          {country ?? '—'}
+        </IntelRow>
+        <IntelRow label="Manufacturer">{manufacturer ?? '—'}</IntelRow>
+        <IntelRow label="Type code" mono>{typeCode ?? '—'}</IntelRow>
+        <IntelRow label="Transponder code" mono>{hex.toUpperCase()}</IntelRow>
+        {squawk && <IntelRow label="Squawk" mono>{squawk}</IntelRow>}
+      </dl>
+    </section>
   );
 }

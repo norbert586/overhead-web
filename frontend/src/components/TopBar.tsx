@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import HamburgerMenu from './HamburgerMenu';
 import type { View } from '../App';
 import { openDiagnostics } from '../utils/diagnostics';
+import Logo from './Logo';
 
 interface TopBarProps {
   view: View;
@@ -51,9 +52,9 @@ export default function TopBar({
     : feedStatus === 'delayed' ? ' scan-dot-warn'
     : '';
   const statusLabel = !listening ? 'Paused'
-    : feedStatus === 'down' ? 'No feed · retrying'
+    : feedStatus === 'down' ? 'No feed, retrying'
     : feedStatus === 'delayed' ? 'Reconnecting…'
-    : `Listening · ${radiusNm} nm`;
+    : `Listening within ${radiusNm} nm`;
 
   const coordsLabel =
     latitude != null && longitude != null
@@ -61,15 +62,13 @@ export default function TopBar({
       : null;
 
   return (
-    <div ref={wrapRef}>
+    <div ref={wrapRef} className="top-bar-wrap">
       <header className="top-bar">
         <div className="top-bar-left">
-          <div className="app-logo">
-            <svg viewBox="0 0 24 24" className="app-logo-icon" aria-hidden="true">
-              <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
-            </svg>
+          <button type="button" className="app-logo" onClick={() => setView('flight')} aria-label="Overhead — back to catching">
+            <Logo />
             <span className="app-name">Overhead</span>
-          </div>
+          </button>
           <div className="scan-status" role="status">
             <div className={`scan-dot${dotClass}`} />
             <span className="scan-text">{statusLabel}</span>
@@ -78,9 +77,10 @@ export default function TopBar({
         <div className="top-bar-right">
           {coordsLabel && <span className="status-info">{coordsLabel}</span>}
           <button
-            className="hamburger"
+            className={`hamburger${menuOpen ? ' open' : ''}`}
             onClick={() => setMenuOpen((o) => !o)}
-            aria-label="Toggle menu"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
           >
             <span />
             <span />

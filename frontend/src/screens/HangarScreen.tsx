@@ -30,17 +30,15 @@ function TypeCard({ code, name, caught }: {
   caught?: HangarData['types'][0];
 }) {
   return (
-    <div className={`hangar-card${caught ? ' caught' : ' ghost'}`}>
-      <SilhouetteGlyph category={categorize(code)} className="hangar-card-glyph" />
+    <div className={`hangar-card${caught ? ' caught' : ' ghost'}`} title={caught ? undefined : `${name} — not caught yet`}>
+      {caught && <SilhouetteGlyph category={categorize(code)} className="hangar-card-glyph" />}
       <div className="hangar-card-code">{code}</div>
       <div className="hangar-card-name">{name}</div>
-      {caught ? (
+      {caught && (
         <div className="hangar-card-meta">
           <span className="hangar-card-count">×{fmt(caught.catches)}</span>
-          <span className="hangar-card-date">first {timeAgo(caught.firstCaught)}</span>
+          <span className="hangar-card-date">First {timeAgo(caught.firstCaught)}</span>
         </div>
-      ) : (
-        <div className="hangar-card-meta hangar-card-meta--ghost">Not yet caught</div>
       )}
     </div>
   );
@@ -89,10 +87,10 @@ export default function HangarScreen() {
   }, []);
 
   if (!data && failed) {
-    return <div className="hangar-screen"><div className="s-section-error">Failed to load your hangar.</div></div>;
+    return <div className="hangar-screen"><div className="s-section-error">Couldn't open the hangar. Check your connection and try again.</div></div>;
   }
   if (!data) {
-    return <div className="hangar-screen"><div className="s-section-loading">Opening the hangar…</div></div>;
+    return <div className="hangar-screen"><div className="s-section-loading" aria-label="Opening the hangar" /></div>;
   }
 
   const caughtByCode = new Map(data.types.map((t) => [t.aircraftType.toUpperCase(), t]));
@@ -104,28 +102,29 @@ export default function HangarScreen() {
 
   return (
     <div className="hangar-screen">
-      <div className="hangar-header">
+      <header className="screen-head hangar-header">
         <div>
-          <span className="hangar-title">The Hangar</span>
-          <span className="hangar-subtitle">Your collection — every airframe you were there for</span>
+          <h1 className="screen-title">The hangar</h1>
+          <p className="screen-lede">Every kind of aircraft you've been under. Empty slots are the ones still out there.</p>
         </div>
         {tab === 'aircraft' && (
           <div className="hangar-completion">
-            <span className="hangar-completion-count">{rosterCaught} / {ROSTER_SIZE}</span>
-            <div className="hangar-completion-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Roster completion">
-              <div className="hangar-completion-fill" style={{ width: `${pct}%` }} />
+            <span className="hangar-completion-count">
+              <strong>{rosterCaught}</strong> of {ROSTER_SIZE} types
+            </span>
+            <div className="hangar-completion-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Types collected">
+              <div className="hangar-completion-fill" style={{ width: `${Math.max(pct, 1)}%` }} />
             </div>
-            <span className="hangar-completion-pct">{pct}%</span>
           </div>
         )}
-      </div>
+      </header>
 
       <div className="hangar-tabs" role="tablist">
         {([
-          ['aircraft',  `Aircraft · ${data.types.length}`],
-          ['airlines',  `Airlines · ${data.operators.length}`],
-          ['countries', `Countries · ${data.countries.length}`],
-        ] as [Tab, string][]).map(([key, label]) => (
+          ['aircraft',  'Aircraft',  data.types.length],
+          ['airlines',  'Airlines',  data.operators.length],
+          ['countries', 'Countries', data.countries.length],
+        ] as [Tab, string, number][]).map(([key, label, n]) => (
           <button
             key={key}
             role="tab"
@@ -134,6 +133,7 @@ export default function HangarScreen() {
             onClick={() => setTab(key)}
           >
             {label}
+            <span className="hangar-tab-count">{n}</span>
           </button>
         ))}
       </div>
@@ -146,8 +146,11 @@ export default function HangarScreen() {
               return (
                 <div className="hangar-section" key={section.id}>
                   <div className="hangar-section-head">
-                    <span className="hangar-section-label">{section.label}</span>
-                    <span className="hangar-section-count">{sectionCaught} / {section.entries.length}</span>
+                    <h2 className="hangar-section-label">{section.label}</h2>
+                    <span className="hangar-section-count">{sectionCaught} of {section.entries.length}</span>
+                    <span className="hangar-section-bar" aria-hidden="true">
+                      <span style={{ width: `${(sectionCaught / section.entries.length) * 100}%` }} />
+                    </span>
                   </div>
                   <div className="hangar-grid">
                     {section.entries.map((e) => (
@@ -161,7 +164,7 @@ export default function HangarScreen() {
             {offRoster.length > 0 && (
               <div className="hangar-section">
                 <div className="hangar-section-head">
-                  <span className="hangar-section-label">Off the chart</span>
+                  <h2 className="hangar-section-label">Off the list</h2>
                   <span className="hangar-section-count">{offRoster.length} caught</span>
                 </div>
                 <div className="hangar-grid">
@@ -189,7 +192,7 @@ export default function HangarScreen() {
                     <AirlineLogo name={o.operator} />
                     <div className="hangar-list-main">
                       <span className="hangar-list-name">{o.operator}</span>
-                      <span className="hangar-list-sub">{fmt(o.airframes)} airframe{o.airframes === 1 ? '' : 's'} · first {timeAgo(o.firstCaught)}</span>
+                      <span className="hangar-list-sub">{fmt(o.airframes)} aircraft, first caught {timeAgo(o.firstCaught)}</span>
                     </div>
                     <span className="hangar-list-count">×{fmt(o.catches)}</span>
                   </div>
@@ -208,7 +211,7 @@ export default function HangarScreen() {
                     <span className="hangar-flag">{countryToFlag(c.country)}</span>
                     <div className="hangar-list-main">
                       <span className="hangar-list-name">{c.country}</span>
-                      <span className="hangar-list-sub">{fmt(c.airframes)} airframe{c.airframes === 1 ? '' : 's'} · first {timeAgo(c.firstCaught)}</span>
+                      <span className="hangar-list-sub">{fmt(c.airframes)} aircraft, first caught {timeAgo(c.firstCaught)}</span>
                     </div>
                     <span className="hangar-list-count">×{fmt(c.catches)}</span>
                   </div>

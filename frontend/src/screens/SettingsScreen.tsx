@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Settings } from '../hooks/useSettings';
 import { RADIUS_MIN_NM, RADIUS_MAX_NM, RADIUS_DEFAULT_NM, clampRadius } from '../hooks/useSettings';
 import { isSoundEnabled, setSoundEnabled, playCatchSound } from '../utils/catchSound';
+import { useThemePreference, type ThemePreference } from '../hooks/useTheme';
 
 interface SettingsScreenProps {
   settings: Settings;
@@ -16,6 +17,7 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
   const [geoError, setGeoError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [sound, setSound] = useState(isSoundEnabled);
+  const { pref: themePref, setPref: setThemePref } = useThemePreference();
 
   // Re-seed the form when settings change externally (e.g. the server profile
   // arriving after sign-in) — derived state during render, not an effect.
@@ -56,113 +58,77 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
   return (
     <div className="settings-screen">
       <div className="settings-form">
-        <div>
-          <div className="settings-heading">{isFirstSetup ? 'Set Up Catching' : 'Settings'}</div>
-          <div className="settings-subheading">
-            {isFirstSetup
-              ? 'Overhead catches flights from wherever you are — these settings tune how, and give you a backup spot when GPS isn\'t available.'
-              : 'Tune your hearing radius and set a home location as a GPS fallback.'}
-          </div>
-        </div>
-
-        {/* How it works */}
-        <div className="settings-mode-cards">
-          <div className="settings-mode-card">
-            <div className="settings-mode-title">How catching works</div>
-            <div className="settings-mode-body">
-              While you have Overhead open, anything that flies within your hearing radius of your
-              live location gets caught and saved to your log. Leave the page and you stop
-              catching — you have to be there.
-            </div>
-          </div>
-          <div className="settings-mode-card">
-            <div className="settings-mode-title">Home location</div>
-            <div className="settings-mode-body">
-              A fallback catch point for when your device can't share its location — desktop
-              browsers, denied permissions. If live GPS is available it always wins.
-            </div>
-          </div>
-        </div>
+        <header className="screen-head">
+          <h1 className="screen-title">{isFirstSetup ? 'Set up catching' : 'Settings'}</h1>
+          <p className="screen-lede">
+            While Overhead is open, anything flying inside your hearing radius is caught and saved
+            to your log. Close it and catching stops — you have to be there.
+          </p>
+        </header>
 
         {/* Hearing radius */}
-        <div className="settings-section">
-          <div className="settings-section-label">Hearing radius</div>
+        <section className="settings-section">
+          <h2 className="settings-section-label">Hearing radius</h2>
           <div className="settings-location-grid">
             <div className="settings-location-inputs">
               <div className="settings-field">
-                <label className="settings-label">
-                  Radius · {radius} nm
+                <label className="settings-label" htmlFor="settings-radius">
+                  <span>Catch anything within</span>
+                  <output className="settings-radius-value">{radius} nm</output>
                 </label>
                 <input
+                  id="settings-radius"
                   className="settings-slider"
                   type="range"
                   min={RADIUS_MIN_NM}
                   max={RADIUS_MAX_NM}
                   step={1}
                   value={radius}
+                  style={{ '--fill': `${((radius - RADIUS_MIN_NM) / (RADIUS_MAX_NM - RADIUS_MIN_NM)) * 100}%` } as React.CSSProperties}
                   onChange={(e) => setRadius(parseInt(e.target.value, 10) || RADIUS_DEFAULT_NM)}
                 />
-                <div className="settings-help">
-                  How far away counts as "overhead". Think of it as how far you can hear — {RADIUS_DEFAULT_NM} nm
-                  is a good default. Bigger catches more, but contacts near the edge won't be
-                  visible or audible from where you stand.
-                </div>
+                <p className="settings-help">
+                  Roughly how far you can hear. {RADIUS_DEFAULT_NM} nm suits most places; a bigger
+                  radius catches more, but planes near the edge are hard to see or hear.
+                </p>
               </div>
             </div>
-            <div className="settings-radius-diagram">
+            <div className="settings-radius-diagram" aria-hidden="true">
               <RadiusDiagram radiusNm={radius} />
-              <div className="settings-radius-caption">
-                Hearing radius · {Math.round(radius)} nm
-              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Home / fallback location */}
-        <div className="settings-section">
-          <div className="settings-section-label">Home location · GPS fallback</div>
-          <div className="settings-field-row">
-            <div className="settings-field">
-              <label className="settings-label">Latitude</label>
-              <input
-                className="settings-input"
-                type="number"
-                placeholder="e.g. 42.7077"
-                value={lat}
-                onChange={(e) => setLat(e.target.value)}
-                step="any"
-              />
-            </div>
-            <div className="settings-field">
-              <label className="settings-label">Longitude</label>
-              <input
-                className="settings-input"
-                type="number"
-                placeholder="e.g. -83.0315"
-                value={lon}
-                onChange={(e) => setLon(e.target.value)}
-                step="any"
-              />
-            </div>
+        {/* Appearance */}
+        <section className="settings-section">
+          <h2 className="settings-section-label">Appearance</h2>
+          <div className="theme-picker" role="radiogroup" aria-label="Theme">
+            {THEME_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={themePref === o.value}
+                className={`theme-option${themePref === o.value ? ' active' : ''}`}
+                onClick={() => setThemePref(o.value)}
+              >
+                <span className={`theme-swatch theme-swatch--${o.value}`} aria-hidden="true" />
+                <span className="theme-option-label">{o.label}</span>
+              </button>
+            ))}
           </div>
-          <button className="settings-btn-geo" onClick={handleGeolocate}>
-            ⊕ Use my location
-          </button>
-          {geoError && (
-            <div className="settings-geo-error">{geoError}</div>
-          )}
-          <div className="settings-help">
-            Optional. Used only when live GPS is unavailable. Decimal degrees, six digits is
-            plenty (~10 cm precision).
-          </div>
-        </div>
+          <p className="settings-help">
+            {THEME_OPTIONS.find((o) => o.value === themePref)?.help}
+          </p>
+        </section>
 
         {/* Catch sound */}
-        <div className="settings-section">
-          <div className="settings-section-label">Catch sound</div>
+        <section className="settings-section">
+          <h2 className="settings-section-label">Sound</h2>
           <label className="settings-toggle-row">
             <input
               type="checkbox"
+              className="switch"
               checked={sound}
               onChange={(e) => {
                 setSound(e.target.checked);
@@ -170,38 +136,85 @@ export default function SettingsScreen({ settings, onSave, isFirstSetup = false 
                 if (e.target.checked) playCatchSound(false);
               }}
             />
-            <span>Play a radio blip when a flight is caught</span>
+            <span>Play a radio blip when a plane is caught</span>
           </label>
-          <div className="settings-help">
-            Rare catches get a brighter tone. Stored on this device.
+          <p className="settings-help">Rare catches get a brighter note. Saved on this device.</p>
+        </section>
+
+        {/* Home / fallback location */}
+        <section className="settings-section">
+          <h2 className="settings-section-label">Home location</h2>
+          <p className="settings-help settings-help--lead">
+            Optional. Used only when this device can't share its location — a desktop browser, or
+            location turned off. Live GPS always wins.
+          </p>
+          <div className="settings-field-row">
+            <div className="settings-field">
+              <label className="settings-label" htmlFor="settings-lat">Latitude</label>
+              <input
+                id="settings-lat"
+                className="settings-input"
+                type="number"
+                inputMode="decimal"
+                placeholder="42.7077"
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+                step="any"
+              />
+            </div>
+            <div className="settings-field">
+              <label className="settings-label" htmlFor="settings-lon">Longitude</label>
+              <input
+                id="settings-lon"
+                className="settings-input"
+                type="number"
+                inputMode="decimal"
+                placeholder="-83.0315"
+                value={lon}
+                onChange={(e) => setLon(e.target.value)}
+                step="any"
+              />
+            </div>
           </div>
-        </div>
+          <button className="settings-btn-geo" onClick={handleGeolocate}>
+            Use where I am now
+          </button>
+          {geoError && (
+            <div className="settings-geo-error">{geoError}</div>
+          )}
+        </section>
 
         {/* Actions */}
         <div className="settings-actions">
           <button className="settings-btn-save" onClick={handleSave}>
-            {isFirstSetup ? 'Start Catching' : 'Save'}
+            {isFirstSetup ? 'Start catching' : 'Save settings'}
           </button>
-          <span className={`settings-saved${saved ? ' visible' : ''}`}>
-            {isFirstSetup ? 'Launching…' : 'Saved'}
+          <span className={`settings-saved${saved ? ' visible' : ''}`} role="status">
+            {isFirstSetup ? 'Starting…' : 'Saved'}
           </span>
         </div>
 
-        {/* Tips */}
-        <div className="settings-tips">
-          <div className="settings-tips-label">Notes</div>
+        <details className="settings-tips">
+          <summary>How catching works</summary>
           <ul className="settings-tips-list">
-            <li>Settings sync server-side — sign in from any device and pick up where you left off.</li>
-            <li>Catching pauses whenever the page is hidden. Switch back to resume.</li>
-            <li>Radius is great-circle distance, not flying time.</li>
-            <li>When nothing is in hearing range, the app shows the nearest contact further out — display only, it isn't caught.</li>
-            <li>Live aircraft data comes from adsb.lol's public feed.</li>
+            <li>Settings follow your account, so another phone or computer picks them up.</li>
+            <li>Catching pauses when the app is in the background and resumes when you come back.</li>
+            <li>The radius is straight-line distance on the ground, not how high the plane is.</li>
+            <li>When nothing is in range you still see the nearest plane further out. It isn't caught.</li>
+            <li>Live positions come from the volunteer receivers of adsb.lol and adsb.fi.</li>
           </ul>
-        </div>
+        </details>
       </div>
     </div>
   );
 }
+
+const THEME_OPTIONS: { value: ThemePreference; label: string; help: string }[] = [
+  { value: 'device', label: 'Match device', help: 'Follows your phone or computer’s light and dark setting.' },
+  { value: 'sun',    label: 'Follow the sun', help: 'Dark from just after sunset where you are, light again at sunrise.' },
+  { value: 'light',  label: 'Light', help: 'Always the day chart.' },
+  { value: 'dark',   label: 'Dark', help: 'Always the night chart — easiest on your eyes outside after dark.' },
+];
 
 function RadiusDiagram({ radiusNm }: { radiusNm: number }) {
   const VIEW = 200;
@@ -223,33 +236,30 @@ function RadiusDiagram({ radiusNm }: { radiusNm: number }) {
   return (
     <svg
       viewBox={`0 0 ${VIEW} ${VIEW}`}
-      width="100%"
-      height="auto"
       role="img"
       aria-label={`Hearing radius diagram showing ${Math.round(clamped)} nautical miles around your location`}
-      style={{ maxWidth: 200, display: 'block' }}
     >
       {/* Reference outer ring at the max hearing radius */}
-      <circle cx={CX} cy={CY} r={MAX_R} fill="none" stroke="rgba(30, 111, 160, 0.08)" strokeWidth="1" strokeDasharray="2 3" />
+      <circle cx={CX} cy={CY} r={MAX_R} fill="none" stroke="rgb(var(--accent-rgb) / 0.08)" strokeWidth="1" strokeDasharray="2 3" />
 
       {/* Active hearing ring */}
-      <circle cx={CX} cy={CY} r={ring} fill="rgba(30, 111, 160, 0.06)" stroke="rgba(30, 111, 160, 0.55)" strokeWidth="1" />
+      <circle cx={CX} cy={CY} r={ring} fill="rgb(var(--accent-rgb) / 0.06)" stroke="rgb(var(--accent-rgb) / 0.55)" strokeWidth="1" />
 
       {/* Center crosshair */}
-      <line x1={CX - 10} y1={CY} x2={CX - 6} y2={CY} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
-      <line x1={CX + 6}  y1={CY} x2={CX + 10} y2={CY} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
-      <line x1={CX} y1={CY - 10} x2={CX} y2={CY - 6} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
-      <line x1={CX} y1={CY + 6}  x2={CX} y2={CY + 10} stroke="rgba(30, 111, 160, 0.5)" strokeWidth="1" />
+      <line x1={CX - 10} y1={CY} x2={CX - 6} y2={CY} stroke="rgb(var(--accent-rgb) / 0.5)" strokeWidth="1" />
+      <line x1={CX + 6}  y1={CY} x2={CX + 10} y2={CY} stroke="rgb(var(--accent-rgb) / 0.5)" strokeWidth="1" />
+      <line x1={CX} y1={CY - 10} x2={CX} y2={CY - 6} stroke="rgb(var(--accent-rgb) / 0.5)" strokeWidth="1" />
+      <line x1={CX} y1={CY + 6}  x2={CX} y2={CY + 10} stroke="rgb(var(--accent-rgb) / 0.5)" strokeWidth="1" />
 
       {/* Center dot */}
-      <circle cx={CX} cy={CY} r="2.5" fill="#1E6FA0" />
+      <circle cx={CX} cy={CY} r="2.5" fill="var(--accent)" />
 
       {/* Aircraft glyphs — coloured if inside the active ring */}
       {planes.map((p, i) => {
         const dx = p.x - CX;
         const dy = p.y - CY;
         const inside = Math.sqrt(dx * dx + dy * dy) <= ring;
-        const color = inside ? '#1E6FA0' : 'rgba(30, 111, 160, 0.16)';
+        const color = inside ? 'var(--accent)' : 'rgb(var(--accent-rgb) / 0.16)';
         return (
           <g key={i} transform={`translate(${p.x},${p.y}) rotate(${p.rot})`}>
             <path d="M 0,-4 L 3,3 L 0,1.5 L -3,3 Z" fill={color} />

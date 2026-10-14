@@ -150,6 +150,17 @@ export function haversineNm(lat1: number, lon1: number, lat2: number, lon2: numb
   return 2 * EARTH_RADIUS_NM * Math.asin(Math.sqrt(a));
 }
 
+/** Initial great-circle bearing from point 1 to point 2, compass degrees (0 = north). */
+export function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const phi1 = toRad(lat1);
+  const phi2 = toRad(lat2);
+  const dLon = toRad(lon2 - lon1);
+  const y = Math.sin(dLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 function describeError(err: unknown): string {
   if (!(err instanceof Error)) return String(err);
   // undici wraps network failures in a bare "fetch failed" TypeError with the

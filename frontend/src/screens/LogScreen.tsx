@@ -7,6 +7,7 @@ import SmartPhoto from '../components/SmartPhoto';
 import AircraftSilhouette from '../components/AircraftSilhouette';
 import ShareCatchButton from '../components/ShareCatch';
 import type { Flight, Classification, InterestTier } from '../types/flight';
+import { CLASS_LABEL, TIER_LABEL } from '../utils/labels';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return (
     d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
-    ' · ' +
+    ', ' +
     d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   );
 }
@@ -195,12 +196,6 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 
 // ── Rarity / interest helpers ────────────────────────────────────────────────
 
-const TIER_LABEL: Record<InterestTier, string> = {
-  rare:        'Rare',
-  interesting: 'Interesting',
-  noteworthy:  'Noteworthy',
-  routine:     'Routine',
-};
 
 type SeenTier = 'new' | 'familiar' | 'regular' | 'frequent' | 'signature';
 
@@ -248,7 +243,7 @@ const DETAIL_TABS: { key: DetailTab; label: string }[] = [
   { key: 'details',   label: 'Details'   },
   { key: 'flight',    label: 'Flight'    },
   { key: 'rarity',    label: 'Rarity'    },
-  { key: 'ingestion', label: 'Ingestion' },
+  { key: 'ingestion', label: 'Your catch' },
 ];
 
 function DetailsTab({ f, typeLabel }: { f: Flight; typeLabel: string }) {
@@ -264,7 +259,6 @@ function DetailsTab({ f, typeLabel }: { f: Flight; typeLabel: string }) {
         <DetailRow label="Country"      value={f.country} />
       </div>
       <div className="log-photo-section">
-        <div className="log-detail-section-label" style={{ marginBottom: 10 }}>Photo</div>
         <RowPhoto registration={f.registration} hex={f.hex} aircraftType={f.aircraftType} callsign={f.callsign} />
       </div>
     </div>
@@ -285,10 +279,10 @@ function FlightTab({ f }: { f: Flight }) {
         <DetailRow label="Origin"         value={originFull} />
         <DetailRow label="Destination"    value={destFull} />
         <DetailRow label="Altitude"       value={formatAlt(f.altitudeFt)} />
-        <DetailRow label="Speed"          value={f.speedKts   != null ? `${f.speedKts} kts` : null} />
-        <DetailRow label="Bearing"        value={f.bearingDeg != null ? `${f.bearingDeg}°`  : null} />
-        <DetailRow label="Distance"       value={f.distanceNm != null ? `${f.distanceNm} nm` : null} />
-        <DetailRow label="Classification" value={f.classification} />
+        <DetailRow label="Speed"          value={f.speedKts   != null ? `${Math.round(f.speedKts)} kt` : null} />
+        <DetailRow label="Heading"        value={f.bearingDeg != null ? `${Math.round(f.bearingDeg)}°`  : null} />
+        <DetailRow label="Closest seen"   value={f.distanceNm != null ? `${f.distanceNm.toFixed(1)} nm` : null} />
+        <DetailRow label="Kind"           value={CLASS_LABEL[f.classification]} />
       </div>
     </div>
   );
@@ -313,7 +307,7 @@ function RarityTab({ f }: { f: Flight }) {
         </div>
         {f.interestReasons.length > 0 ? (
           <div className="log-rarity-reasons">
-            <div className="log-detail-section-label">Why</div>
+            <div className="log-detail-section-label">Why it stands out</div>
             <ul className="log-rarity-reason-list">
               {f.interestReasons.map((r, i) => (
                 <li key={i} className="log-rarity-reason">{r}</li>
@@ -321,7 +315,7 @@ function RarityTab({ f }: { f: Flight }) {
             </ul>
           </div>
         ) : (
-          <div className="log-rarity-reasons-empty">No interest signals — routine traffic.</div>
+          <div className="log-rarity-reasons-empty">Nothing unusual — everyday traffic.</div>
         )}
       </div>
     </div>
@@ -332,9 +326,9 @@ function IngestionTab({ f }: { f: Flight }) {
   return (
     <div className="log-tab-content">
       <div className="log-detail-col">
-        <DetailRow label="ICAO hex"   value={f.hex} />
+        <DetailRow label="Transponder code" value={f.hex.toUpperCase()} />
         <DetailRow label="Times caught" value={String(f.timesSeen)} />
-        <DetailRow label="Duration"   value={formatDuration(f.firstSeen, f.lastSeen)} />
+        <DetailRow label="In range for" value={formatDuration(f.firstSeen, f.lastSeen)} />
         <DetailRow label="First caught" value={formatDateTime(f.firstSeen)} />
         <DetailRow label="Last caught" value={formatDateTime(f.lastSeen)} />
         <DetailRow
@@ -353,18 +347,19 @@ function IngestionTab({ f }: { f: Flight }) {
 function LogRow({ flight: f }: { flight: Flight }) {
   const [open, setOpen] = useState(false);
   const [tab,  setTab ] = useState<DetailTab>('details');
+
   const typeLabel = [f.manufacturer, f.aircraftType].filter(Boolean).join(' ') || '—';
 
   return (
     <div className={`log-row strip--${f.classification}${open ? ' expanded' : ''}`}>
       <button className="log-row-main" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="log-dot-col">
-          <span className={`log-dot ${f.classification}`} />
+        <span className="log-callsign">{f.callsign ?? f.registration ?? 'No callsign'}</span>
+        <span className="log-type">
+          {typeLabel}
+          {f.operator && <span className="log-operator">{f.operator}</span>}
         </span>
-        <span className="log-callsign">{f.callsign ?? '——'}</span>
-        <span className="log-type">{typeLabel}</span>
         <span className="log-route">{formatRoute(f)}</span>
-        <span className="log-time">{timeAgo(f.lastSeen)}</span>
+        <span className="log-time" title={formatDateTime(f.lastSeen)}>{timeAgo(f.lastSeen)}</span>
         <span className="log-rarity-col"><RarityChip tier={f.interestTier} score={f.interestScore} /></span>
         <span className="log-seen"><SeenBadge count={f.timesSeen} /></span>
         <span className="log-chevron-col"><Chevron open={open} /></span>
@@ -372,10 +367,12 @@ function LogRow({ flight: f }: { flight: Flight }) {
 
       {open && (
         <div className="log-detail">
-          <div className="log-detail-tabs">
+          <div className="log-detail-tabs" role="tablist">
             {DETAIL_TABS.map(({ key, label }) => (
               <button
                 key={key}
+                role="tab"
+                aria-selected={tab === key}
                 className={`log-detail-tab${tab === key ? ' active' : ''}`}
                 onClick={() => setTab(key)}
               >
@@ -396,18 +393,29 @@ function LogRow({ flight: f }: { flight: Flight }) {
   );
 }
 
+/** "Today", "Yesterday", "Monday", then "Mon, Oct 5" — a logbook's page headings. */
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(today) - start(d)) / 86_400_000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return d.toLocaleDateString('en-US', { weekday: 'long' });
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+}
+
 // ── Column header ─────────────────────────────────────────────────────────────
 
 function ListHeader() {
   return (
-    <div className="log-list-header">
-      <span className="log-dot-col" />
+    <div className="log-list-header" aria-hidden="true">
       <span className="log-col-label">Callsign</span>
       <span className="log-col-label log-col-aircraft">Aircraft</span>
       <span className="log-col-label log-col-route">Route</span>
       <span className="log-col-label">Last caught</span>
       <span className="log-col-label log-col-rarity">Rarity</span>
-      <span className="log-col-label log-col-right log-col-seen">Caught</span>
+      <span className="log-col-label log-col-right log-col-seen">Times</span>
       <span className="log-chevron-col" />
     </div>
   );
@@ -419,10 +427,10 @@ type ClassFilter = 'all' | Classification;
 
 const CLASS_PILLS: { key: ClassFilter; label: string }[] = [
   { key: 'all',        label: 'All'        },
-  { key: 'commercial', label: 'Commercial' },
+  { key: 'commercial', label: 'Airline'    },
   { key: 'private',    label: 'Private'    },
   { key: 'cargo',      label: 'Cargo'      },
-  { key: 'government', label: 'Gov / Mil'  },
+  { key: 'government', label: 'Government' },
   { key: 'unknown',    label: 'Unknown'    },
 ];
 
@@ -451,6 +459,8 @@ function FilterBar({
   appliedFrom, appliedTo, onApplyDates,
   count, total,
 }: FilterBarProps) {
+  // Phones get search plus a Filters button; desktop always shows the panel.
+  const [open, setOpen] = useState(false);
   const [draftFrom,    setDraftFrom   ] = useState('');
   const [draftTo,      setDraftTo     ] = useState('');
   const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -487,20 +497,37 @@ function FilterBar({
     setActivePreset(null);
   }
 
+  const activeFilters = (isApplied ? 1 : 0) + (classFilter !== 'all' ? 1 : 0);
+
   return (
-    <div className="log-filter-bar">
+    <div className={`log-filter-bar${open ? ' open' : ''}`}>
+      <div className="log-filter-row log-filter-search">
+        <div className="log-search-wrap">
+          <svg viewBox="0 0 16 16" className="log-search-icon" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M10.5 10.5 14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <input
+            className="log-search"
+            type="search"
+            placeholder="Search callsign, registration, airline, airport"
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            spellCheck={false}
+            aria-label="Search your log"
+          />
+        </div>
+        <button
+          type="button"
+          className={`log-filter-toggle${activeFilters ? ' has-active' : ''}`}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          Filters{activeFilters ? <span className="log-filter-badge">{activeFilters}</span> : null}
+        </button>
+      </div>
 
-      {/* ── Row 1: search + date range ── */}
-      <div className="log-filter-row log-filter-top">
-        <input
-          className="log-search"
-          type="text"
-          placeholder="Search callsign, registration, type…"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          spellCheck={false}
-        />
-
+      <div className="log-filter-panel">
         <div className={`log-date-filter${isApplied ? ' applied' : ''}`}>
           {/* Quick presets */}
           <div className="log-preset-group">
@@ -545,31 +572,29 @@ function FilterBar({
               Apply
             </button>
             {isApplied && (
-              <button className="log-date-clear" onClick={handleClear} title="Clear date filter">✕</button>
+              <button className="log-date-clear" onClick={handleClear} title="Clear date filter" aria-label="Clear date filter">✕</button>
             )}
           </div>
         </div>
-      </div>
 
-      {/* ── Row 2: classification pills + count ── */}
-      <div className="log-filter-row log-filter-bottom">
-        <div className="log-filter-pills">
-          {CLASS_PILLS.map(({ key, label }) => (
-            <button
-              key={key}
-              className={`log-pill${classFilter === key ? ' active' : ''}${key !== 'all' ? ` pill-${key}` : ''}`}
-              onClick={() => onClass(key)}
-            >
-              {key !== 'all' && <span className={`log-dot ${key}`} style={{ marginRight: 5 }} />}
-              {label}
-            </button>
-          ))}
+        <div className="log-filter-row log-filter-bottom">
+          <div className="log-filter-pills">
+            {CLASS_PILLS.map(({ key, label }) => (
+              <button
+                key={key}
+                className={`log-pill${classFilter === key ? ' active' : ''}${key !== 'all' ? ` pill-${key}` : ''}`}
+                onClick={() => onClass(key)}
+              >
+                {key !== 'all' && <span className={`log-dot ${key}`} />}
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="log-filter-count">
-          {count < total ? `${count} / ${total}` : total.toLocaleString()} aircraft
-        </span>
       </div>
-
+      <p className="log-filter-count" role="status">
+        {count < total ? `Showing ${count} of ${total.toLocaleString()}` : `${total.toLocaleString()} aircraft`}
+      </p>
     </div>
   );
 }
@@ -622,7 +647,7 @@ export default function LogScreen() {
   const flights = useMemo(() => result.data?.flights ?? [], [result.data]);
   const total   = result.data?.total ?? 0;
   const loading = !result.data && !result.failed;
-  const error   = result.failed && !result.data ? 'Failed to load flight log.' : null;
+  const error   = result.failed && !result.data ? "Couldn't load your log. Check your connection and open it again." : null;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -641,13 +666,26 @@ export default function LogScreen() {
     });
   }, [flights, search, classFilter]);
 
+  // Group by the day each plane was last caught, in list order.
+  const groups = useMemo(() => {
+    const out: { label: string; items: Flight[] }[] = [];
+    for (const f of filtered) {
+      const label = dayLabel(f.lastSeen);
+      const last = out[out.length - 1];
+      if (last && last.label === label) last.items.push(f);
+      else out.push({ label, items: [f] });
+    }
+    return out;
+  }, [filtered]);
+
   return (
     <div className="log-screen">
-      <div className="log-header">
-        <div className="log-header-left">
-          <span className="log-title">Flight Log</span>
+      <header className="screen-head log-header">
+        <div>
+          <h1 className="screen-title">Your log</h1>
+          <p className="screen-lede">Every plane you've caught, newest first. Tap one for its photo and story.</p>
         </div>
-        <div className="log-header-right">
+        <label className="log-header-right">
           <span className="log-limit-label">Show</span>
           <select
             className="log-limit-select"
@@ -655,11 +693,11 @@ export default function LogScreen() {
             onChange={(e) => setLimit(Number(e.target.value) as 50 | 100 | 200)}
           >
             {LIMIT_OPTIONS.map((n) => (
-              <option key={n} value={n}>{n} flights</option>
+              <option key={n} value={n}>Last {n}</option>
             ))}
           </select>
-        </div>
-      </div>
+        </label>
+      </header>
 
       {!loading && (
         <FilterBar
@@ -676,18 +714,28 @@ export default function LogScreen() {
       )}
 
       <div className="log-list">
-        {loading && <div className="log-empty">Loading…</div>}
+        {loading && <div className="log-empty">Opening your log…</div>}
         {!loading && error && <div className="log-empty log-error">{error}</div>}
         {!loading && !error && filtered.length === 0 && (
           <div className="log-empty">
-            {flights.length === 0 ? 'No flights recorded yet.' : 'No flights match the current filter.'}
+            {flights.length === 0
+              ? 'Nothing caught yet. Open Overhead next time you hear a plane — it lands here.'
+              : 'Nothing matches. Try a different search or clear the filters.'}
           </div>
         )}
         {!loading && !error && filtered.length > 0 && (
           <>
             <ListHeader />
-            {filtered.map((f) => (
-              <LogRow key={`${f.hex}-${f.firstSeen}`} flight={f} />
+            {groups.map(({ label, items }, i) => (
+              <section key={`${label}-${i}`} className="log-day" aria-label={label}>
+                <h2 className="log-day-label">
+                  {label}
+                  <span className="log-day-count">{items.length}</span>
+                </h2>
+                {items.map((f) => (
+                  <LogRow key={`${f.hex}-${f.firstSeen}`} flight={f} />
+                ))}
+              </section>
             ))}
           </>
         )}
