@@ -5,6 +5,7 @@ import { resolvePhotos, photoCredit, photoMatchLabel, photoSearchUrl } from '../
 import type { PhotoCandidate, PhotoResult } from '../types/photo';
 import SmartPhoto from '../components/SmartPhoto';
 import AircraftSilhouette from '../components/AircraftSilhouette';
+import ShareCatchButton from '../components/ShareCatch';
 import type { Flight, Classification, InterestTier } from '../types/flight';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -381,6 +382,7 @@ function LogRow({ flight: f }: { flight: Flight }) {
                 {label}
               </button>
             ))}
+            <ShareCatchButton flight={f} mode="log" className="log-share-btn" />
           </div>
           <div className="log-detail-body">
             {tab === 'details'   && <DetailsTab   f={f} typeLabel={typeLabel} />}

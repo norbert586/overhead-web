@@ -159,3 +159,12 @@ const ROSTER_CODES = new Set(
 export function isOnRoster(code: string): boolean {
   return ROSTER_CODES.has(code.toUpperCase());
 }
+
+const ROSTER_NAMES = new Map(
+  TYPE_ROSTER.flatMap((s) => s.entries.map((e) => [e.code, e.name] as const)),
+);
+
+/** Everyday model name for an ICAO type code ("B738" → "Boeing 737-800"), if on the roster. */
+export function rosterName(code: string | null): string | null {
+  return code ? ROSTER_NAMES.get(code.toUpperCase()) ?? null : null;
+}

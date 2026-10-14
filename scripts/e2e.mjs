@@ -224,6 +224,29 @@ async function main() {
     check(/"app"/.test(copied) && /"events"/.test(copied), `Copy report put the report on the clipboard (${copied.length} chars)`);
     await page.getByRole('button', { name: 'Close' }).click();
 
+    console.log('share a catch');
+    await page.locator('.col-left .share-catch-btn').click();
+    const shareText = await page.getByTestId('share-text').innerText();
+    check(/^✈️ Just caught TST100 flying over me!/.test(shareText) && /Newark \(EWR\) → Denver \(DEN\)/.test(shareText),
+      `catch screen → ready-to-text message ("${shareText.split('\n')[0]}")`);
+    check(/https:\/\/overheadflight\.com$/.test(shareText) && !/40\.69|-74\.17/.test(shareText),
+      'message ends with the site link and never includes the user\'s coordinates');
+    await page.locator('.share-sheet-backdrop').evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
+    await shot('2b-share-sheet');
+    await page.getByRole('button', { name: 'Copy text' }).click();
+    await page.getByRole('button', { name: /Copied/ }).waitFor({ timeout: 5_000 });
+    check(await page.evaluate(() => navigator.clipboard.readText()) === shareText, 'Copy text put exactly that message on the clipboard');
+    await page.keyboard.press('Escape');
+    await page.locator('.hamburger').click();
+    await page.locator('.menu-item', { hasText: 'Log' }).click();
+    await page.locator('.log-row-main').first().click();
+    await page.locator('.log-share-btn').click();
+    const logShare = await page.getByTestId('share-text').innerText();
+    check(/^✈️ Caught TST\d+ flying over me · today at /.test(logShare), `flight log → dated message ("${logShare.split('\n')[0]}")`);
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.locator('.hamburger').click();
+    await page.locator('.menu-item', { hasText: 'Flight' }).click();
+
     console.log('feeds down');
     await mode('down');
     await page.locator('.overhead-stale-note').waitFor({ timeout: 30_000 });
