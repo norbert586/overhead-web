@@ -121,7 +121,8 @@ async function main() {
   page.on('pageerror', (e) => pageErrors.push(e.message));
   const status = () => page.locator('.top-bar .scan-text').first().innerText().catch(() => '?');
   const shot = (n) => page.screenshot({ path: path.join(SHOTS, `${n}.png`) });
-  const app = `http://localhost:${PORTS.web}/`;
+  // Decorative motion frozen so screenshots don't depend on the frame caught.
+  const app = `http://localhost:${PORTS.web}/?motion=off`;
 
   try {
     console.log('healthy feed');
