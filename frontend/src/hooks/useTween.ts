@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-
-const reducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+import { motionAllowed } from '../utils/motion';
 
 /**
  * A number that glides to each new value instead of jumping — the altimeter
@@ -17,7 +15,7 @@ export function useTween(value: number | null, key: string, durationMs = 900): n
   useEffect(() => {
     cancelAnimationFrame(raf.current);
     const start = from.current;
-    if (value === null || start === null || lastKey.current !== key || reducedMotion() || start === value) {
+    if (value === null || start === null || lastKey.current !== key || !motionAllowed() || start === value) {
       lastKey.current = key;
       from.current = value;
       raf.current = requestAnimationFrame(() => setShown(value));

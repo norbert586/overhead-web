@@ -13,8 +13,10 @@ import '@fontsource/barlow-condensed/700.css'
 import App from './App.tsx'
 import { reloadForNewVersion } from './utils/reload'
 import { installGlobalErrorReporting } from './utils/diagnostics'
+import { applyMotionOverride } from './utils/motion'
 
 installGlobalErrorReporting()
+applyMotionOverride()
 
 // A lazily-loaded screen from an older build failed to load — a deploy
 // happened while this tab was open. Reload onto the new build instead of
