@@ -3,6 +3,10 @@
 All notable changes to Overhead are tracked here.
 Entries are appended automatically when a pull request is merged into `main`.
 
+## 2026-10-17
+
+- Motion foundation for canvas effects ([#68](https://github.com/norbert586/overhead-web/pull/68)) · v2.8.0
+
 ## 2026-10-14
 
 - Fix live feed: drop airplanes.live, fix adsb.fi, self-healing poll, working Copy report ([#65](https://github.com/norbert586/overhead-web/pull/65)) · v2.5.1
